@@ -1,0 +1,89 @@
+{
+  "skill_name": "tax-preparation",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "I just got my W-2 and a 1099-NEC for some freelance work. My W-2 shows box 1 wages of $95,400, box 2 federal income tax withheld of $14,200, and box 4 social security tax withheld of $5,917. The 1099-NEC shows $12,500 in non-employee compensation. I'm single, no dependents, standard deduction. Can you figure out my total tax liability for 2025, tell me if I owe or get a refund, and calculate what my quarterly estimated payments should be next year to avoid underpayment penalties?",
+      "expected_output": "Structured analysis showing: (1) total gross income ~$107,900, (2) SE tax calculation on $12,500 freelance income, (3) AGI after half-SE deduction, (4) federal tax liability using 2025 brackets, (5) refund/owe amount vs withholding, (6) quarterly estimated payment amounts for 2026",
+      "files": [],
+      "assertions": [
+        {
+          "name": "identifies-total-gross-income",
+          "description": "Output identifies the combined W-2 + 1099-NEC gross income as approximately $107,900"
+        },
+        {
+          "name": "calculates-se-tax",
+          "description": "Output calculates self-employment tax on the $12,500 freelance income (approximately $1,767)"
+        },
+        {
+          "name": "applies-standard-deduction",
+          "description": "Output applies the 2025 single standard deduction correctly"
+        },
+        {
+          "name": "provides-quarterly-estimates",
+          "description": "Output provides four quarterly estimated payment figures for 2026"
+        },
+        {
+          "name": "states-refund-or-owe",
+          "description": "Output clearly states whether the user owes money or receives a refund and the amount"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "I got my 1099-B from Fidelity for RSUs that vested last year. For one lot it shows: 500 shares vested on March 15 2025 at an FMV of $48.20 (so $24,100 total), I sold all 500 shares on November 3 2025 at $52.75 ($26,375 proceeds). My company withheld shares to cover taxes at vesting — Fidelity is showing my cost basis as $0 on the 1099-B. My W-2 already includes the $24,100 as income in box 1. I'm in the 32% bracket. What is my correct adjusted cost basis, what adjustment code do I use on Form 8949, and what is my actual capital gain or loss?",
+      "expected_output": "Explanation that RSU cost basis equals the FMV at vesting already included in W-2 income ($24,100), Form 8949 adjustment code B for incorrect 1099-B cost basis, and the actual capital gain is $26,375 - $24,100 = $2,275 (long-term vs short-term determination based on holding period from March 15 to November 3 being less than 1 year = short-term)",
+      "files": [],
+      "assertions": [
+        {
+          "name": "identifies-correct-cost-basis",
+          "description": "Output states the correct adjusted cost basis is $24,100 (FMV at vesting)"
+        },
+        {
+          "name": "specifies-form-8949-code-b",
+          "description": "Output specifies Form 8949 adjustment code B for incorrect broker-reported cost basis"
+        },
+        {
+          "name": "correct-capital-gain-amount",
+          "description": "Output calculates the capital gain as $2,275 (proceeds $26,375 minus correct basis $24,100)"
+        },
+        {
+          "name": "short-term-classification",
+          "description": "Output correctly classifies this as a short-term gain (held less than 1 year: March 15 to November 3)"
+        },
+        {
+          "name": "warns-about-double-taxation",
+          "description": "Output warns that using the $0 1099-B basis would result in double taxation"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I'm married filing jointly, two kids under 17. AGI is $138,000. I have: $8,400 in mortgage interest, $6,200 in property taxes, $3,800 in charitable donations, $2,100 in unreimbursed medical expenses. Should I itemize or take the standard deduction? Am I eligible for the Child Tax Credit, and if so how much? Are there any commonly missed deductions or credits I should look into based on my situation?",
+      "expected_output": "Comparison of standard deduction ($30,000 MFJ 2025) vs itemized total (~$18,500 — note: SALT capped at $10,000, medical expenses subject to 7.5% AGI floor so $2,100 - $10,350 threshold = $0 deductible). Recommend standard deduction. Full $2,000/child CTC = $4,000 (AGI $138k well under phase-out at $400k MFJ). Suggest probing for: student loan interest, HSA contributions, retirement account contributions, childcare/dependent care FSA, AOTC if college-aged kids.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "recommends-standard-deduction",
+          "description": "Output recommends the standard deduction over itemizing (standard deduction exceeds itemized total)"
+        },
+        {
+          "name": "applies-salt-cap",
+          "description": "Output applies the $10,000 SALT cap to the $6,200 property taxes (full amount is under cap, so this is $6,200)"
+        },
+        {
+          "name": "medical-deduction-threshold",
+          "description": "Output notes that medical expenses of $2,100 do not exceed the 7.5% AGI floor ($10,350) and are therefore not deductible"
+        },
+        {
+          "name": "child-tax-credit-amount",
+          "description": "Output states Child Tax Credit eligibility and the $4,000 amount (2 x $2,000)"
+        },
+        {
+          "name": "suggests-additional-deductions",
+          "description": "Output proactively suggests at least 2 commonly missed deductions or credits relevant to this taxpayer profile"
+        }
+      ]
+    }
+  ]
+}

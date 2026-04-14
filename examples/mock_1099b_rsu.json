@@ -1,0 +1,41 @@
+{
+  "form": "1099-B",
+  "tax_year": 2025,
+  "broker": "Global Investments LLC",
+  "transactions": [
+    {
+      "description": "TECH CORP RSU",
+      "cusip": "123456789",
+      "date_acquired": "2024-05-15",
+      "date_sold": "2025-02-10",
+      "shares": 50,
+      "proceeds": 11000.00,
+      "reported_cost_basis": 0.00,
+      "reported_cost_basis_type": "non-covered",
+      "holding_period": "short-term",
+      "internal_notes": {
+        "actual_fmv_at_vest": 178.50,
+        "correct_cost_basis": 8925.00,
+        "required_8949_code": "B",
+        "adjustment_amount": 8925.00
+      }
+    },
+    {
+      "description": "TECH CORP RSU",
+      "cusip": "123456789",
+      "date_acquired": "2023-11-15",
+      "date_sold": "2025-02-10",
+      "shares": 25,
+      "proceeds": 5500.00,
+      "reported_cost_basis": 0.00,
+      "reported_cost_basis_type": "non-covered",
+      "holding_period": "long-term",
+      "internal_notes": {
+        "actual_fmv_at_vest": 165.00,
+        "correct_cost_basis": 4125.00,
+        "required_8949_code": "B",
+        "adjustment_amount": 4125.00
+      }
+    }
+  ]
+}

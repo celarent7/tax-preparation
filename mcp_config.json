@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "tax-preparation": {
+      "command": "python3",
+      "args": [
+        "/Users/boris_bogdanov/Documents/scripts/tax-preparation/scripts/mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/boris_bogdanov/Documents/scripts/tax-preparation/scripts"
+      }
+    }
+  }
+}

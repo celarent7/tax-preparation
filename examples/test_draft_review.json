@@ -1,0 +1,28 @@
+{
+  "tax_year": 2024,
+  "filing_status": "married_jointly",
+  "draft_source": "Test Draft",
+  "form_1040": {
+    "line_1a_wages": 150000,
+    "line_2b_taxable_interest": 500,
+    "line_3b_ordinary_dividends": 1800,
+    "line_7_capital_gain_loss": 5000,
+    "line_8_other_income": 0,
+    "line_9_total_income": 157300,
+    "line_10_adjustments": 3000,
+    "line_11_agi": 154300,
+    "line_12_deduction": 29200,
+    "line_15_taxable_income": 125100,
+    "line_16_tax": 18832,
+    "line_24_total_tax": 14832,
+    "line_25a_w2_withholding": 22000,
+    "line_25d_total_withholding": 22000,
+    "line_26_estimated_payments": 0,
+    "line_33_total_payments": 22000,
+    "line_34_overpayment": 7168,
+    "line_35a_refund": 7168
+  },
+  "schedule_b": {"interest_payers": ["Bank of America"], "dividend_payers": ["Vanguard"], "foreign_accounts": false},
+  "schedule_d": {"short_term_gain_loss": 2000, "long_term_gain_loss": 3000, "total_gain_loss": 5000},
+  "form_8949": {"entries": [{"description": "ACME RSU", "cost_basis": 0, "proceeds": 12000}, {"description": "VTI", "cost_basis": 5000, "proceeds": 8000}]}
+}

@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Dev artifacts
+tax-preparation-workspace/
+.integrity-sha256.txt
+architectural_efficiency_report.md
+release_readiness_assessment.md
+license_compliance_preparation.md
+
+# Packaged skills
+*.skill
+
+# Secrets / local config
+.env
+*.local

@@ -1,0 +1,33 @@
+{
+  "form": "W-2",
+  "tax_year": 2025,
+  "employer": {
+    "name": "Tech Corp Inc.",
+    "ein": "00-0000000",
+    "address": "123 Silicon Way, San Jose, CA 95110"
+  },
+  "employee": {
+    "name": "Jane Doe",
+    "ssn": "XXX-XX-0000",
+    "address": "456 Maple St, Anytown, CA 90001"
+  },
+  "boxes": {
+    "1": 150000.00,
+    "2": 22500.00,
+    "3": 150000.00,
+    "4": 9300.00,
+    "5": 150000.00,
+    "6": 2175.00,
+    "12": [
+      {"code": "D", "amount": 23000.00, "description": "401(k) contribution"},
+      {"code": "W", "amount": 3000.00, "description": "Employer HSA contribution"}
+    ],
+    "13": {
+      "retirement_plan": true,
+      "statutory_employee": false,
+      "third_party_sick_pay": false
+    },
+    "17": 9500.00,
+    "19": 1200.00
+  }
+}

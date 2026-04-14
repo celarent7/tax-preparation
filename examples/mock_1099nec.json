@@ -1,0 +1,21 @@
+{
+  "form": "1099-NEC",
+  "tax_year": 2025,
+  "payer": {
+    "name": "Design Studio Partners",
+    "ein": "11-1111111"
+  },
+  "recipient": {
+    "name": "Jane Doe",
+    "address": "456 Maple St, Anytown, CA 90001"
+  },
+  "boxes": {
+    "1": 45000.00,
+    "4": 0.00,
+    "5": 0.00
+  },
+  "internal_notes": {
+    "category": "Self-Employment Income",
+    "subject_to_se_tax": true
+  }
+}
