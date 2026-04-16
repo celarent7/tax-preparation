@@ -21,6 +21,9 @@ dist/
 build/
 .pytest_cache/
 
+# Personal / employer-specific references (not for public distribution)
+references/rsu/epam_rsu_specifics.md
+
 # Dev artifacts
 tax-preparation-workspace/
 .integrity-sha256.txt

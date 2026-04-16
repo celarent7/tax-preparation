@@ -131,6 +131,16 @@ Load these when specific technical guidance is needed beyond built-in knowledge.
 | `./references/draft_review_checklist.md` | Validation rules for draft returns |
 | `./docs/limitations.md` | **Out-of-scope scenarios** (AMT, K-1s, international) |
 
+### Optional Employer-Specific References
+
+These files may or may not be present. Check with `Glob` before attempting to read — silently skip if absent.
+
+| Reference | Contents |
+|-----------|----------|
+| `./references/rsu/epam_rsu_specifics.md` | EPAM LTI/ESPP plan details, UBS brokerage specifics, withholding rates, Form 8949 adjustment patterns |
+
+If present, load this file whenever the user mentions EPAM, UBS One Source, EPAM RSUs, or EPAM ESPP — it contains employer-specific plan terms, withholding rates, and Form 8949 adjustment examples that override the generic RSU guidance.
+
 ---
 
 ## Limitations
