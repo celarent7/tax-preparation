@@ -221,6 +221,39 @@ Reduce credit by distributions received:
 
 ---
 
+---
+
+## ⚠️ OBBBA clean-energy credit terminations <!-- YEAR -->2025<!-- /YEAR -->
+
+**These credits have been terminated on an accelerated schedule.** Every
+clean-energy credit described in this file is subject to a hard cut-off. Check
+the date before telling a taxpayer they qualify — and for a return being
+prepared now, check whether they *missed* one.
+
+| Credit | IRC § | Terminated for |
+|---|---|---|
+| New Clean Vehicle Credit | §30D | vehicles **acquired after 2025-09-30** |
+| Used Clean Vehicle Credit | §25E | vehicles **acquired after 2025-09-30** |
+| Qualified Commercial Clean Vehicle Credit | §45W | vehicles **acquired after 2025-09-30** |
+| Energy Efficient Home Improvement Credit | §25C | property **placed in service after 2025-12-31** |
+| Residential Clean Energy Credit | §25D | expenditures **made after 2025-12-31** |
+
+**"Acquired" for the vehicle credits** (§§25E, 30D, 45W) means the date a
+*written binding contract* is entered into **and** a payment is made — including
+a nominal down payment or a trade-in. A taxpayer with a binding contract and a
+payment on or before 2025-09-30 may still claim the credit when the vehicle is
+placed in service, even if delivery is later.
+
+*Source: IRS, "FAQs for modification of sections 25C, 25D, 25E, 30C, 30D, 45L,
+45W and 179D under Public Law 119-21 (One, Big, Beautiful Bill)",
+<https://www.irs.gov/newsroom/faqs-for-modification-of-sections-25c-25d-25e-30c-30d-45l-45w-and-179d-under-public-law-119-21-139-stat-72-july-4-2025-commonly-known-as-the-one-big-beautiful-bill>
+(retrieved 2026-07-30).*
+
+**California note:** CA does not conform to these federal credits and has no
+equivalent state credit; see `references/california_tax_guide.md`.
+
+---
+
 ## Residential Clean Energy Credit
 
 ### Qualifying Property (30% credit)

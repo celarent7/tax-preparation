@@ -20,9 +20,25 @@ The Tax Preparation Plugin is designed for standard US individual and family tax
 - **Section 1256 Contracts**: Specialized treatment for futures and options.
 
 ## 4. Specific Tax Credits & Taxes
-- **Alternative Minimum Tax (AMT)**: While the tool uses standard brackets, it does not perform a full Form 6251 AMT calculation.
-- **Energy Credits**: High-depth technical validation of specific heat pump or solar equipment eligibility.
+- **Alternative Minimum Tax (AMT)**: The tool does not perform a full Form 6251 AMT calculation. It **does** emit an `amt_risk` warning when an ISO bargain element, a large SALT amount lost to the cap, or income inside the exemption phase-out zone is present — that is a trigger flag only, not a computation.
+- **Energy Credits**: High-depth technical validation of specific heat pump or solar equipment eligibility. Note that most clean-energy credits were terminated by OBBBA during 2025 — see the termination table in `references/credits_guide.md`.
 - **Estate & Gift Taxes**: Form 706 or Form 709.
+- **QBI (§199A)**: The constants carry the thresholds and phase-in ranges, but no full QBI calculator with SSTB / W-2-wage / UBIA limits is implemented.
+
+## 5. State Coverage
+
+- **California** is the only state with a real engine: progressive brackets, Schedule CA non-conformity add-backs (HSA, QBI, OBBBA deductions), CA standard-vs-itemized, exemption and renter's credits, the Behavioral Health Services Tax, SDI, and the CA estimated-tax rules. **Tax year 2025 only** — other years raise rather than approximate.
+- **WA, TX, FL, NV** are recognized as no-income-tax states. The WA capital gains excise tax is modeled but its annual standard deduction is unverified, so it returns no figure rather than a stale one.
+- **All other states** carry only a **top marginal rate flagged `estimate_only`**. That is not an effective rate and must never be presented as one.
+
+## 6. Unverified Constants
+
+Some statutory figures could not be confirmed against a primary source during
+the last data refresh and are stored as `null` with an entry in
+`_sources.TODO_VERIFY` in `scripts/tax_constants.json`. Reading one raises
+`UnverifiedConstantError` rather than returning a guess. Currently this includes
+the 2026 SALT cap, the 2026 Social Security wage base, and the 2023/2026
+retirement-plan contribution limits. See the remediation log for the full list.
 
 ---
 **Recommendation**: If your situation involves any of the above, please use this tool only for preliminary data gathering and consult a **Qualified Tax Professional** before filing.

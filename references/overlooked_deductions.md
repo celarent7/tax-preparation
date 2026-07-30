@@ -1,3 +1,8 @@
+> **Clean-energy credits have hard OBBBA cut-offs** — §30D/§25E/§45W vehicles
+> acquired after **2025-09-30**, and §25C/§25D home property after
+> **2025-12-31**, no longer qualify. See the termination table in
+> `references/credits_guide.md` before suggesting any of them.
+
 # Commonly Overlooked Deductions & Credits
 
 Comprehensive reference for deductions and credits that taxpayers frequently miss.
