@@ -124,6 +124,7 @@ def test_eitc_investment_income_limit_per_year(year, limit):
 @pytest.mark.parametrize("year,exemption_mfj,exemption_single,start_mfj,rate", [
     # Rev. Proc. 2022-38 sec .11 / 2024-40 sec .11 / 2025-32 sec .10
     ("2023", 126500, 81300, 1156300, 0.25),
+    ("2024", 133300, 85700, 1218700, 0.25),
     ("2025", 137000, 88100, 1252700, 0.25),
     # OBBBA resets the 2026 phase-out to $1M/$500K with a 50% rate.
     ("2026", 140200, 90100, 1000000, 0.50),
@@ -139,6 +140,7 @@ def test_amt_exemptions_and_phaseout(year, exemption_mfj, exemption_single, star
 
 @pytest.mark.parametrize("year,complete_phaseout_mfj", [
     ("2023", 1662300),
+    ("2024", 1751900),
     ("2025", 1800700),
     ("2026", 1280400),
 ])

@@ -27,9 +27,12 @@
       "title": "Rev. Proc. 2023-34 (inflation adjustments for tax year 2024)",
       "retrieved": "2026-07-29",
       "backs": [
-        "2024.ltcg_brackets"
+        "2024.ltcg_brackets",
+        "2024.amt",
+        "2024.qbi",
+        "2024.credits.eitc"
       ],
-      "note": "Section .03 Maximum Capital Gains Rate: MFJ 94,050/583,750; MFS 47,025/291,850; HoH 63,000/551,350; all other individuals 47,025/518,900. The MFS 15% ceiling had been 259,450 (half of the single ceiling) \u2014 corrected per this source (finding F14)."
+      "note": "Section .03 Maximum Capital Gains Rate: MFJ 94,050/583,750; MFS 47,025/291,850; HoH 63,000/551,350; all other individuals 47,025/518,900. The MFS 15% ceiling had been 259,450 (half of the single ceiling) \u2014 corrected per this source (finding F14). Section .11 AMT: exemptions 133,300 MFJ / 85,700 single / 66,650 MFS; 28% bracket at 232,600 (116,300 MFS); phaseout thresholds 1,218,700 MFJ / 609,350 other (complete 1,751,900 MFJ, confirming the 25% rate). Section .27 QBI thresholds 383,900 MFJ / 191,950 other with phase-in amounts 483,900 / 241,950. Section .06 EITC table + $11,600 investment income limit."
     },
     "irs_topic_409": {
       "url": "https://www.irs.gov/taxtopics/tc409",
@@ -1013,6 +1016,34 @@
       "phaseout_rounding": "up",
       "actc_earned_income_floor": 2500,
       "actc_rate": 0.15
+    },
+    "amt": {
+      "exemption_single": 85700,
+      "exemption_mfj": 133300,
+      "exemption_mfs": 66650,
+      "phaseout_start_single": 609350,
+      "phaseout_start_mfj": 1218700,
+      "phaseout_start_mfs": 609350,
+      "phaseout_rate": 0.25,
+      "rate_28_threshold": 232600,
+      "rate_28_threshold_mfs": 116300,
+      "rates": [
+        {
+          "top": 232600,
+          "rate": 0.26
+        },
+        {
+          "top": null,
+          "rate": 0.28
+        }
+      ]
+    },
+    "qbi": {
+      "rate": 0.2,
+      "threshold_single": 191950,
+      "threshold_mfj": 383900,
+      "phase_in_range_single": 50000,
+      "phase_in_range_mfj": 100000
     }
   },
   "2025": {
