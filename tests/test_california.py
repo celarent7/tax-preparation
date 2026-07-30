@@ -380,3 +380,63 @@ def test_unsupported_state_year_raises():
 def test_no_income_tax_states_report_zero():
     for code in ("WA", "TX", "FL", "NV"):
         assert load_state_constants(code, "2025")["type"] == "none"
+
+
+# ---------------------------------------------------------------------------
+# C4 — the CA itemize-vs-standard decision in deduction_analyzer
+# ---------------------------------------------------------------------------
+
+def run_analyzer(*extra):
+    result = subprocess.run(
+        [sys.executable, os.path.join(SCRIPTS, "deduction_analyzer.py"),
+         "--agi", "300000", "--filing-status", "mfj", "--year", "2025",
+         "--state", "CA", "--output-format", "json", *extra],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_ca_itemize_decision_is_made_separately():
+    """C4: the analyzer never made the CA itemize-vs-standard decision.
+
+    CA's standard deduction ($11,412 MFJ) is roughly a third of the federal
+    $31,500, so a filer can land on opposite sides of the two decisions.
+    """
+    payload = run_analyzer("--property-tax", "9000", "--charitable-cash", "6000")
+    ca_section = payload["california"]
+
+    assert ca_section["ca_standard_deduction"] == 11412
+    # federal itemized 15,000 < 31,500 standard -> take federal standard
+    assert payload["comparison"]["use_itemized"] is False
+    # but CA itemized 15,000 > 11,412 -> itemize for CA
+    assert ca_section["use_itemized_for_ca"] is True
+    assert ca_section["differs_from_federal_decision"] is True
+
+
+def test_ca_excludes_state_income_tax_from_itemized():
+    """C4: state income tax is not deductible on the California return."""
+    payload = run_analyzer("--property-tax", "14000", "--state-income-tax", "22000")
+    ca_section = payload["california"]
+
+    # Federal SALT allows property + income tax up to the cap; CA takes the
+    # property tax only.
+    assert ca_section["state_income_tax_excluded"] == 22000
+    assert ca_section["ca_itemized_total"] == 14000
+
+
+def test_ca_mortgage_limit_delta_is_quantified():
+    """C3/C4: CA allows $1M of acquisition debt where federal allows $750K.
+
+    Interest $40,000 on $950,000 of post-2017 debt:
+      federal: 750,000/950,000 x 40,000 = $31,578.95
+      CA:      950,000 <= 1,000,000, so the full $40,000
+      delta:   $8,421.05 of extra California deduction
+    """
+    payload = run_analyzer("--mortgage-interest", "40000",
+                           "--acquisition-debt", "950000",
+                           "--loan-origination-date", "2020-01-01")
+    ca_section = payload["california"]
+
+    assert ca_section["ca_mortgage_debt_limit"] == 1000000
+    assert ca_section["mortgage_deduction_delta_vs_federal"] == pytest.approx(8421.05, abs=0.05)

@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Tuple
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils import (
     get_constant,
+    load_state_constants,
     get_status_value,
     load_tax_constants,
     make_year_arg,
@@ -259,6 +260,8 @@ def main():
                         help="Appreciated property gifts to 30%%-limit organizations")
     parser.add_argument("--age-65-plus", type=int, default=0)
     parser.add_argument("--blind", type=int, default=0)
+    parser.add_argument("--state", type=str, default=None,
+                        help="State of residence, e.g. CA, for a state itemize-vs-standard comparison")
     parser.add_argument("--output-format", choices=["json", "text"], default="text")
 
     args = parser.parse_args()
@@ -359,6 +362,58 @@ def main():
         }
     }
 
+    # --- State comparison: CA itemize-vs-standard is a SEPARATE decision (C4) ---
+    if args.state and args.state.upper() == "CA":
+        try:
+            ca = load_state_constants("CA", args.year)
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+
+        ca_standard = get_status_value(ca["standard_deduction"], args.filing_status,
+                                       "California standard deduction")
+        # CA itemized starts from the federal itemized total, then:
+        #   - removes state income tax entirely (not deductible for CA)
+        #   - adds back SALT lost to the federal cap that CA would allow
+        #     (property tax remains deductible for CA)
+        #   + allows mortgage interest on up to $1,000,000 of debt
+        ca_mortgage = analyze_mortgage_interest(
+            args.mortgage_interest, args.acquisition_debt, args.filing_status,
+            ca["nonconformity"]["mortgage_debt_limit"],
+            ca["nonconformity"]["mortgage_debt_limit"] / 2,
+            origination_date=args.loan_origination_date,
+            average_balance=args.average_mortgage_balance,
+        )
+        mortgage_delta = round(ca_mortgage["deductible_amount"] - mortgage["deductible_amount"], 2)
+
+        ca_itemized = round(
+            medical["deductible_amount"]
+            + salt["property_tax"]                      # property tax only, uncapped for CA
+            + ca_mortgage["deductible_amount"]
+            + charitable["deductible_amount"], 2)
+
+        ca_use_itemized = ca_itemized > ca_standard
+        result["california"] = {
+            "ca_standard_deduction": ca_standard,
+            "ca_itemized_total": ca_itemized,
+            "state_income_tax_excluded": salt["state_income_tax"],
+            "mortgage_deduction_delta_vs_federal": mortgage_delta,
+            "ca_mortgage_debt_limit": ca["nonconformity"]["mortgage_debt_limit"],
+            "use_itemized_for_ca": ca_use_itemized,
+            "recommendation": ("Itemize for California" if ca_use_itemized
+                               else "Take the California standard deduction"),
+            "differs_from_federal_decision": ca_use_itemized != use_itemized,
+            "notes": [
+                "California's standard deduction is far smaller than the federal one, "
+                "so the itemize decision must be made separately for CA.",
+                "State income tax is NOT deductible on the California return.",
+                "California allows mortgage interest on up to $1,000,000 of "
+                "acquisition debt (federal is $750,000), which can make itemizing "
+                "worthwhile for CA even when the federal return takes the standard "
+                "deduction.",
+            ],
+        }
+
     if args.output_format == "json":
         print(json.dumps(result, indent=2))
     else:
@@ -386,6 +441,18 @@ def main():
             print(f"    (Lost to SALT cap: ${salt['lost_to_cap']:,.2f})")
         print(f"  Mortgage Interest:     ${mortgage['deductible_amount']:,.2f}")
         print(f"  Charitable:            ${charitable['deductible_amount']:,.2f}")
+
+        if "california" in result:
+            c = result["california"]
+            print("\n--- California (separate decision) ---")
+            print(f"  CA Standard Deduction: ${c['ca_standard_deduction']:,.2f}")
+            print(f"  CA Itemized Total:     ${c['ca_itemized_total']:,.2f}")
+            if c["mortgage_deduction_delta_vs_federal"]:
+                print(f"  Extra CA mortgage interest (\$1M limit): "
+                      f"${c['mortgage_deduction_delta_vs_federal']:,.2f}")
+            print(f"  RESULT: {c['recommendation']}")
+            if c["differs_from_federal_decision"]:
+                print("  ⚠️  This DIFFERS from the federal decision above.")
 
 
 if __name__ == "__main__":
