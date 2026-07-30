@@ -9,6 +9,27 @@
       "backs": ["2025.salt.cap", "2025.salt.cap_mfs", "2025.salt.phasedown_magi_start", "2025.salt.phasedown_magi_start_mfs", "2025.salt.phasedown_rate", "2025.salt.floor", "2025.salt.floor_mfs"],
       "quote": "The overall limit on the deduction for state and local income, sales, and property taxes has increased to $40,000 ($20,000 if married filing separately). The overall limit is reduced if your modified adjusted gross income is more than $500,000 ($250,000 if married filing separately) but will not be reduced below $10,000 ($5,000 if married filing separately)."
     },
+    "rev_proc_2023_34_ty2024": {
+      "url": "https://www.irs.gov/pub/irs-drop/rp-23-34.pdf",
+      "title": "Rev. Proc. 2023-34 (inflation adjustments for tax year 2024)",
+      "retrieved": "2026-07-29",
+      "backs": ["2024.ltcg_brackets"],
+      "note": "Section .03 Maximum Capital Gains Rate: MFJ 94,050/583,750; MFS 47,025/291,850; HoH 63,000/551,350; all other individuals 47,025/518,900. The MFS 15% ceiling had been 259,450 (half of the single ceiling) — corrected per this source (finding F14)."
+    },
+    "irs_topic_409": {
+      "url": "https://www.irs.gov/taxtopics/tc409",
+      "title": "Topic no. 409, Capital gains and losses",
+      "retrieved": "2026-07-29",
+      "backs": ["2025.ltcg_brackets"],
+      "note": "2025: single 48,350/533,400; MFS 48,350/300,000; MFJ+QSS 96,700/600,050; HoH 64,750/566,700."
+    },
+    "irs_pub_501_2025": {
+      "url": "https://www.irs.gov/publications/p501",
+      "title": "Publication 501 (2025), Dependents, Standard Deduction, and Filing Information",
+      "retrieved": "2026-07-29",
+      "backs": ["2025.standard_deductions"],
+      "note": "OBBBA standard deduction for tax years beginning after 2024-12-31: 15,750 single/MFS, 31,500 MFJ/QSS, 23,625 HoH; indexed after 2025."
+    },
     "irs_topic_560": {
       "url": "https://www.irs.gov/taxtopics/tc560",
       "title": "Topic no. 560, Additional Medicare Tax",
@@ -240,7 +261,7 @@
     "ltcg_brackets": {
       "single": [{"top": 47025, "rate": 0.00}, {"top": 518900, "rate": 0.15}, {"top": null, "rate": 0.20}],
       "married_jointly": [{"top": 94050, "rate": 0.00}, {"top": 583750, "rate": 0.15}, {"top": null, "rate": 0.20}],
-      "married_separately": [{"top": 47025, "rate": 0.00}, {"top": 259450, "rate": 0.15}, {"top": null, "rate": 0.20}],
+      "married_separately": [{"top": 47025, "rate": 0.00}, {"top": 291850, "rate": 0.15}, {"top": null, "rate": 0.20}],
       "head_of_household": [{"top": 63000, "rate": 0.00}, {"top": 551350, "rate": 0.15}, {"top": null, "rate": 0.20}]
     },
     "niit_thresholds": {

@@ -17,17 +17,30 @@ def tax_data_2024():
     return load_tax_constants("2024")
 
 def test_standard_deduction_2025(tax_data_2025):
+    """Y3: 2025 standard deductions are the OBBBA amounts, not the pre-OBBBA ones.
+
+    This test previously asserted $15,000 / $30,000 — the pre-OBBBA figures —
+    and so encoded audit finding Y3 rather than catching it. OBBBA amended the
+    basic standard deduction for tax years beginning after 2024-12-31 to
+    $15,750 single/MFS, $31,500 MFJ/QSS, $23,625 HoH.
+
+    Source: IRS Publication 501 (2025), https://www.irs.gov/publications/p501;
+    IRS "New and enhanced deductions for individuals" (retrieved 2026-07-29).
+    """
     sd = tax_data_2025["standard_deductions"]
     add = tax_data_2025["additional_deduction_65_blind"]
-    
+
     # Single
-    assert calculate_standard_deduction("single", sd, add) == 15000
+    assert calculate_standard_deduction("single", sd, add) == 15750
     # MFJ
-    assert calculate_standard_deduction("married_jointly", sd, add) == 30000
-    # Single 65+
-    assert calculate_standard_deduction("single", sd, add, age_65_plus=1) == 17000
-    # MFJ both 65+
-    assert calculate_standard_deduction("married_jointly", sd, add, age_65_plus=2) == 30000 + (1600 * 2)
+    assert calculate_standard_deduction("married_jointly", sd, add) == 31500
+    # MFS and HoH
+    assert calculate_standard_deduction("married_separately", sd, add) == 15750
+    assert calculate_standard_deduction("head_of_household", sd, add) == 23625
+    # Single 65+: 15750 + 2000
+    assert calculate_standard_deduction("single", sd, add, age_65_plus=1) == 17750
+    # MFJ both 65+: 31500 + 2 x 1600
+    assert calculate_standard_deduction("married_jointly", sd, add, age_65_plus=2) == 31500 + (1600 * 2)
 
 def test_standard_deduction_2024(tax_data_2024):
     sd = tax_data_2024["standard_deductions"]

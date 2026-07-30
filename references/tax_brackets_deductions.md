@@ -65,11 +65,25 @@ Reference guide for current tax year thresholds, limits, and brackets.
 <!-- STANDARD_DEDUCTIONS -->
 | Filing Status | Standard Deduction |
 |---------------|-------------------|
-| Single | $15,000 |
-| Married Filing Jointly | $30,000 |
-| Married Filing Separately | $15,000 |
-| Head of Household | $22,500 |
+| Single | $15,750 |
+| Married Filing Jointly | $31,500 |
+| Married Filing Separately | $15,750 |
+| Head of Household | $23,625 |
+| Qualifying Surviving Spouse | $31,500 |
 <!-- /STANDARD_DEDUCTIONS -->
+
+> **OBBBA increase — do not use the pre-OBBBA figures.** The One Big Beautiful
+> Bill Act amended the basic standard deduction for tax years beginning after
+> December 31, 2024, raising it to $15,750 / $31,500 / $23,625. Earlier drafts of
+> the 2025 figures ($15,000 / $30,000 / $22,500) reflect pre-OBBBA law and are
+> **wrong for 2025** (audit finding Y3). These amounts are inflation-adjusted for
+> years after 2025. Authoritative values live in
+> `scripts/tax_constants.json` → `2025.standard_deductions`.
+>
+> *Source: IRS Publication 501 (2025), <https://www.irs.gov/publications/p501>;
+> IRS, "New and enhanced deductions for individuals",
+> <https://www.irs.gov/newsroom/new-and-enhanced-deductions-for-individuals>
+> (retrieved 2026-07-29).*
 
 **Additional deduction for age 65+ or blind**:
 <!-- ADDITIONAL_DEDUCTIONS -->
