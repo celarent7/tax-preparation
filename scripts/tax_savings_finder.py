@@ -9,7 +9,7 @@ import json
 import os
 import sys
 from typing import Dict, List, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from enum import Enum
 
 # Add the scripts directory to the path to import utils
@@ -31,6 +31,17 @@ class TaxOpportunity:
     priority: Priority
     action_required: str
     documentation_needed: List[str]
+
+
+def opportunity_to_dict(opportunity: "TaxOpportunity") -> Dict[str, Any]:
+    """Serialize an opportunity to JSON-safe primitives.
+
+    `asdict` leaves the Priority enum as an Enum member, which json.dumps
+    cannot encode — so the enum is flattened to its string value (finding D1).
+    """
+    payload = asdict(opportunity)
+    payload["priority"] = opportunity.priority.value
+    return payload
 
 
 def get_savings_rules(tax_data: Dict) -> Dict:
@@ -183,7 +194,7 @@ def main():
     opportunities.extend(analyze_deductions(user_data, rules))
 
     if args.output_format == "json":
-        print(json.dumps([asdict(o) for o in opportunities], indent=2))
+        print(json.dumps([opportunity_to_dict(o) for o in opportunities], indent=2))
     else:
         print(f"\n--- {args.year} Tax Savings Opportunities ---")
         if not opportunities:
