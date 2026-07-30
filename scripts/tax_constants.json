@@ -1,4 +1,9 @@
 {
+  "supported_years": ["2024", "2025"],
+  "_sources": {
+    "_note": "Every statutory figure must trace to a primary source: IRS Rev. Proc. / newsroom / form instructions for federal, FTB for California. URL + retrieval date + the keys each source backs.",
+    "TODO_VERIFY": {}
+  },
   "2025": {
     "tax_year": 2025,
     "tax_brackets": {
@@ -49,11 +54,11 @@
       ]
     },
     "standard_deductions": {
-      "single": 15000,
-      "married_jointly": 30000,
-      "married_separately": 15000,
-      "head_of_household": 22500,
-      "qualifying_surviving_spouse": 30000
+      "single": 15750,
+      "married_jointly": 31500,
+      "married_separately": 15750,
+      "head_of_household": 23625,
+      "qualifying_surviving_spouse": 31500
     },
     "additional_deduction_65_blind": {
       "single": 2000,
