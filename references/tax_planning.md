@@ -115,13 +115,22 @@ python scripts/estimated_tax_calculator.py --projected-income <amount> --withhol
 
 ## Itemized vs Standard Deduction Decision
 
-### Standard Deduction (2024)
+### Standard Deduction (<!-- YEAR -->2025<!-- /YEAR -->)
 | Filing Status | Amount |
 |---------------|--------|
-| Single | $14,600 |
-| Married Filing Jointly | $29,200 |
-| Head of Household | $21,900 |
-| Additional for 65+/blind | $1,550 (married) or $1,950 (single/HoH) |
+| Single | $15,750 |
+| Married Filing Jointly / QSS | $31,500 |
+| Married Filing Separately | $15,750 |
+| Head of Household | $23,625 |
+| Additional for 65+/blind | $1,600 (married) or $2,000 (single/HoH) |
+
+> These are the **OBBBA** amounts, effective for tax years beginning after
+> 2024-12-31. This table previously showed 2024 figures ($14,600 / $29,200 /
+> $21,900) with no year marker while the surrounding text read as current —
+> audit finding Y4. Prior-year amounts for amended returns live in
+> `references/tax_brackets_deductions.md`.
+>
+> *Source: IRS Pub 501 (2025), <https://www.irs.gov/publications/p501>.*
 
 ### Itemized Deductions Summary
 | Category | Limit | Notes |
@@ -147,13 +156,17 @@ python scripts/deduction_optimizer.py --income <agi> --itemized-items <file.json
 
 ## Investment Tax Optimization
 
-### Capital Gains Rates (2024)
-- 0%: Taxable income up to $47,025 (single), $94,050 (MFJ)
-- 15%: Up to $518,900 (single), $583,750 (MFJ)
+### Capital Gains Rates (<!-- YEAR -->2025<!-- /YEAR -->)
+- 0%: Taxable income up to $48,350 (single), $96,700 (MFJ)
+- 15%: Up to $533,400 (single), $600,050 (MFJ)
 - 20%: Above those thresholds
 
+*Source: IRS Topic no. 409, <https://www.irs.gov/taxtopics/tc409>. Full table by
+filing status: `references/investment_taxes.md`.*
+
 ### Net Investment Income Tax (NIIT)
-3.8% on investment income when MAGI exceeds $200k ($250k MFJ)
+3.8% on investment income when MAGI exceeds $200k (single/HoH), $250k (MFJ),
+$125k (MFS). These thresholds are statutory and **not** inflation-indexed.
 
 ### Optimization Strategies
 - **Tax-loss harvesting**: Offset gains with losses (watch wash sale rule)

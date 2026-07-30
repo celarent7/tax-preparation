@@ -2,18 +2,43 @@
 
 Comprehensive reference for capital gains, dividends, cost basis, and investment tax optimization.
 
-## Capital Gains Tax Rates (2024)
+## Capital Gains Tax Rates (<!-- YEAR -->2025<!-- /YEAR -->)
 
 ### Long-Term Capital Gains (held > 1 year)
 
+<!-- LTCG_TABLE_2025 -->
+| Filing Status | 0% Rate | 15% Rate | 20% Rate |
+|---------------|---------|----------|----------|
+| Single | $0 - $48,350 | $48,351 - $533,400 | Over $533,400 |
+| Married Filing Jointly / QSS | $0 - $96,700 | $96,701 - $600,050 | Over $600,050 |
+| Married Filing Separately | $0 - $48,350 | $48,351 - $300,000 | Over $300,000 |
+| Head of Household | $0 - $64,750 | $64,751 - $566,700 | Over $566,700 |
+<!-- /LTCG_TABLE_2025 -->
+
+*Source: IRS Topic no. 409, <https://www.irs.gov/taxtopics/tc409> (retrieved 2026-07-29).*
+
+### Prior year for amended returns (<!-- YEAR -->2024<!-- /YEAR -->)
+
+<!-- LTCG_TABLE_2024 -->
 | Filing Status | 0% Rate | 15% Rate | 20% Rate |
 |---------------|---------|----------|----------|
 | Single | $0 - $47,025 | $47,026 - $518,900 | Over $518,900 |
-| Married Filing Jointly | $0 - $94,050 | $94,051 - $583,750 | Over $583,750 |
+| Married Filing Jointly / QSS | $0 - $94,050 | $94,051 - $583,750 | Over $583,750 |
 | Married Filing Separately | $0 - $47,025 | $47,026 - $291,850 | Over $291,850 |
 | Head of Household | $0 - $63,000 | $63,001 - $551,350 | Over $551,350 |
+<!-- /LTCG_TABLE_2024 -->
+
+*Source: Rev. Proc. 2023-34 §.03, <https://www.irs.gov/pub/irs-drop/rp-23-34.pdf>.*
 
 **Note**: These brackets are based on TAXABLE INCOME, not AGI.
+
+**Every table in this file is year-stamped (finding Y4).** Untagged figures were
+2024 amounts presented as current. Always confirm the year before using a table,
+and prefer `scripts/tax_constants.json` as the authoritative source.
+
+**California does not follow any of this.** CA taxes capital gains — short *and*
+long term — as ordinary income at its progressive rates, with no preferential
+bracket. See `references/california_tax_guide.md`.
 
 ### Short-Term Capital Gains (held ≤ 1 year)
 - Taxed as ordinary income at your marginal tax rate (10%-37%)
