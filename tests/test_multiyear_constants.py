@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+"""Validates the multi-year constants expansion (blueprint 3.1 steps 1 & 3).
+
+Covers audit findings:
+  Y2 — coverage was only 2024-2025; no 2023 (amended returns) or 2026 (planning).
+  F6 — the EITC block's phaseout values matched neither year's Rev. Proc.
+  F7 — the OBBBA individual deductions were absent everywhere.
+  F8 — no AMT data at all (trigger-flag support).
+
+Several rates are verified here by *arithmetic identity* against separately
+published figures rather than by quoting them. That is a stronger check than a
+transcription: if either the rate or the published amount were wrong, the
+identity would not hold to the dollar.
+"""
+
+import os
+import sys
+
+import pytest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+
+from utils import SUPPORTED_YEARS, get_constant, load_tax_constants  # noqa: E402
+
+
+def test_supported_years_cover_2023_through_2026():
+    """Y2: amended-return years and the planning year are both present."""
+    assert SUPPORTED_YEARS == ["2023", "2024", "2025", "2026"]
+
+
+# ---------------------------------------------------------------------------
+# F6 — EITC
+# ---------------------------------------------------------------------------
+
+CHILD_COUNTS = ("0", "1", "2", "3")
+
+
+@pytest.mark.parametrize("year", SUPPORTED_YEARS)
+def test_eitc_max_credit_equals_earned_amount_times_phase_in_rate(year):
+    """F6: max_credit = earned_income_amount x phase_in_rate, to the dollar.
+
+    IRC 32(b)(1) phase-in percentages are 7.65 / 34 / 40 / 45. The Rev. Proc.
+    publishes the earned income amount and the max credit but not the rate, so
+    this identity confirms the stored rate against two published figures.
+    Example (2025, two children): $17,880 x 0.40 = $7,152. ✓
+    """
+    eitc = load_tax_constants(year)["credits"]["eitc"]
+    for n in CHILD_COUNTS:
+        row = eitc[n]
+        computed = row["earned_income_amount"] * row["phase_in_rate"]
+        assert abs(computed - row["max_credit"]) <= 1, (
+            f"{year} {n} children: {row['earned_income_amount']} x "
+            f"{row['phase_in_rate']} = {computed}, published max credit "
+            f"{row['max_credit']}"
+        )
+
+
+@pytest.mark.parametrize("year", SUPPORTED_YEARS)
+@pytest.mark.parametrize("suffix", ["mfj", "other"])
+def test_eitc_completed_phaseout_matches_phase_out_rate(year, suffix):
+    """F6: completed_phaseout = threshold + max_credit / phase_out_rate.
+
+    Confirms the IRC 32(b)(1) phase-out percentages (7.65 / 15.98 / 21.06 /
+    21.06) against the published threshold and completed phaseout amounts.
+    Example (2023, one child, MFJ):
+        28,120 + (11,750 x 0.34)/0.1598 = 28,120 + 25,000 = 53,120 ✓
+
+    Tolerance is $15 rather than exact: IRC 32(j) rounds each published amount
+    (earned income amount, threshold, completed phaseout) to the nearest $10
+    independently, so recomputing one from the others cannot reproduce it to
+    the dollar. Observed residuals across 2023-2026 are under $7.
+
+    The tolerance is still far tighter than any rate error. Applying the
+    one-child 15.98% rate to a zero-child filer, for instance, would land
+    ~$44,000 away — which is exactly the F5 defect this guards against.
+    """
+    eitc = load_tax_constants(year)["credits"]["eitc"]
+    for n in CHILD_COUNTS:
+        row = eitc[n]
+        threshold = row[f"threshold_phaseout_{suffix}"]
+        completed = row[f"completed_phaseout_{suffix}"]
+        unrounded_credit = row["earned_income_amount"] * row["phase_in_rate"]
+        computed = threshold + unrounded_credit / row["phase_out_rate"]
+        assert abs(computed - completed) <= 15, (
+            f"{year} {n} children ({suffix}): {threshold} + "
+            f"({row['earned_income_amount']} x {row['phase_in_rate']})/"
+            f"{row['phase_out_rate']} = {computed:.1f}, "
+            f"published completed phaseout {completed}"
+        )
+
+
+def test_eitc_phase_in_rates_differ_by_child_count():
+    """F5: a single 34% rate for every child count overstated the 0-child credit.
+
+    The 0-child phase-in rate is 7.65%, not 34% — using 34% overstates that
+    filer's credit by roughly 4.4x, which is what the audit found.
+    """
+    eitc = load_tax_constants("2025")["credits"]["eitc"]
+    assert eitc["0"]["phase_in_rate"] == 0.0765
+    assert eitc["1"]["phase_in_rate"] == 0.34
+    assert eitc["2"]["phase_in_rate"] == 0.40
+    assert eitc["3"]["phase_in_rate"] == 0.45
+
+    assert eitc["0"]["phase_out_rate"] == 0.0765
+    assert eitc["1"]["phase_out_rate"] == 0.1598
+    assert eitc["2"]["phase_out_rate"] == 0.2106
+    assert eitc["3"]["phase_out_rate"] == 0.2106
+
+
+@pytest.mark.parametrize("year,limit", [
+    ("2023", 11000), ("2024", 11600), ("2025", 11950), ("2026", 12200),
+])
+def test_eitc_investment_income_limit_per_year(year, limit):
+    """F6: the investment-income limit is year-specific (was 2024-only)."""
+    eitc = load_tax_constants(year)["credits"]["eitc"]
+    assert eitc["investment_income_limit"] == limit
+
+
+# ---------------------------------------------------------------------------
+# F8 — AMT
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("year,exemption_mfj,exemption_single,start_mfj,rate", [
+    # Rev. Proc. 2022-38 sec .11 / 2024-40 sec .11 / 2025-32 sec .10
+    ("2023", 126500, 81300, 1156300, 0.25),
+    ("2025", 137000, 88100, 1252700, 0.25),
+    # OBBBA resets the 2026 phase-out to $1M/$500K with a 50% rate.
+    ("2026", 140200, 90100, 1000000, 0.50),
+])
+def test_amt_exemptions_and_phaseout(year, exemption_mfj, exemption_single, start_mfj, rate):
+    """F8: AMT exemption/phase-out data is present and year-correct."""
+    amt = load_tax_constants(year)["amt"]
+    assert amt["exemption_mfj"] == exemption_mfj
+    assert amt["exemption_single"] == exemption_single
+    assert amt["phaseout_start_mfj"] == start_mfj
+    assert amt["phaseout_rate"] == rate
+
+
+@pytest.mark.parametrize("year,complete_phaseout_mfj", [
+    ("2023", 1662300),
+    ("2025", 1800700),
+    ("2026", 1280400),
+])
+def test_amt_phaseout_rate_reproduces_published_complete_phaseout(year, complete_phaseout_mfj):
+    """F8: threshold + exemption/rate must equal the published complete phaseout.
+
+    This verifies the stored phase-out RATE without quoting it from memory:
+      2025 MFJ: 1,252,700 + 137,000/0.25 = 1,800,700 ✓
+      2026 MFJ: 1,000,000 + 140,200/0.50 = 1,280,400 ✓ (OBBBA 50% rate)
+    A wrong rate would miss the published figure by hundreds of thousands.
+    """
+    amt = load_tax_constants(year)["amt"]
+    computed = amt["phaseout_start_mfj"] + amt["exemption_mfj"] / amt["phaseout_rate"]
+    assert computed == pytest.approx(complete_phaseout_mfj, abs=1)
+
+
+def test_amt_2026_phaseout_is_the_obbba_reset():
+    """F8: 2026 must not inherit the 2025 phase-out thresholds."""
+    amt_2025 = load_tax_constants("2025")["amt"]
+    amt_2026 = load_tax_constants("2026")["amt"]
+    assert amt_2026["phaseout_start_mfj"] == 1000000 < amt_2025["phaseout_start_mfj"]
+    assert amt_2026["phaseout_start_single"] == 500000 < amt_2025["phaseout_start_single"]
+    assert amt_2026["phaseout_rate"] == 0.50
+
+
+# ---------------------------------------------------------------------------
+# F7 — OBBBA deductions
+# ---------------------------------------------------------------------------
+
+def test_obbba_deductions_present_for_2025():
+    """F7: senior / tips / overtime / car-loan deductions exist with limits.
+
+    All figures from Schedule 1-A (Form 1040) 2025.
+    """
+    o = load_tax_constants("2025")["obbba_deductions"]
+
+    assert o["senior_bonus"]["amount"] == 6000
+    assert o["senior_bonus"]["magi_phaseout_start_single"] == 75000
+    assert o["senior_bonus"]["magi_phaseout_start_mfj"] == 150000
+    assert o["senior_bonus"]["phaseout_rate"] == 0.06
+    assert o["senior_bonus"]["effective_years"] == ["2025", "2026", "2027", "2028"]
+
+    assert o["tips"]["max"] == 25000
+    assert o["tips"]["magi_phaseout_start_single"] == 150000
+    assert o["tips"]["magi_phaseout_start_mfj"] == 300000
+
+    assert o["overtime"]["max_single"] == 12500
+    assert o["overtime"]["max_mfj"] == 25000
+
+    assert o["car_loan_interest"]["max"] == 10000
+    assert o["car_loan_interest"]["magi_phaseout_start_single"] == 100000
+
+
+def test_obbba_phaseout_rounding_direction_differs_by_deduction():
+    """F7: Schedule 1-A rounds tips/overtime DOWN but car-loan interest UP.
+
+    Lines 11/19 say "decrease the result to the next lower whole number";
+    line 28 says "increase the result to the next higher whole number". Getting
+    this backwards changes the deduction by one $100/$200 step.
+    """
+    o = load_tax_constants("2025")["obbba_deductions"]
+    assert o["tips"]["phaseout_rounding"] == "down"
+    assert o["overtime"]["phaseout_rounding"] == "down"
+    assert o["car_loan_interest"]["phaseout_rounding"] == "up"
+    assert o["tips"]["phaseout_per_1000"] == 100
+    assert o["car_loan_interest"]["phaseout_per_1000"] == 200
+
+
+# ---------------------------------------------------------------------------
+# Y5 — due dates live in data, not code
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("year", SUPPORTED_YEARS)
+def test_estimated_tax_due_dates_present_and_year_correct(year):
+    """Y5: each year carries its own four due dates; none fall back to 2025."""
+    dates = load_tax_constants(year)["estimated_tax_due_dates"]
+    assert len(dates) == 4
+    quarters = [d[0] for d in dates]
+    assert quarters == ["Q1", "Q2", "Q3", "Q4"]
+    # Q1-Q3 fall in the tax year; Q4 falls in January of the next year.
+    for q, date_str, _ in dates[:3]:
+        assert date_str.startswith(year), f"{year} {q} due date is {date_str}"
+    assert dates[3][1].startswith(str(int(year) + 1))
+
+
+# ---------------------------------------------------------------------------
+# Ground rule 1 — unverified 2026 figures raise instead of guessing
+# ---------------------------------------------------------------------------
+
+def test_unverified_2026_salt_cap_raises_when_read():
+    """The 2026 SALT cap is not published in Rev. Proc. 2025-32, so it is null.
+
+    Reading it must raise rather than silently returning None or a guess.
+    """
+    from utils import UnverifiedConstantError
+
+    salt_2026 = load_tax_constants("2026")["salt"]
+    with pytest.raises(UnverifiedConstantError):
+        get_constant(salt_2026, "cap")
+
+
+def test_unverified_2026_ss_wage_base_raises_when_read():
+    """The SSA wage base is not in the Rev. Proc.; it must not be guessed."""
+    from utils import UnverifiedConstantError
+
+    se = load_tax_constants("2026")["se_tax"]
+    with pytest.raises(UnverifiedConstantError):
+        get_constant(se, "ss_wage_base")
+
+
+def test_verified_2026_figures_are_readable():
+    """Data that WAS verified is usable — nulls are targeted, not blanket."""
+    data = load_tax_constants("2026")
+    assert get_constant(data, "standard_deductions", "married_jointly") == 32200
+    assert get_constant(data, "ctc", "per_child") == 2200
+    assert get_constant(data, "amt", "exemption_mfj") == 140200

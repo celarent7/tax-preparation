@@ -83,11 +83,9 @@ def get_savings_rules(tax_data: Dict) -> Dict:
         "salt": tax_data["salt"],
         "medical_threshold": tax_data["credits"]["medical_threshold"],
         "charitable_cash_limit": tax_data["credits"]["charitable_cash_limit"],
-        "eitc_limits": {
-            "max_credit": tax_data["credits"]["eitc"]["max_credit"],
-            "phaseout_single": tax_data["credits"]["eitc"]["phaseout_single"],
-            "phaseout_mfj": tax_data["credits"]["eitc"]["phaseout_mfj"]
-        },
+        # Per-child-count EITC parameters (see the `eitc` block in
+        # tax_constants.json). Replaces the old flat max_credit/phaseout_* keys.
+        "eitc": tax_data["credits"]["eitc"],
         "savers_credit_limits": tax_data["credits"]["savers_credit"],
         "tax_brackets": tax_data["tax_brackets_processed"]
     }

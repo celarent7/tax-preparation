@@ -1,116 +1,320 @@
 {
-  "supported_years": ["2024", "2025"],
+  "supported_years": [
+    "2023",
+    "2024",
+    "2025",
+    "2026"
+  ],
   "_sources": {
     "_note": "Every statutory figure must trace to a primary source: IRS Rev. Proc. / newsroom / form instructions for federal, FTB for California. URL + retrieval date + the keys each source backs.",
     "irs_sch_a_2025_instructions": {
       "url": "https://www.irs.gov/instructions/i1040sca",
       "title": "Instructions for Schedule A (Form 1040) (2025)",
       "retrieved": "2026-07-29",
-      "backs": ["2025.salt.cap", "2025.salt.cap_mfs", "2025.salt.phasedown_magi_start", "2025.salt.phasedown_magi_start_mfs", "2025.salt.phasedown_rate", "2025.salt.floor", "2025.salt.floor_mfs"],
+      "backs": [
+        "2025.salt.cap",
+        "2025.salt.cap_mfs",
+        "2025.salt.phasedown_magi_start",
+        "2025.salt.phasedown_magi_start_mfs",
+        "2025.salt.phasedown_rate",
+        "2025.salt.floor",
+        "2025.salt.floor_mfs"
+      ],
       "quote": "The overall limit on the deduction for state and local income, sales, and property taxes has increased to $40,000 ($20,000 if married filing separately). The overall limit is reduced if your modified adjusted gross income is more than $500,000 ($250,000 if married filing separately) but will not be reduced below $10,000 ($5,000 if married filing separately)."
     },
     "rev_proc_2023_34_ty2024": {
       "url": "https://www.irs.gov/pub/irs-drop/rp-23-34.pdf",
       "title": "Rev. Proc. 2023-34 (inflation adjustments for tax year 2024)",
       "retrieved": "2026-07-29",
-      "backs": ["2024.ltcg_brackets"],
-      "note": "Section .03 Maximum Capital Gains Rate: MFJ 94,050/583,750; MFS 47,025/291,850; HoH 63,000/551,350; all other individuals 47,025/518,900. The MFS 15% ceiling had been 259,450 (half of the single ceiling) — corrected per this source (finding F14)."
+      "backs": [
+        "2024.ltcg_brackets"
+      ],
+      "note": "Section .03 Maximum Capital Gains Rate: MFJ 94,050/583,750; MFS 47,025/291,850; HoH 63,000/551,350; all other individuals 47,025/518,900. The MFS 15% ceiling had been 259,450 (half of the single ceiling) \u2014 corrected per this source (finding F14)."
     },
     "irs_topic_409": {
       "url": "https://www.irs.gov/taxtopics/tc409",
       "title": "Topic no. 409, Capital gains and losses",
       "retrieved": "2026-07-29",
-      "backs": ["2025.ltcg_brackets"],
+      "backs": [
+        "2025.ltcg_brackets"
+      ],
       "note": "2025: single 48,350/533,400; MFS 48,350/300,000; MFJ+QSS 96,700/600,050; HoH 64,750/566,700."
     },
     "irs_pub_501_2025": {
       "url": "https://www.irs.gov/publications/p501",
       "title": "Publication 501 (2025), Dependents, Standard Deduction, and Filing Information",
       "retrieved": "2026-07-29",
-      "backs": ["2025.standard_deductions"],
+      "backs": [
+        "2025.standard_deductions"
+      ],
       "note": "OBBBA standard deduction for tax years beginning after 2024-12-31: 15,750 single/MFS, 31,500 MFJ/QSS, 23,625 HoH; indexed after 2025."
     },
     "irs_topic_560": {
       "url": "https://www.irs.gov/taxtopics/tc560",
       "title": "Topic no. 560, Additional Medicare Tax",
       "retrieved": "2026-07-29",
-      "backs": ["se_tax.additional_medicare_rate", "se_tax.additional_medicare_threshold_single", "se_tax.additional_medicare_threshold_married", "se_tax.additional_medicare_threshold_married_separately", "se_tax.additional_medicare_threshold_head_of_household", "se_tax.additional_medicare_threshold_qualifying_surviving_spouse"],
+      "backs": [
+        "se_tax.additional_medicare_rate",
+        "se_tax.additional_medicare_threshold_single",
+        "se_tax.additional_medicare_threshold_married",
+        "se_tax.additional_medicare_threshold_married_separately",
+        "se_tax.additional_medicare_threshold_head_of_household",
+        "se_tax.additional_medicare_threshold_qualifying_surviving_spouse"
+      ],
       "note": "0.9% on wages/SE income over $250,000 joint, $125,000 MFS, $200,000 in any other case (incl. HoH and QSS). Statutory, not inflation-indexed."
     },
-    "TODO_VERIFY": {}
+    "TODO_VERIFY": {
+      "2026.salt": "OBBBA indexes the SALT cap for 2026 but Rev. Proc. 2025-32 does not publish it. cap, cap_mfs and both phasedown_magi_start values are null pending the IRS release or statute text stating the 2026 figures.",
+      "2026.se_tax.ss_wage_base": "Social Security wage base is announced by SSA, not in the Rev. Proc. Needs the SSA 2026 fact sheet.",
+      "2026.retirement_limits": "401(k)/IRA/HSA limits come from an IRS Notice (401k/IRA) and Rev. Proc. (HSA), neither fetched. All null.",
+      "2026.credits.savers_credit": "Saver's Credit AGI bands for 2026 not verified.",
+      "2026.mileage_rate": "Standard mileage rate is announced in a separate IRS Notice.",
+      "2026.educator_expense_limit": "Not verified for 2026.",
+      "retirement_limits.401k.super_catchup_60_63": "SECURE 2.0 ages 60-63 super catch-up ($11,250 for 2025 per the blueprint) not verified against IRS Notice 2024-80.",
+      "retirement_limits.401k.total_415c": "Section 415(c) annual additions limit not verified for 2025/2026.",
+      "2023.retirement_limits": "2023 401(k)/IRA limits come from IRS Notice 2022-55 and HSA limits from Rev. Proc. 2022-24; neither was fetched. All null.",
+      "2023.credits.savers_credit": "Saver's Credit AGI bands for 2023 not verified.",
+      "2023.mileage_rate": "Standard mileage rate is announced in a separate IRS Notice."
+    },
+    "rev_proc_2024_40_ty2025": {
+      "url": "https://www.irs.gov/pub/irs-drop/rp-24-40.pdf",
+      "title": "Rev. Proc. 2024-40 (inflation adjustments for tax year 2025)",
+      "retrieved": "2026-07-29",
+      "backs": [
+        "2025.credits.eitc",
+        "2025.amt",
+        "2025.qbi"
+      ],
+      "note": "sec .06 EITC table + $11,950 investment income limit; sec .11 AMT exemptions 137,000 MFJ / 88,100 single / 68,500 MFS, 28% bracket at 239,100 (119,550 MFS), phaseout thresholds 1,252,700 MFJ / 626,350 other; sec .27 QBI thresholds 394,600 MFJ / 197,300 other with phase-in amounts 494,600 / 247,300."
+    },
+    "rev_proc_2025_32_ty2026": {
+      "url": "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "title": "Rev. Proc. 2025-32 (inflation adjustments for tax year 2026)",
+      "retrieved": "2026-07-29",
+      "backs": [
+        "2026.tax_brackets",
+        "2026.standard_deductions",
+        "2026.additional_deduction_65_blind",
+        "2026.ltcg_brackets",
+        "2026.ctc",
+        "2026.amt",
+        "2026.qbi",
+        "2026.credits.eitc"
+      ],
+      "note": "sec .03 LTCG; sec .05 CTC 2,200/1,700; sec .06 EITC + 12,200 investment limit; sec .10 AMT (OBBBA phaseout reset to 1,000,000 MFJ / 500,000 other); sec .14 standard deduction 32,200/24,150/16,100 and aged-or-blind 1,650 (2,050 if unmarried and not a surviving spouse); sec .26 QBI."
+    },
+    "rev_proc_2022_38_ty2023": {
+      "url": "https://www.irs.gov/pub/irs-drop/rp-22-38.pdf",
+      "title": "Rev. Proc. 2022-38 (inflation adjustments for tax year 2023)",
+      "retrieved": "2026-07-29",
+      "backs": [
+        "2023.tax_brackets",
+        "2023.standard_deductions",
+        "2023.ltcg_brackets"
+      ],
+      "note": "sec .03 LTCG 89,250/553,850 MFJ, 44,625/276,900 MFS, 59,750/523,050 HoH, 44,625/492,300 single; sec .15 standard deduction 27,700/20,800/13,850."
+    },
+    "schedule_1a_2025": {
+      "url": "https://www.irs.gov/pub/irs-pdf/f1040s1a.pdf",
+      "title": "Schedule 1-A (Form 1040) 2025 \u2014 Additional Deductions",
+      "retrieved": "2026-07-29",
+      "backs": [
+        "2025.obbba_deductions"
+      ],
+      "note": "Part II tips: max 25,000, MAGI 150,000/300,000, $100 per $1,000 rounded DOWN. Part III overtime: 12,500/25,000, MAGI 150,000/300,000, $100 per $1,000 rounded DOWN. Part IV car loan interest: 10,000, MAGI 100,000/200,000, $200 per $1,000 rounded UP. Part V seniors: 6,000 less 6% of MAGI over 75,000 (150,000 MFJ)."
+    },
+    "schedule_8812_2025": {
+      "url": "https://www.irs.gov/pub/irs-pdf/f1040s8.pdf",
+      "title": "Schedule 8812 (Form 1040) 2025",
+      "retrieved": "2026-07-29",
+      "backs": [
+        "2025.ctc",
+        "2024.ctc"
+      ],
+      "note": "Line 10 rounds the MAGI excess UP to the next multiple of $1,000; line 11 multiplies by 5% (= $50 per $1,000)."
+    },
+    "form_1040es": {
+      "url": "https://www.irs.gov/pub/irs-pdf/f1040es.pdf",
+      "title": "Form 1040-ES, Estimated Tax for Individuals",
+      "retrieved": "2026-07-29",
+      "backs": [
+        "estimated_tax.safe_harbor_thresholds"
+      ],
+      "note": "110% safe harbor applies when prior-year AGI exceeded $150,000 ($75,000 if MFS)."
+    }
   },
-  "2025": {
-    "tax_year": 2025,
+  "2023": {
+    "tax_year": 2023,
     "tax_brackets": {
       "single": [
-        {"top": 11925, "rate": 0.10},
-        {"top": 48475, "rate": 0.12},
-        {"top": 103350, "rate": 0.22},
-        {"top": 197300, "rate": 0.24},
-        {"top": 250525, "rate": 0.32},
-        {"top": 626350, "rate": 0.35},
-        {"top": null, "rate": 0.37}
+        {
+          "top": 11000,
+          "rate": 0.1
+        },
+        {
+          "top": 44725,
+          "rate": 0.12
+        },
+        {
+          "top": 95375,
+          "rate": 0.22
+        },
+        {
+          "top": 182100,
+          "rate": 0.24
+        },
+        {
+          "top": 231250,
+          "rate": 0.32
+        },
+        {
+          "top": 578125,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
       ],
       "married_jointly": [
-        {"top": 23850, "rate": 0.10},
-        {"top": 96950, "rate": 0.12},
-        {"top": 206700, "rate": 0.22},
-        {"top": 394600, "rate": 0.24},
-        {"top": 501050, "rate": 0.32},
-        {"top": 751600, "rate": 0.35},
-        {"top": null, "rate": 0.37}
+        {
+          "top": 22000,
+          "rate": 0.1
+        },
+        {
+          "top": 89450,
+          "rate": 0.12
+        },
+        {
+          "top": 190750,
+          "rate": 0.22
+        },
+        {
+          "top": 364200,
+          "rate": 0.24
+        },
+        {
+          "top": 462500,
+          "rate": 0.32
+        },
+        {
+          "top": 693750,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
       ],
       "married_separately": [
-        {"top": 11925, "rate": 0.10},
-        {"top": 48475, "rate": 0.12},
-        {"top": 103350, "rate": 0.22},
-        {"top": 197300, "rate": 0.24},
-        {"top": 250525, "rate": 0.32},
-        {"top": 375800, "rate": 0.35},
-        {"top": null, "rate": 0.37}
+        {
+          "top": 11000,
+          "rate": 0.1
+        },
+        {
+          "top": 44725,
+          "rate": 0.12
+        },
+        {
+          "top": 95375,
+          "rate": 0.22
+        },
+        {
+          "top": 182100,
+          "rate": 0.24
+        },
+        {
+          "top": 231250,
+          "rate": 0.32
+        },
+        {
+          "top": 346875,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
       ],
       "head_of_household": [
-        {"top": 17000, "rate": 0.10},
-        {"top": 64850, "rate": 0.12},
-        {"top": 103350, "rate": 0.22},
-        {"top": 197300, "rate": 0.24},
-        {"top": 250500, "rate": 0.32},
-        {"top": 626350, "rate": 0.35},
-        {"top": null, "rate": 0.37}
+        {
+          "top": 15700,
+          "rate": 0.1
+        },
+        {
+          "top": 59850,
+          "rate": 0.12
+        },
+        {
+          "top": 95350,
+          "rate": 0.22
+        },
+        {
+          "top": 182100,
+          "rate": 0.24
+        },
+        {
+          "top": 231250,
+          "rate": 0.32
+        },
+        {
+          "top": 578100,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
       ],
       "qualifying_surviving_spouse": [
-        {"top": 23850, "rate": 0.10},
-        {"top": 96950, "rate": 0.12},
-        {"top": 206700, "rate": 0.22},
-        {"top": 394600, "rate": 0.24},
-        {"top": 501050, "rate": 0.32},
-        {"top": 751600, "rate": 0.35},
-        {"top": null, "rate": 0.37}
+        {
+          "top": 22000,
+          "rate": 0.1
+        },
+        {
+          "top": 89450,
+          "rate": 0.12
+        },
+        {
+          "top": 190750,
+          "rate": 0.22
+        },
+        {
+          "top": 364200,
+          "rate": 0.24
+        },
+        {
+          "top": 462500,
+          "rate": 0.32
+        },
+        {
+          "top": 693750,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
       ]
     },
     "standard_deductions": {
-      "single": 15750,
-      "married_jointly": 31500,
-      "married_separately": 15750,
-      "head_of_household": 23625,
-      "qualifying_surviving_spouse": 31500
+      "single": 13850,
+      "married_jointly": 27700,
+      "married_separately": 13850,
+      "head_of_household": 20800,
+      "qualifying_surviving_spouse": 27700
     },
     "additional_deduction_65_blind": {
-      "single": 2000,
-      "married_jointly": 1600,
-      "married_separately": 1600,
-      "head_of_household": 2000,
-      "qualifying_surviving_spouse": 1600
+      "single": 1850,
+      "married_jointly": 1500,
+      "married_separately": 1500,
+      "head_of_household": 1850,
+      "qualifying_surviving_spouse": 1500
     },
     "salt": {
-      "cap": 40000,
-      "cap_mfs": 20000,
-      "phasedown": true,
-      "phasedown_magi_start": 500000,
-      "phasedown_magi_start_mfs": 250000,
-      "phasedown_rate": 0.30,
-      "floor": 10000,
-      "floor_mfs": 5000
+      "cap": 10000,
+      "cap_mfs": 5000,
+      "phasedown": false
     },
     "mortgage_debt_limit": 750000,
     "mortgage_debt_limit_mfs": 375000,
@@ -118,23 +322,90 @@
     "capital_loss_limit_mfs": 1500,
     "educator_expense_limit": 300,
     "student_loan_interest_limit": 2500,
-    "charitable_property_agi_limit": 0.30,
+    "charitable_property_agi_limit": 0.3,
     "ltcg_brackets": {
-      "single": [{"top": 48350, "rate": 0.00}, {"top": 533400, "rate": 0.15}, {"top": null, "rate": 0.20}],
-      "married_jointly": [{"top": 96700, "rate": 0.00}, {"top": 600050, "rate": 0.15}, {"top": null, "rate": 0.20}],
-      "married_separately": [{"top": 48350, "rate": 0.00}, {"top": 300000, "rate": 0.15}, {"top": null, "rate": 0.20}],
-      "head_of_household": [{"top": 64750, "rate": 0.00}, {"top": 566700, "rate": 0.15}, {"top": null, "rate": 0.20}]
+      "single": [
+        {
+          "top": 44625,
+          "rate": 0.0
+        },
+        {
+          "top": 492300,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "married_jointly": [
+        {
+          "top": 89250,
+          "rate": 0.0
+        },
+        {
+          "top": 553850,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "married_separately": [
+        {
+          "top": 44625,
+          "rate": 0.0
+        },
+        {
+          "top": 276900,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "head_of_household": [
+        {
+          "top": 59750,
+          "rate": 0.0
+        },
+        {
+          "top": 523050,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "qualifying_surviving_spouse": [
+        {
+          "top": 89250,
+          "rate": 0.0
+        },
+        {
+          "top": 553850,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ]
     },
     "niit_thresholds": {
       "single": 200000,
       "married_jointly": 250000,
       "married_separately": 125000,
-      "head_of_household": 200000
+      "head_of_household": 200000,
+      "qualifying_surviving_spouse": 250000
     },
     "se_tax": {
       "ss_rate": 0.124,
       "medicare_rate": 0.029,
-      "ss_wage_base": 176100,
+      "ss_wage_base": 160200,
       "additional_medicare_rate": 0.009,
       "additional_medicare_threshold_single": 200000,
       "additional_medicare_threshold_married": 250000,
@@ -151,85 +422,299 @@
       "supplemental_rate": 0.22,
       "supplemental_rate_over_1m": 0.37
     },
-    "mileage_rate": 0.70,
+    "mileage_rate": null,
     "home_office_simplified_rate": 5.0,
     "home_office_max_sqft": 300,
     "retirement_limits": {
       "hsa": {
-        "single": 4300,
-        "family": 8550,
+        "single": null,
+        "family": null,
         "catchup_55_plus": 1000
       },
       "ira": {
-        "limit": 7000,
-        "catchup_50_plus": 1000
+        "limit": null,
+        "catchup_50_plus": null
       },
       "401k": {
-        "limit": 23500,
-        "catchup_50_plus": 7500
+        "limit": null,
+        "catchup_50_plus": null,
+        "super_catchup_60_63": null,
+        "total_415c": null
       }
+    },
+    "ctc": {
+      "per_child": 2000,
+      "refundable_max": 1600,
+      "other_dependent": 500,
+      "phaseout_start_single": 200000,
+      "phaseout_start_mfj": 400000,
+      "phaseout_per_1000": 50,
+      "phaseout_rounding": "up",
+      "actc_earned_income_floor": 2500,
+      "actc_rate": 0.15
+    },
+    "amt": {
+      "exemption_single": 81300,
+      "exemption_mfj": 126500,
+      "exemption_mfs": 63250,
+      "phaseout_start_single": 578150,
+      "phaseout_start_mfj": 1156300,
+      "phaseout_start_mfs": 578150,
+      "phaseout_rate": 0.25,
+      "rate_28_threshold": 220700,
+      "rate_28_threshold_mfs": 110350,
+      "rates": [
+        {
+          "top": 220700,
+          "rate": 0.26
+        },
+        {
+          "top": null,
+          "rate": 0.28
+        }
+      ]
+    },
+    "qbi": {
+      "rate": 0.2,
+      "threshold_single": 182100,
+      "threshold_mfj": 364200,
+      "phase_in_range_single": 50000,
+      "phase_in_range_mfj": 100000
     },
     "credits": {
       "medical_threshold": 0.075,
-      "charitable_cash_limit": 0.60,
+      "charitable_cash_limit": 0.6,
       "eitc": {
-        "max_credit": {"0": 649, "1": 4328, "2": 7152, "3": 8046},
-        "phaseout_single": {"0": 11020, "1": 24040, "2": 24040, "3": 24040},
-        "phaseout_mfj": {"0": 18230, "1": 31250, "2": 31250, "3": 31250}
+        "0": {
+          "earned_income_amount": 7840,
+          "max_credit": 600,
+          "phase_in_rate": 0.0765,
+          "phase_out_rate": 0.0765,
+          "threshold_phaseout_mfj": 16370,
+          "completed_phaseout_mfj": 24210,
+          "threshold_phaseout_other": 9800,
+          "completed_phaseout_other": 17640
+        },
+        "1": {
+          "earned_income_amount": 11750,
+          "max_credit": 3995,
+          "phase_in_rate": 0.34,
+          "phase_out_rate": 0.1598,
+          "threshold_phaseout_mfj": 28120,
+          "completed_phaseout_mfj": 53120,
+          "threshold_phaseout_other": 21560,
+          "completed_phaseout_other": 46560
+        },
+        "2": {
+          "earned_income_amount": 16510,
+          "max_credit": 6604,
+          "phase_in_rate": 0.4,
+          "phase_out_rate": 0.2106,
+          "threshold_phaseout_mfj": 28120,
+          "completed_phaseout_mfj": 59478,
+          "threshold_phaseout_other": 21560,
+          "completed_phaseout_other": 52918
+        },
+        "3": {
+          "earned_income_amount": 16510,
+          "max_credit": 7430,
+          "phase_in_rate": 0.45,
+          "phase_out_rate": 0.2106,
+          "threshold_phaseout_mfj": 28120,
+          "completed_phaseout_mfj": 63398,
+          "threshold_phaseout_other": 21560,
+          "completed_phaseout_other": 56838
+        },
+        "investment_income_limit": 11000
       },
       "savers_credit": {
-        "mfj": {"50_percent": 49000, "20_percent": 53000, "10_percent": 81500},
-        "single": {"50_percent": 24500, "20_percent": 26500, "10_percent": 40750}
+        "mfj": {
+          "50_percent": null,
+          "20_percent": null,
+          "10_percent": null
+        },
+        "single": {
+          "50_percent": null,
+          "20_percent": null,
+          "10_percent": null
+        }
       }
-    }
+    },
+    "estimated_tax_due_dates": [
+      [
+        "Q1",
+        "2023-04-18",
+        "Jan 1 - Mar 31"
+      ],
+      [
+        "Q2",
+        "2023-06-15",
+        "Apr 1 - May 31"
+      ],
+      [
+        "Q3",
+        "2023-09-15",
+        "Jun 1 - Aug 31"
+      ],
+      [
+        "Q4",
+        "2024-01-16",
+        "Sep 1 - Dec 31"
+      ]
+    ]
   },
   "2024": {
     "tax_year": 2024,
     "tax_brackets": {
       "single": [
-        {"top": 11600, "rate": 0.10},
-        {"top": 47150, "rate": 0.12},
-        {"top": 100525, "rate": 0.22},
-        {"top": 191950, "rate": 0.24},
-        {"top": 243725, "rate": 0.32},
-        {"top": 609350, "rate": 0.35},
-        {"top": null, "rate": 0.37}
+        {
+          "top": 11600,
+          "rate": 0.1
+        },
+        {
+          "top": 47150,
+          "rate": 0.12
+        },
+        {
+          "top": 100525,
+          "rate": 0.22
+        },
+        {
+          "top": 191950,
+          "rate": 0.24
+        },
+        {
+          "top": 243725,
+          "rate": 0.32
+        },
+        {
+          "top": 609350,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
       ],
       "married_jointly": [
-        {"top": 23200, "rate": 0.10},
-        {"top": 94300, "rate": 0.12},
-        {"top": 201050, "rate": 0.22},
-        {"top": 383900, "rate": 0.24},
-        {"top": 487450, "rate": 0.32},
-        {"top": 731200, "rate": 0.35},
-        {"top": null, "rate": 0.37}
+        {
+          "top": 23200,
+          "rate": 0.1
+        },
+        {
+          "top": 94300,
+          "rate": 0.12
+        },
+        {
+          "top": 201050,
+          "rate": 0.22
+        },
+        {
+          "top": 383900,
+          "rate": 0.24
+        },
+        {
+          "top": 487450,
+          "rate": 0.32
+        },
+        {
+          "top": 731200,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
       ],
       "married_separately": [
-        {"top": 11600, "rate": 0.10},
-        {"top": 47150, "rate": 0.12},
-        {"top": 100525, "rate": 0.22},
-        {"top": 191950, "rate": 0.24},
-        {"top": 243725, "rate": 0.32},
-        {"top": 365600, "rate": 0.35},
-        {"top": null, "rate": 0.37}
+        {
+          "top": 11600,
+          "rate": 0.1
+        },
+        {
+          "top": 47150,
+          "rate": 0.12
+        },
+        {
+          "top": 100525,
+          "rate": 0.22
+        },
+        {
+          "top": 191950,
+          "rate": 0.24
+        },
+        {
+          "top": 243725,
+          "rate": 0.32
+        },
+        {
+          "top": 365600,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
       ],
       "head_of_household": [
-        {"top": 16550, "rate": 0.10},
-        {"top": 63100, "rate": 0.12},
-        {"top": 100500, "rate": 0.22},
-        {"top": 191950, "rate": 0.24},
-        {"top": 243700, "rate": 0.32},
-        {"top": 609350, "rate": 0.35},
-        {"top": null, "rate": 0.37}
+        {
+          "top": 16550,
+          "rate": 0.1
+        },
+        {
+          "top": 63100,
+          "rate": 0.12
+        },
+        {
+          "top": 100500,
+          "rate": 0.22
+        },
+        {
+          "top": 191950,
+          "rate": 0.24
+        },
+        {
+          "top": 243700,
+          "rate": 0.32
+        },
+        {
+          "top": 609350,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
       ],
       "qualifying_surviving_spouse": [
-        {"top": 23200, "rate": 0.10},
-        {"top": 94300, "rate": 0.12},
-        {"top": 201050, "rate": 0.22},
-        {"top": 383900, "rate": 0.24},
-        {"top": 487450, "rate": 0.32},
-        {"top": 731200, "rate": 0.35},
-        {"top": null, "rate": 0.37}
+        {
+          "top": 23200,
+          "rate": 0.1
+        },
+        {
+          "top": 94300,
+          "rate": 0.12
+        },
+        {
+          "top": 201050,
+          "rate": 0.22
+        },
+        {
+          "top": 383900,
+          "rate": 0.24
+        },
+        {
+          "top": 487450,
+          "rate": 0.32
+        },
+        {
+          "top": 731200,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
       ]
     },
     "standard_deductions": {
@@ -257,12 +742,64 @@
     "capital_loss_limit_mfs": 1500,
     "educator_expense_limit": 300,
     "student_loan_interest_limit": 2500,
-    "charitable_property_agi_limit": 0.30,
+    "charitable_property_agi_limit": 0.3,
     "ltcg_brackets": {
-      "single": [{"top": 47025, "rate": 0.00}, {"top": 518900, "rate": 0.15}, {"top": null, "rate": 0.20}],
-      "married_jointly": [{"top": 94050, "rate": 0.00}, {"top": 583750, "rate": 0.15}, {"top": null, "rate": 0.20}],
-      "married_separately": [{"top": 47025, "rate": 0.00}, {"top": 291850, "rate": 0.15}, {"top": null, "rate": 0.20}],
-      "head_of_household": [{"top": 63000, "rate": 0.00}, {"top": 551350, "rate": 0.15}, {"top": null, "rate": 0.20}]
+      "single": [
+        {
+          "top": 47025,
+          "rate": 0.0
+        },
+        {
+          "top": 518900,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "married_jointly": [
+        {
+          "top": 94050,
+          "rate": 0.0
+        },
+        {
+          "top": 583750,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "married_separately": [
+        {
+          "top": 47025,
+          "rate": 0.0
+        },
+        {
+          "top": 291850,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "head_of_household": [
+        {
+          "top": 63000,
+          "rate": 0.0
+        },
+        {
+          "top": 551350,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ]
     },
     "niit_thresholds": {
       "single": 200000,
@@ -310,17 +847,967 @@
     },
     "credits": {
       "medical_threshold": 0.075,
-      "charitable_cash_limit": 0.60,
+      "charitable_cash_limit": 0.6,
       "eitc": {
-        "max_credit": {"0": 632, "1": 4213, "2": 6960, "3": 7830},
-        "phaseout_single": {"0": 11020, "1": 24040, "2": 24040, "3": 24040},
-        "phaseout_mfj": {"0": 18230, "1": 31250, "2": 31250, "3": 31250}
+        "0": {
+          "earned_income_amount": 8260,
+          "max_credit": 632,
+          "phase_in_rate": 0.0765,
+          "phase_out_rate": 0.0765,
+          "threshold_phaseout_mfj": 17250,
+          "completed_phaseout_mfj": 25511,
+          "threshold_phaseout_other": 10330,
+          "completed_phaseout_other": 18591
+        },
+        "1": {
+          "earned_income_amount": 12390,
+          "max_credit": 4213,
+          "phase_in_rate": 0.34,
+          "phase_out_rate": 0.1598,
+          "threshold_phaseout_mfj": 29640,
+          "completed_phaseout_mfj": 56004,
+          "threshold_phaseout_other": 22720,
+          "completed_phaseout_other": 49084
+        },
+        "2": {
+          "earned_income_amount": 17400,
+          "max_credit": 6960,
+          "phase_in_rate": 0.4,
+          "phase_out_rate": 0.2106,
+          "threshold_phaseout_mfj": 29640,
+          "completed_phaseout_mfj": 62688,
+          "threshold_phaseout_other": 22720,
+          "completed_phaseout_other": 55768
+        },
+        "3": {
+          "earned_income_amount": 17400,
+          "max_credit": 7830,
+          "phase_in_rate": 0.45,
+          "phase_out_rate": 0.2106,
+          "threshold_phaseout_mfj": 29640,
+          "completed_phaseout_mfj": 66819,
+          "threshold_phaseout_other": 22720,
+          "completed_phaseout_other": 59899
+        },
+        "investment_income_limit": 11600
       },
       "savers_credit": {
-        "mfj": {"50_percent": 46000, "20_percent": 50000, "10_percent": 76500},
-        "single": {"50_percent": 23000, "20_percent": 25000, "10_percent": 38250}
+        "mfj": {
+          "50_percent": 46000,
+          "20_percent": 50000,
+          "10_percent": 76500
+        },
+        "single": {
+          "50_percent": 23000,
+          "20_percent": 25000,
+          "10_percent": 38250
+        }
       }
+    },
+    "estimated_tax_due_dates": [
+      [
+        "Q1",
+        "2024-04-15",
+        "Jan 1 - Mar 31"
+      ],
+      [
+        "Q2",
+        "2024-06-17",
+        "Apr 1 - May 31"
+      ],
+      [
+        "Q3",
+        "2024-09-16",
+        "Jun 1 - Aug 31"
+      ],
+      [
+        "Q4",
+        "2025-01-15",
+        "Sep 1 - Dec 31"
+      ]
+    ],
+    "ctc": {
+      "per_child": 2000,
+      "refundable_max": 1700,
+      "other_dependent": 500,
+      "phaseout_start_single": 200000,
+      "phaseout_start_mfj": 400000,
+      "phaseout_per_1000": 50,
+      "phaseout_rounding": "up",
+      "actc_earned_income_floor": 2500,
+      "actc_rate": 0.15
     }
+  },
+  "2025": {
+    "tax_year": 2025,
+    "tax_brackets": {
+      "single": [
+        {
+          "top": 11925,
+          "rate": 0.1
+        },
+        {
+          "top": 48475,
+          "rate": 0.12
+        },
+        {
+          "top": 103350,
+          "rate": 0.22
+        },
+        {
+          "top": 197300,
+          "rate": 0.24
+        },
+        {
+          "top": 250525,
+          "rate": 0.32
+        },
+        {
+          "top": 626350,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ],
+      "married_jointly": [
+        {
+          "top": 23850,
+          "rate": 0.1
+        },
+        {
+          "top": 96950,
+          "rate": 0.12
+        },
+        {
+          "top": 206700,
+          "rate": 0.22
+        },
+        {
+          "top": 394600,
+          "rate": 0.24
+        },
+        {
+          "top": 501050,
+          "rate": 0.32
+        },
+        {
+          "top": 751600,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ],
+      "married_separately": [
+        {
+          "top": 11925,
+          "rate": 0.1
+        },
+        {
+          "top": 48475,
+          "rate": 0.12
+        },
+        {
+          "top": 103350,
+          "rate": 0.22
+        },
+        {
+          "top": 197300,
+          "rate": 0.24
+        },
+        {
+          "top": 250525,
+          "rate": 0.32
+        },
+        {
+          "top": 375800,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ],
+      "head_of_household": [
+        {
+          "top": 17000,
+          "rate": 0.1
+        },
+        {
+          "top": 64850,
+          "rate": 0.12
+        },
+        {
+          "top": 103350,
+          "rate": 0.22
+        },
+        {
+          "top": 197300,
+          "rate": 0.24
+        },
+        {
+          "top": 250500,
+          "rate": 0.32
+        },
+        {
+          "top": 626350,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ],
+      "qualifying_surviving_spouse": [
+        {
+          "top": 23850,
+          "rate": 0.1
+        },
+        {
+          "top": 96950,
+          "rate": 0.12
+        },
+        {
+          "top": 206700,
+          "rate": 0.22
+        },
+        {
+          "top": 394600,
+          "rate": 0.24
+        },
+        {
+          "top": 501050,
+          "rate": 0.32
+        },
+        {
+          "top": 751600,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ]
+    },
+    "standard_deductions": {
+      "single": 15750,
+      "married_jointly": 31500,
+      "married_separately": 15750,
+      "head_of_household": 23625,
+      "qualifying_surviving_spouse": 31500
+    },
+    "additional_deduction_65_blind": {
+      "single": 2000,
+      "married_jointly": 1600,
+      "married_separately": 1600,
+      "head_of_household": 2000,
+      "qualifying_surviving_spouse": 1600
+    },
+    "salt": {
+      "cap": 40000,
+      "cap_mfs": 20000,
+      "phasedown": true,
+      "phasedown_magi_start": 500000,
+      "phasedown_magi_start_mfs": 250000,
+      "phasedown_rate": 0.3,
+      "floor": 10000,
+      "floor_mfs": 5000
+    },
+    "mortgage_debt_limit": 750000,
+    "mortgage_debt_limit_mfs": 375000,
+    "capital_loss_limit": 3000,
+    "capital_loss_limit_mfs": 1500,
+    "educator_expense_limit": 300,
+    "student_loan_interest_limit": 2500,
+    "charitable_property_agi_limit": 0.3,
+    "ltcg_brackets": {
+      "single": [
+        {
+          "top": 48350,
+          "rate": 0.0
+        },
+        {
+          "top": 533400,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "married_jointly": [
+        {
+          "top": 96700,
+          "rate": 0.0
+        },
+        {
+          "top": 600050,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "married_separately": [
+        {
+          "top": 48350,
+          "rate": 0.0
+        },
+        {
+          "top": 300000,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "head_of_household": [
+        {
+          "top": 64750,
+          "rate": 0.0
+        },
+        {
+          "top": 566700,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ]
+    },
+    "niit_thresholds": {
+      "single": 200000,
+      "married_jointly": 250000,
+      "married_separately": 125000,
+      "head_of_household": 200000
+    },
+    "se_tax": {
+      "ss_rate": 0.124,
+      "medicare_rate": 0.029,
+      "ss_wage_base": 176100,
+      "additional_medicare_rate": 0.009,
+      "additional_medicare_threshold_single": 200000,
+      "additional_medicare_threshold_married": 250000,
+      "additional_medicare_threshold_married_separately": 125000,
+      "additional_medicare_threshold_head_of_household": 200000,
+      "additional_medicare_threshold_qualifying_surviving_spouse": 200000,
+      "se_adjustment_factor": 0.9235
+    },
+    "fica_employee": {
+      "ss_rate": 0.062,
+      "medicare_rate": 0.0145
+    },
+    "withholding": {
+      "supplemental_rate": 0.22,
+      "supplemental_rate_over_1m": 0.37
+    },
+    "mileage_rate": 0.7,
+    "home_office_simplified_rate": 5.0,
+    "home_office_max_sqft": 300,
+    "retirement_limits": {
+      "hsa": {
+        "single": 4300,
+        "family": 8550,
+        "catchup_55_plus": 1000
+      },
+      "ira": {
+        "limit": 7000,
+        "catchup_50_plus": 1000
+      },
+      "401k": {
+        "limit": 23500,
+        "catchup_50_plus": 7500,
+        "super_catchup_60_63": null,
+        "total_415c": null
+      }
+    },
+    "credits": {
+      "medical_threshold": 0.075,
+      "charitable_cash_limit": 0.6,
+      "eitc": {
+        "0": {
+          "earned_income_amount": 8490,
+          "max_credit": 649,
+          "phase_in_rate": 0.0765,
+          "phase_out_rate": 0.0765,
+          "threshold_phaseout_mfj": 17730,
+          "completed_phaseout_mfj": 26214,
+          "threshold_phaseout_other": 10620,
+          "completed_phaseout_other": 19104
+        },
+        "1": {
+          "earned_income_amount": 12730,
+          "max_credit": 4328,
+          "phase_in_rate": 0.34,
+          "phase_out_rate": 0.1598,
+          "threshold_phaseout_mfj": 30470,
+          "completed_phaseout_mfj": 57554,
+          "threshold_phaseout_other": 23350,
+          "completed_phaseout_other": 50434
+        },
+        "2": {
+          "earned_income_amount": 17880,
+          "max_credit": 7152,
+          "phase_in_rate": 0.4,
+          "phase_out_rate": 0.2106,
+          "threshold_phaseout_mfj": 30470,
+          "completed_phaseout_mfj": 64430,
+          "threshold_phaseout_other": 23350,
+          "completed_phaseout_other": 57310
+        },
+        "3": {
+          "earned_income_amount": 17880,
+          "max_credit": 8046,
+          "phase_in_rate": 0.45,
+          "phase_out_rate": 0.2106,
+          "threshold_phaseout_mfj": 30470,
+          "completed_phaseout_mfj": 68675,
+          "threshold_phaseout_other": 23350,
+          "completed_phaseout_other": 61555
+        },
+        "investment_income_limit": 11950
+      },
+      "savers_credit": {
+        "mfj": {
+          "50_percent": 49000,
+          "20_percent": 53000,
+          "10_percent": 81500
+        },
+        "single": {
+          "50_percent": 24500,
+          "20_percent": 26500,
+          "10_percent": 40750
+        }
+      }
+    },
+    "ctc": {
+      "per_child": 2200,
+      "refundable_max": 1700,
+      "other_dependent": 500,
+      "phaseout_start_single": 200000,
+      "phaseout_start_mfj": 400000,
+      "phaseout_per_1000": 50,
+      "phaseout_rounding": "up",
+      "actc_earned_income_floor": 2500,
+      "actc_rate": 0.15
+    },
+    "obbba_deductions": {
+      "senior_bonus": {
+        "amount": 6000,
+        "magi_phaseout_start_single": 75000,
+        "magi_phaseout_start_mfj": 150000,
+        "phaseout_rate": 0.06,
+        "effective_years": [
+          "2025",
+          "2026",
+          "2027",
+          "2028"
+        ]
+      },
+      "tips": {
+        "max": 25000,
+        "magi_phaseout_start_single": 150000,
+        "magi_phaseout_start_mfj": 300000,
+        "phaseout_per_1000": 100,
+        "phaseout_rounding": "down"
+      },
+      "overtime": {
+        "max_single": 12500,
+        "max_mfj": 25000,
+        "magi_phaseout_start_single": 150000,
+        "magi_phaseout_start_mfj": 300000,
+        "phaseout_per_1000": 100,
+        "phaseout_rounding": "down"
+      },
+      "car_loan_interest": {
+        "max": 10000,
+        "magi_phaseout_start_single": 100000,
+        "magi_phaseout_start_mfj": 200000,
+        "phaseout_per_1000": 200,
+        "phaseout_rounding": "up"
+      }
+    },
+    "amt": {
+      "exemption_single": 88100,
+      "exemption_mfj": 137000,
+      "exemption_mfs": 68500,
+      "phaseout_start_single": 626350,
+      "phaseout_start_mfj": 1252700,
+      "phaseout_start_mfs": 626350,
+      "phaseout_rate": 0.25,
+      "rate_28_threshold": 239100,
+      "rate_28_threshold_mfs": 119550,
+      "rates": [
+        {
+          "top": 239100,
+          "rate": 0.26
+        },
+        {
+          "top": null,
+          "rate": 0.28
+        }
+      ]
+    },
+    "qbi": {
+      "rate": 0.2,
+      "threshold_single": 197300,
+      "threshold_mfj": 394600,
+      "phase_in_range_single": 50000,
+      "phase_in_range_mfj": 100000
+    },
+    "estimated_tax_due_dates": [
+      [
+        "Q1",
+        "2025-04-15",
+        "Jan 1 - Mar 31"
+      ],
+      [
+        "Q2",
+        "2025-06-16",
+        "Apr 1 - May 31"
+      ],
+      [
+        "Q3",
+        "2025-09-15",
+        "Jun 1 - Aug 31"
+      ],
+      [
+        "Q4",
+        "2026-01-15",
+        "Sep 1 - Dec 31"
+      ]
+    ]
+  },
+  "2026": {
+    "tax_year": 2026,
+    "tax_brackets": {
+      "single": [
+        {
+          "top": 12400,
+          "rate": 0.1
+        },
+        {
+          "top": 50400,
+          "rate": 0.12
+        },
+        {
+          "top": 105700,
+          "rate": 0.22
+        },
+        {
+          "top": 201775,
+          "rate": 0.24
+        },
+        {
+          "top": 256225,
+          "rate": 0.32
+        },
+        {
+          "top": 640600,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ],
+      "married_jointly": [
+        {
+          "top": 24800,
+          "rate": 0.1
+        },
+        {
+          "top": 100800,
+          "rate": 0.12
+        },
+        {
+          "top": 211400,
+          "rate": 0.22
+        },
+        {
+          "top": 403550,
+          "rate": 0.24
+        },
+        {
+          "top": 512450,
+          "rate": 0.32
+        },
+        {
+          "top": 768700,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ],
+      "married_separately": [
+        {
+          "top": 12400,
+          "rate": 0.1
+        },
+        {
+          "top": 50400,
+          "rate": 0.12
+        },
+        {
+          "top": 105700,
+          "rate": 0.22
+        },
+        {
+          "top": 201775,
+          "rate": 0.24
+        },
+        {
+          "top": 256225,
+          "rate": 0.32
+        },
+        {
+          "top": 384350,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ],
+      "head_of_household": [
+        {
+          "top": 17700,
+          "rate": 0.1
+        },
+        {
+          "top": 67450,
+          "rate": 0.12
+        },
+        {
+          "top": 105700,
+          "rate": 0.22
+        },
+        {
+          "top": 201750,
+          "rate": 0.24
+        },
+        {
+          "top": 256200,
+          "rate": 0.32
+        },
+        {
+          "top": 640600,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ],
+      "qualifying_surviving_spouse": [
+        {
+          "top": 24800,
+          "rate": 0.1
+        },
+        {
+          "top": 100800,
+          "rate": 0.12
+        },
+        {
+          "top": 211400,
+          "rate": 0.22
+        },
+        {
+          "top": 403550,
+          "rate": 0.24
+        },
+        {
+          "top": 512450,
+          "rate": 0.32
+        },
+        {
+          "top": 768700,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ]
+    },
+    "standard_deductions": {
+      "single": 16100,
+      "married_jointly": 32200,
+      "married_separately": 16100,
+      "head_of_household": 24150,
+      "qualifying_surviving_spouse": 32200
+    },
+    "additional_deduction_65_blind": {
+      "single": 2050,
+      "married_jointly": 1650,
+      "married_separately": 1650,
+      "head_of_household": 2050,
+      "qualifying_surviving_spouse": 1650
+    },
+    "salt": {
+      "cap": null,
+      "cap_mfs": null,
+      "phasedown": true,
+      "phasedown_magi_start": null,
+      "phasedown_magi_start_mfs": null,
+      "phasedown_rate": 0.3,
+      "floor": 10000,
+      "floor_mfs": 5000
+    },
+    "mortgage_debt_limit": 750000,
+    "mortgage_debt_limit_mfs": 375000,
+    "capital_loss_limit": 3000,
+    "capital_loss_limit_mfs": 1500,
+    "educator_expense_limit": null,
+    "student_loan_interest_limit": 2500,
+    "charitable_property_agi_limit": 0.3,
+    "ltcg_brackets": {
+      "single": [
+        {
+          "top": 49450,
+          "rate": 0.0
+        },
+        {
+          "top": 545500,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "married_jointly": [
+        {
+          "top": 98900,
+          "rate": 0.0
+        },
+        {
+          "top": 613700,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "married_separately": [
+        {
+          "top": 49450,
+          "rate": 0.0
+        },
+        {
+          "top": 306850,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "head_of_household": [
+        {
+          "top": 66200,
+          "rate": 0.0
+        },
+        {
+          "top": 579600,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "qualifying_surviving_spouse": [
+        {
+          "top": 98900,
+          "rate": 0.0
+        },
+        {
+          "top": 613700,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ]
+    },
+    "niit_thresholds": {
+      "single": 200000,
+      "married_jointly": 250000,
+      "married_separately": 125000,
+      "head_of_household": 200000,
+      "qualifying_surviving_spouse": 250000
+    },
+    "se_tax": {
+      "ss_rate": 0.124,
+      "medicare_rate": 0.029,
+      "ss_wage_base": null,
+      "additional_medicare_rate": 0.009,
+      "additional_medicare_threshold_single": 200000,
+      "additional_medicare_threshold_married": 250000,
+      "additional_medicare_threshold_married_separately": 125000,
+      "additional_medicare_threshold_head_of_household": 200000,
+      "additional_medicare_threshold_qualifying_surviving_spouse": 200000,
+      "se_adjustment_factor": 0.9235
+    },
+    "fica_employee": {
+      "ss_rate": 0.062,
+      "medicare_rate": 0.0145
+    },
+    "withholding": {
+      "supplemental_rate": 0.22,
+      "supplemental_rate_over_1m": 0.37
+    },
+    "mileage_rate": null,
+    "home_office_simplified_rate": 5.0,
+    "home_office_max_sqft": 300,
+    "retirement_limits": {
+      "hsa": {
+        "single": null,
+        "family": null,
+        "catchup_55_plus": 1000
+      },
+      "ira": {
+        "limit": null,
+        "catchup_50_plus": null
+      },
+      "401k": {
+        "limit": null,
+        "catchup_50_plus": null,
+        "super_catchup_60_63": null,
+        "total_415c": null
+      }
+    },
+    "ctc": {
+      "per_child": 2200,
+      "refundable_max": 1700,
+      "other_dependent": 500,
+      "phaseout_start_single": 200000,
+      "phaseout_start_mfj": 400000,
+      "phaseout_per_1000": 50,
+      "phaseout_rounding": "up",
+      "actc_earned_income_floor": 2500,
+      "actc_rate": 0.15
+    },
+    "amt": {
+      "exemption_single": 90100,
+      "exemption_mfj": 140200,
+      "exemption_mfs": 70100,
+      "phaseout_start_single": 500000,
+      "phaseout_start_mfj": 1000000,
+      "phaseout_start_mfs": 500000,
+      "phaseout_rate": 0.5,
+      "rate_28_threshold": 244500,
+      "rate_28_threshold_mfs": 122250,
+      "rates": [
+        {
+          "top": 244500,
+          "rate": 0.26
+        },
+        {
+          "top": null,
+          "rate": 0.28
+        }
+      ]
+    },
+    "qbi": {
+      "rate": 0.2,
+      "threshold_single": 201775,
+      "threshold_mfj": 403500,
+      "phase_in_range_single": 75000,
+      "phase_in_range_mfj": 150000
+    },
+    "credits": {
+      "medical_threshold": 0.075,
+      "charitable_cash_limit": 0.6,
+      "eitc": {
+        "0": {
+          "earned_income_amount": 8680,
+          "max_credit": 664,
+          "phase_in_rate": 0.0765,
+          "phase_out_rate": 0.0765,
+          "threshold_phaseout_mfj": 18140,
+          "completed_phaseout_mfj": 26820,
+          "threshold_phaseout_other": 10860,
+          "completed_phaseout_other": 19540
+        },
+        "1": {
+          "earned_income_amount": 13020,
+          "max_credit": 4427,
+          "phase_in_rate": 0.34,
+          "phase_out_rate": 0.1598,
+          "threshold_phaseout_mfj": 31160,
+          "completed_phaseout_mfj": 58863,
+          "threshold_phaseout_other": 23890,
+          "completed_phaseout_other": 51593
+        },
+        "2": {
+          "earned_income_amount": 18290,
+          "max_credit": 7316,
+          "phase_in_rate": 0.4,
+          "phase_out_rate": 0.2106,
+          "threshold_phaseout_mfj": 31160,
+          "completed_phaseout_mfj": 65899,
+          "threshold_phaseout_other": 23890,
+          "completed_phaseout_other": 58629
+        },
+        "3": {
+          "earned_income_amount": 18290,
+          "max_credit": 8231,
+          "phase_in_rate": 0.45,
+          "phase_out_rate": 0.2106,
+          "threshold_phaseout_mfj": 31160,
+          "completed_phaseout_mfj": 70244,
+          "threshold_phaseout_other": 23890,
+          "completed_phaseout_other": 62974
+        },
+        "investment_income_limit": 12200
+      },
+      "savers_credit": {
+        "mfj": {
+          "50_percent": null,
+          "20_percent": null,
+          "10_percent": null
+        },
+        "single": {
+          "50_percent": null,
+          "20_percent": null,
+          "10_percent": null
+        }
+      }
+    },
+    "estimated_tax_due_dates": [
+      [
+        "Q1",
+        "2026-04-15",
+        "Jan 1 - Mar 31"
+      ],
+      [
+        "Q2",
+        "2026-06-15",
+        "Apr 1 - May 31"
+      ],
+      [
+        "Q3",
+        "2026-09-15",
+        "Jun 1 - Aug 31"
+      ],
+      [
+        "Q4",
+        "2027-01-15",
+        "Sep 1 - Dec 31"
+      ]
+    ]
   },
   "state_tax_rates": {
     "CA": 0.133,
