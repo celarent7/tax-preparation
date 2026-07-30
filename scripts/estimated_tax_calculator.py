@@ -13,7 +13,9 @@ from typing import Dict, List
 
 # Add the scripts directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from tax_calculator import calculate_additional_medicare, calculate_niit
 from utils import (
+    additional_medicare_threshold,
     get_status_value,
     load_tax_constants,
     make_year_arg,
@@ -22,22 +24,20 @@ from utils import (
 )
 
 
-def get_due_dates(year: str) -> List:
-    """Get quarterly due dates for a specific tax year."""
-    if year == "2024":
-        return [
-            ("Q1", "2024-04-15", "Jan 1 - Mar 31"),
-            ("Q2", "2024-06-17", "Apr 1 - May 31"),
-            ("Q3", "2024-09-16", "Jun 1 - Aug 31"),
-            ("Q4", "2025-01-15", "Sep 1 - Dec 31")
-        ]
-    else: # 2025 default
-        return [
-            ("Q1", "2025-04-15", "Jan 1 - Mar 31"),
-            ("Q2", "2025-06-16", "Apr 1 - May 31"),
-            ("Q3", "2025-09-15", "Jun 1 - Aug 31"),
-            ("Q4", "2026-01-15", "Sep 1 - Dec 31")
-        ]
+def get_due_dates(tax_data: Dict) -> List:
+    """Quarterly due dates for the tax year, read from the constants file.
+
+    Previously these were hard-coded with an `else` branch that returned 2025
+    dates for ANY non-2024 year — a latent bug that would have silently
+    mislabelled every 2026 deadline the moment 2026 was added (finding Y5).
+    """
+    dates = tax_data.get("estimated_tax_due_dates")
+    if not dates:
+        raise ValueError(
+            f"No estimated_tax_due_dates defined for tax year "
+            f"{tax_data.get('tax_year')} in scripts/tax_constants.json."
+        )
+    return [tuple(d) for d in dates]
 
 
 def calculate_income_tax(taxable_income: float, filing_status: str, tax_brackets: Dict) -> float:
@@ -145,6 +145,10 @@ def main():
     parser.add_argument("--prior-year-agi", type=float, default=0, help="AGI from prior year return")
     parser.add_argument("--filing-status", default="single",
                         help="Filing status (single, mfj, mfs, hoh, qss or canonical form)")
+    parser.add_argument("--projected-wages", type=float, default=None,
+                        help="Projected W-2 wages for the Additional Medicare Tax (defaults to --projected-income)")
+    parser.add_argument("--net-investment-income", type=float, default=0,
+                        help="Projected net investment income, for NIIT")
     parser.add_argument("--withholding-to-date", type=float, default=0, help="Federal withholding to date")
     make_year_arg(parser)
     parser.add_argument("--output-format", choices=["json", "text"], default="text")
@@ -185,8 +189,22 @@ def main():
     # Calculate Federal Income Tax
     income_tax = calculate_income_tax(taxable_income, args.filing_status, tax_brackets)
 
+    # Additional Medicare + NIIT on the projection (task P3.2). Omitting these
+    # understated the projected liability for exactly the high earners who owe
+    # estimated tax.
+    add_medicare = calculate_additional_medicare(
+        args.projected_wages if args.projected_wages is not None else args.projected_income,
+        additional_medicare_threshold(args.filing_status, se_tax_config),
+        se_tax_config["additional_medicare_rate"],
+    )
+    niit = calculate_niit(
+        agi, args.net_investment_income,
+        get_status_value(tax_data["niit_thresholds"], args.filing_status, "NIIT threshold"),
+    )
+
     # Total estimated tax liability
-    total_estimated_tax = income_tax + se_results["total"]
+    total_estimated_tax = (income_tax + se_results["total"]
+                           + add_medicare["tax"] + niit["tax"])
 
     # Safe Harbor analysis
     safe_harbor = calculate_safe_harbor(
@@ -209,6 +227,8 @@ def main():
         "estimated_liability": {
             "income_tax": income_tax,
             "self_employment_tax": se_results["total"],
+            "additional_medicare_tax": add_medicare["tax"],
+            "niit": niit["tax"],
             "total": round(total_estimated_tax, 2)
         },
         "safe_harbor": safe_harbor,
@@ -217,7 +237,7 @@ def main():
             "withholding_to_date": args.withholding_to_date,
             "remaining_estimated_due": round(remaining_to_pay, 2),
             "quarterly_amount": round(quarterly_payment, 2),
-            "due_dates": get_due_dates(args.year)
+            "due_dates": get_due_dates(tax_data)
         }
     }
 
@@ -226,7 +246,8 @@ def main():
     else:
         print(f"\n--- {args.year} Estimated Tax Calculation ---")
         print(f"Projected Total Liability:  ${total_estimated_tax:,.2f}")
-        print(f"  (Income Tax: ${income_tax:,.2f}, SE Tax: ${se_results['total']:,.2f})")
+        print(f"  (Income Tax: ${income_tax:,.2f}, SE Tax: ${se_results['total']:,.2f}"
+              f", Add'l Medicare: ${add_medicare['tax']:,.2f}, NIIT: ${niit['tax']:,.2f})")
         print("-" * 45)
         print(f"Safe Harbor Requirement:    ${safe_harbor['minimum_required']:,.2f}")
         print(f"Target Total Payment:       ${total_target:,.2f} (90% of current or safe harbor)")

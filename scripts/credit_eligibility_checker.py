@@ -7,8 +7,19 @@ and calculate potential credit amounts.
 import argparse
 import json
 import math
+import os
+import sys
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
+
+# Add the scripts directory to the path to import utils
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from utils import (
+    UnverifiedConstantError,
+    load_tax_constants,
+    make_year_arg,
+    normalize_filing_status,
+)
 
 
 @dataclass
@@ -23,87 +34,32 @@ class CreditResult:
     documentation_needed: List[str]
 
 
-# Credit Parameters
-#
-# NOTE (audit findings Y1/P4): this table is being migrated to
-# scripts/tax_constants.json so that figures are year-aware and live in one
-# place. Until that migration lands, the values here are 2025 amounts and this
-# script has no --year switch — do not use it for another tax year.
-CREDIT_PARAMS = {
-    "child_tax_credit": {
-        # OBBBA: $2,200 for any taxable year beginning in 2025 (was $2,000).
-        # Source: https://www.irs.gov/credits-deductions/individuals/child-tax-credit
-        "credit_per_child": 2200,
-        "refundable_max": 1700,
-        "age_limit": 17,
-        # Schedule 8812 (2025): MFJ $400,000; all other filing statuses $200,000.
-        "phaseout_start_single": 200000,
-        "phaseout_start_mfj": 400000,
-        "phaseout_rate": 50  # $50 per $1000 (or fraction thereof) over threshold
-    },
-    "other_dependent_credit": {
-        "credit_per_dependent": 500,
-        "phaseout_start_single": 200000,
-        "phaseout_start_mfj": 400000
-    },
-    "eitc": {
-        0: {"max_credit": 632, "earned_for_max": 7830, "phaseout_start_single": 9800, "phaseout_start_mfj": 16370, "max_single": 18591, "max_mfj": 25511},
-        1: {"max_credit": 4213, "earned_for_max": 12390, "phaseout_start_single": 22720, "phaseout_start_mfj": 29640, "max_single": 49084, "max_mfj": 56004},
-        2: {"max_credit": 6960, "earned_for_max": 17400, "phaseout_start_single": 22720, "phaseout_start_mfj": 29640, "max_single": 55768, "max_mfj": 62688},
-        3: {"max_credit": 7830, "earned_for_max": 17400, "phaseout_start_single": 22720, "phaseout_start_mfj": 29640, "max_single": 59899, "max_mfj": 66819}
-    },
-    "eitc_investment_limit": 11600,
-    "child_dependent_care": {
-        "expense_limit_one": 3000,
-        "expense_limit_two_plus": 6000,
-        "max_percentage": 35,
-        "min_percentage": 20,
-        "agi_for_max": 15000,
-        "agi_for_min": 43000
-    },
-    "aotc": {
-        "max_credit": 2500,
-        "refundable_percent": 40,
-        "expense_100_percent": 2000,
-        "expense_25_percent": 2000,
-        "phaseout_start_single": 80000,
-        "phaseout_end_single": 90000,
-        "phaseout_start_mfj": 160000,
-        "phaseout_end_mfj": 180000,
-        "max_years": 4
-    },
-    "lifetime_learning": {
-        "max_credit": 2000,
-        "credit_rate": 0.20,
-        "expense_limit": 10000,
-        "phaseout_start_single": 80000,
-        "phaseout_end_single": 90000,
-        "phaseout_start_mfj": 160000,
-        "phaseout_end_mfj": 180000
-    },
-    "savers_credit": {
-        "max_contribution": 2000,
-        "rates": {
-            "mfj": [(46000, 0.50), (50000, 0.20), (76500, 0.10)],
-            "hoh": [(34500, 0.50), (37500, 0.20), (57375, 0.10)],
-            "single": [(23000, 0.50), (25000, 0.20), (38250, 0.10)]
-        }
-    },
-    "adoption_credit": {
-        "max_credit": 16810,
-        "phaseout_start": 252150,
-        "phaseout_end": 292150
+def get_credit_params(tax_data: Dict) -> Dict:
+    """Assemble credit parameters for a tax year from the constants file.
+
+    Replaces the module-level CREDIT_PARAMS dict, which held 2024 figures with
+    no --year switch and applied them silently to any year (finding Y1), and
+    which duplicated the EITC table that also lived in tax_constants.json.
+    """
+    return {
+        "child_tax_credit": tax_data["ctc"],
+        "eitc": tax_data["credits"]["eitc"],
+        "aotc": tax_data["credits_static"]["aotc"],
+        "lifetime_learning": tax_data["credits_static"]["lifetime_learning"],
+        "child_dependent_care": tax_data["credits_static"]["child_dependent_care"],
+        "savers_credit": {
+            "max_contribution": tax_data["credits_static"]["savers_credit_max_contribution"],
+            "bands": tax_data["credits"]["savers_credit"],
+        },
     }
-}
 
 
-def calculate_child_tax_credit(data: Dict) -> CreditResult:
+def calculate_child_tax_credit(data: Dict, params: Dict) -> CreditResult:
     """Calculate Child Tax Credit eligibility and amount."""
-    params = CREDIT_PARAMS["child_tax_credit"]
 
     qualifying_children = data.get("children_under_17", 0)
     agi = data.get("agi", 0)
-    filing_status = data.get("filing_status", "single")
+    filing_status = normalize_filing_status(data["filing_status"])
     earned_income = data.get("earned_income", 0)
 
     requirements = {
@@ -128,7 +84,7 @@ def calculate_child_tax_credit(data: Dict) -> CreditResult:
         )
 
     # Calculate base credit
-    base_credit = qualifying_children * params["credit_per_child"]
+    base_credit = qualifying_children * params["per_child"]
 
     # Apply phaseout
     phaseout_start = params["phaseout_start_mfj"] if filing_status == "married_jointly" else params["phaseout_start_single"]
@@ -142,7 +98,7 @@ def calculate_child_tax_credit(data: Dict) -> CreditResult:
         # $1,025, enter $2,000". The old `excess // 1000` floored instead,
         # understating the phase-out by up to $50 (finding F4).
         thousands = math.ceil(excess / 1000)
-        reduction = thousands * params["phaseout_rate"]
+        reduction = thousands * params["phaseout_per_1000"]
         base_credit = max(0, base_credit - reduction)
         phaseout_applied = True
         notes.append(f"Credit reduced by ${reduction:,.0f} due to income phaseout")
@@ -154,7 +110,7 @@ def calculate_child_tax_credit(data: Dict) -> CreditResult:
     else:
         refundable = 0
 
-    notes.append(f"Credit: ${params['credit_per_child']:,} per qualifying child under 17")
+    notes.append(f"Credit: ${params['per_child']:,} per qualifying child under 17")
 
     return CreditResult(
         name="Child Tax Credit",
@@ -168,20 +124,35 @@ def calculate_child_tax_credit(data: Dict) -> CreditResult:
     )
 
 
-def calculate_eitc(data: Dict) -> CreditResult:
-    """Calculate Earned Income Tax Credit eligibility and amount."""
+def calculate_eitc(data: Dict, eitc_table: Dict) -> CreditResult:
+    """Calculate Earned Income Tax Credit eligibility and amount.
+
+    IRC 32(b)(1) sets a DIFFERENT phase-in and phase-out percentage for each
+    qualifying-child count:
+
+        children   phase-in   phase-out
+        0            7.65%      7.65%
+        1           34%        15.98%
+        2           40%        21.06%
+        3+          45%        21.06%
+
+    The old code applied 34% and 15.98% to every child count (findings F5/F6),
+    which overstated a zero-child filer's credit by roughly 4.4x. All figures
+    now come from the per-year `eitc` block in tax_constants.json.
+    """
     qualifying_children = min(data.get("qualifying_children_eitc", 0), 3)
     earned_income = data.get("earned_income", 0)
     agi = data.get("agi", 0)
     investment_income = data.get("investment_income", 0)
-    filing_status = data.get("filing_status", "single")
+    filing_status = normalize_filing_status(data["filing_status"])
     age = data.get("age", 30)
 
-    params = CREDIT_PARAMS["eitc"][qualifying_children]
+    params = eitc_table[str(qualifying_children)]
+    investment_limit = eitc_table["investment_income_limit"]
 
     requirements = {
         "has_earned_income": earned_income > 0,
-        "investment_income_under_limit": investment_income <= CREDIT_PARAMS["eitc_investment_limit"],
+        "investment_income_under_limit": investment_income <= investment_limit,
         "income_under_limit": True,
         "valid_ssn": data.get("has_valid_ssn", True),
         "not_mfs": filing_status != "married_separately",
@@ -198,7 +169,7 @@ def calculate_eitc(data: Dict) -> CreditResult:
 
     if not requirements["investment_income_under_limit"]:
         return CreditResult("Earned Income Tax Credit", False, 0, 0, False,
-                           [f"Investment income ${investment_income:,.0f} exceeds ${CREDIT_PARAMS['eitc_investment_limit']:,} limit"],
+                           [f"Investment income ${investment_income:,.0f} exceeds ${investment_limit:,} limit"],
                            requirements, docs)
 
     if not requirements["not_mfs"]:
@@ -211,9 +182,10 @@ def calculate_eitc(data: Dict) -> CreditResult:
                            ["Without qualifying children, must be age 25-64"],
                            requirements, docs)
 
-    # Determine income limit
+    # Determine income limit (the completed-phaseout amount for this status)
     is_mfj = filing_status == "married_jointly"
-    income_limit = params["max_mfj"] if is_mfj else params["max_single"]
+    suffix = "mfj" if is_mfj else "other"
+    income_limit = params[f"completed_phaseout_{suffix}"]
 
     income_for_calc = max(earned_income, agi)
 
@@ -223,21 +195,23 @@ def calculate_eitc(data: Dict) -> CreditResult:
                            [f"Income ${income_for_calc:,.0f} exceeds limit ${income_limit:,}"],
                            requirements, docs)
 
-    # Calculate credit (simplified)
-    phaseout_start = params["phaseout_start_mfj"] if is_mfj else params["phaseout_start_single"]
+    phaseout_start = params[f"threshold_phaseout_{suffix}"]
 
-    if income_for_calc <= params["earned_for_max"]:
-        # Phase-in
-        credit = min(earned_income * 0.34, params["max_credit"])  # Simplified rate
+    if income_for_calc <= params["earned_income_amount"]:
+        # Phase-in: credit accrues at the per-child-count rate, capped at max.
+        credit = min(earned_income * params["phase_in_rate"], params["max_credit"])
     elif income_for_calc <= phaseout_start:
+        # Plateau between the earned income amount and the phase-out threshold.
         credit = params["max_credit"]
     else:
-        # Phaseout
+        # Phase-out at the per-child-count rate.
         excess = income_for_calc - phaseout_start
-        reduction = excess * 0.1598  # Simplified phaseout rate
+        reduction = excess * params["phase_out_rate"]
         credit = max(0, params["max_credit"] - reduction)
 
+    credit = round(credit, 2)
     notes.append(f"Max credit for {qualifying_children} children: ${params['max_credit']:,}")
+    notes.append(f"Phase-in {params['phase_in_rate']:.2%}, phase-out {params['phase_out_rate']:.2%}")
     notes.append("EITC is fully refundable")
 
     return CreditResult(
@@ -252,9 +226,8 @@ def calculate_eitc(data: Dict) -> CreditResult:
     )
 
 
-def calculate_child_dependent_care(data: Dict) -> CreditResult:
+def calculate_child_dependent_care(data: Dict, params: Dict) -> CreditResult:
     """Calculate Child and Dependent Care Credit."""
-    params = CREDIT_PARAMS["child_dependent_care"]
 
     qualifying_persons = data.get("qualifying_dependents_care", 0)
     expenses = data.get("childcare_expenses", 0)
@@ -321,13 +294,12 @@ def calculate_child_dependent_care(data: Dict) -> CreditResult:
     )
 
 
-def calculate_aotc(data: Dict) -> CreditResult:
+def calculate_aotc(data: Dict, params: Dict) -> CreditResult:
     """Calculate American Opportunity Tax Credit."""
-    params = CREDIT_PARAMS["aotc"]
 
     expenses = data.get("education_expenses", 0)
     agi = data.get("agi", 0)
-    filing_status = data.get("filing_status", "single")
+    filing_status = normalize_filing_status(data["filing_status"])
     years_claimed = data.get("aotc_years_claimed", 0)
     is_student = data.get("is_eligible_student", False)
 
@@ -390,18 +362,30 @@ def calculate_aotc(data: Dict) -> CreditResult:
     )
 
 
-def calculate_savers_credit(data: Dict) -> CreditResult:
+def calculate_savers_credit(data: Dict, params: Dict) -> CreditResult:
     """Calculate Retirement Savings Contribution Credit."""
-    params = CREDIT_PARAMS["savers_credit"]
 
     contributions = data.get("retirement_contributions", 0)
     agi = data.get("agi", 0)
-    filing_status = data.get("filing_status", "single")
+    filing_status = normalize_filing_status(data["filing_status"])
     age = data.get("age", 30)
     is_student = data.get("is_full_time_student", False)
 
-    status_key = "mfj" if filing_status == "married_jointly" else ("hoh" if filing_status == "head_of_household" else "single")
-    rates = params["rates"][status_key]
+    # Constants carry mfj/single AGI bands; HoH bands are 75% of the MFJ ones
+    # per IRC 25B(b). Only mfj/single are stored, so HoH derives from MFJ.
+    status_key = "mfj" if filing_status == "married_jointly" else "single"
+    bands = params["bands"][status_key]
+    if any(v is None for v in bands.values()):
+        raise UnverifiedConstantError(
+            "Saver's Credit AGI bands have no verified value for this tax year. "
+            "See _sources.TODO_VERIFY in scripts/tax_constants.json."
+        )
+    scale = 0.75 if filing_status == "head_of_household" else 1.0
+    rates = [
+        (bands["50_percent"] * scale, 0.50),
+        (bands["20_percent"] * scale, 0.20),
+        (bands["10_percent"] * scale, 0.10),
+    ]
 
     requirements = {
         "has_contributions": contributions > 0,
@@ -451,16 +435,23 @@ def calculate_savers_credit(data: Dict) -> CreditResult:
     )
 
 
-def check_all_credits(data: Dict) -> Dict:
-    """Check eligibility for all major credits."""
+def check_all_credits(data: Dict, tax_data: Dict) -> Dict:
+    """Check eligibility for all major credits for a given tax year."""
+    params = get_credit_params(tax_data)
     results = []
 
+    # Normalize once so every credit sees a canonical status (finding D2).
+    if not data.get("filing_status"):
+        raise ValueError("Tax data must specify 'filing_status'.")
+    data = dict(data)
+    data["filing_status"] = normalize_filing_status(data["filing_status"])
+
     # Run all credit calculations
-    results.append(calculate_child_tax_credit(data))
-    results.append(calculate_eitc(data))
-    results.append(calculate_child_dependent_care(data))
-    results.append(calculate_aotc(data))
-    results.append(calculate_savers_credit(data))
+    results.append(calculate_child_tax_credit(data, params["child_tax_credit"]))
+    results.append(calculate_eitc(data, params["eitc"]))
+    results.append(calculate_child_dependent_care(data, params["child_dependent_care"]))
+    results.append(calculate_aotc(data, params["aotc"]))
+    results.append(calculate_savers_credit(data, params["savers_credit"]))
 
     # Calculate totals
     total_credits = sum(r.amount for r in results if r.eligible)
@@ -492,12 +483,14 @@ def check_all_credits(data: Dict) -> Dict:
 def main():
     parser = argparse.ArgumentParser(description="Check tax credit eligibility")
     parser.add_argument("--data-file", type=str, help="JSON file with tax data")
+    make_year_arg(parser)
     parser.add_argument("--output-format", choices=["json", "text"], default="text")
 
     # Common inline parameters
     parser.add_argument("--agi", type=float, default=50000)
     parser.add_argument("--earned-income", type=float, default=None)
-    parser.add_argument("--filing-status", choices=["single", "married_jointly", "head_of_household"], default="single")
+    parser.add_argument("--filing-status", default="single",
+                        help="Filing status (single, mfj, mfs, hoh, qss or canonical form)")
     parser.add_argument("--children-under-17", type=int, default=0)
     parser.add_argument("--qualifying-children-eitc", type=int, default=0)
     parser.add_argument("--childcare-expenses", type=float, default=0)
@@ -525,13 +518,18 @@ def main():
             "age": args.age
         }
 
-    results = check_all_credits(data)
+    try:
+        tax_data = load_tax_constants(args.year)
+        results = check_all_credits(data, tax_data)
+    except (ValueError, UnverifiedConstantError) as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
     if args.output_format == "json":
         print(json.dumps(results, indent=2))
     else:
         print("\n" + "="*70)
-        print("TAX CREDIT ELIGIBILITY CHECK")
+        print(f"TAX CREDIT ELIGIBILITY CHECK — TAX YEAR {args.year}")
         print("="*70)
 
         summary = results["summary"]

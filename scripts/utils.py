@@ -279,6 +279,8 @@ def load_tax_constants(year: str = "2025") -> Dict[str, Any]:
     data["filing_status_map"] = full_data.get("filing_status_map", {})
     data["states"] = full_data.get("states", {})
     data["_sources"] = full_data.get("_sources", {})
+    # Statutory, non-inflation-indexed credit parameters shared by every year.
+    data["credits_static"] = full_data.get("credits_static", {})
 
     return data
 

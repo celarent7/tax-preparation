@@ -30,10 +30,16 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
-from credit_eligibility_checker import calculate_child_tax_credit  # noqa: E402
+from credit_eligibility_checker import (  # noqa: E402
+    calculate_child_tax_credit,
+    get_credit_params,
+)
+from utils import load_tax_constants  # noqa: E402
+
+CTC_PARAMS_2025 = get_credit_params(load_tax_constants("2025"))["child_tax_credit"]
 
 
-def ctc(**overrides):
+def ctc(year="2025", **overrides):
     data = {
         "children_under_17": 1,
         "agi": 100000,
@@ -41,7 +47,9 @@ def ctc(**overrides):
         "earned_income": 100000,
     }
     data.update(overrides)
-    return calculate_child_tax_credit(data)
+    params = (CTC_PARAMS_2025 if year == "2025"
+              else get_credit_params(load_tax_constants(year))["child_tax_credit"])
+    return calculate_child_tax_credit(data, params)
 
 
 # ---------------------------------------------------------------------------

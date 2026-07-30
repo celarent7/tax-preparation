@@ -141,6 +141,17 @@
         "estimated_tax.safe_harbor_thresholds"
       ],
       "note": "110% safe harbor applies when prior-year AGI exceeded $150,000 ($75,000 if MFS)."
+    },
+    "statutory_non_indexed_credits": {
+      "url": "https://www.irs.gov/credits-deductions/individuals/aotc",
+      "title": "IRS - American Opportunity Tax Credit; IRC 21 and 25A",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "credits_static.aotc",
+        "credits_static.lifetime_learning",
+        "credits_static.child_dependent_care"
+      ],
+      "note": "AOTC ($2,500 max, 40% refundable, $80k-$90k / $160k-$180k phase-out) and the Child and Dependent Care Credit ($3,000/$6,000 expense limits, 35% to 20% between $15,000 and $43,000 AGI) are fixed by statute and are NOT inflation-indexed, so one shared block serves every year."
     }
   },
   "2023": {
@@ -1827,5 +1838,36 @@
     "mfs": "married_separately",
     "hoh": "head_of_household",
     "single": "single"
+  },
+  "credits_static": {
+    "aotc": {
+      "max_credit": 2500,
+      "refundable_percent": 40,
+      "expense_100_percent": 2000,
+      "expense_25_percent": 2000,
+      "phaseout_start_single": 80000,
+      "phaseout_end_single": 90000,
+      "phaseout_start_mfj": 160000,
+      "phaseout_end_mfj": 180000,
+      "max_years": 4
+    },
+    "lifetime_learning": {
+      "max_credit": 2000,
+      "credit_rate": 0.2,
+      "expense_limit": 10000,
+      "phaseout_start_single": 80000,
+      "phaseout_end_single": 90000,
+      "phaseout_start_mfj": 160000,
+      "phaseout_end_mfj": 180000
+    },
+    "child_dependent_care": {
+      "expense_limit_one": 3000,
+      "expense_limit_two_plus": 6000,
+      "max_percentage": 35,
+      "min_percentage": 20,
+      "agi_for_max": 15000,
+      "agi_for_min": 43000
+    },
+    "savers_credit_max_contribution": 2000
   }
 }
