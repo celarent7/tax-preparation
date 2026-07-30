@@ -283,21 +283,30 @@ def load_tax_constants(year: str = "2025") -> Dict[str, Any]:
     return data
 
 
+def select_for_status(mapping: Dict[str, Any], filing_status: str, label: str = "table") -> Any:
+    """Pick a per-filing-status entry from a mapping, or raise.
+
+    The single primitive that replaces every `.get(status, mapping["single"])`
+    silent fallback (finding D2). Callers that hold a bare table (rather than
+    the whole constants dict) use this directly.
+    """
+    status = normalize_filing_status(filing_status)
+    if status not in mapping:
+        raise ValueError(
+            f"No {label} defined for filing status {status!r}. "
+            f"Available: {', '.join(sorted(mapping))}."
+        )
+    return mapping[status]
+
+
 def get_brackets(tax_data: Dict[str, Any], filing_status: str, key: str = "tax_brackets_processed"):
     """Fetch a processed bracket table for a filing status, or raise.
 
     Replaces the `.get(status, brackets["single"])` pattern that silently
     computed the wrong tax for valid-but-unhandled statuses (finding D2).
     """
-    status = normalize_filing_status(filing_status)
-    table = tax_data[key]
-    if status not in table:
-        raise ValueError(
-            f"No {key.replace('_processed', '')} defined for filing status "
-            f"{status!r} in tax year {tax_data.get('tax_year')}. "
-            f"Available: {', '.join(sorted(table))}."
-        )
-    return table[status]
+    label = f"{key.replace('_processed', '')} (tax year {tax_data.get('tax_year')})"
+    return select_for_status(tax_data[key], filing_status, label)
 
 
 def get_status_value(mapping: Dict[str, Any], filing_status: str, label: str = "value") -> Any:
@@ -307,12 +316,7 @@ def get_status_value(mapping: Dict[str, Any], filing_status: str, label: str = "
     over with another status's figure (findings D2, F12).
     """
     status = normalize_filing_status(filing_status)
-    if status not in mapping:
-        raise ValueError(
-            f"No {label} defined for filing status {status!r}. "
-            f"Available: {', '.join(sorted(mapping))}."
-        )
-    value = mapping[status]
+    value = select_for_status(mapping, status, label)
     if value is None:
         raise UnverifiedConstantError(
             f"The {label} for filing status {status!r} has no verified value. "

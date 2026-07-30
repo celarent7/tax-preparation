@@ -14,7 +14,26 @@ from enum import Enum
 
 # Add the scripts directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from utils import load_tax_constants
+from utils import (
+    load_tax_constants,
+    make_year_arg,
+    normalize_filing_status,
+    select_for_status,
+)
+
+
+def require_filing_status(data: Dict) -> str:
+    """Read and normalize the profile's filing status.
+
+    An absent filing_status is a missing required field, not an invitation to
+    assume "single" (finding D2).
+    """
+    if not data.get("filing_status"):
+        raise ValueError(
+            "The tax profile must specify 'filing_status' "
+            "(single, mfj, mfs, hoh, or qss)."
+        )
+    return normalize_filing_status(data["filing_status"])
 
 
 class Priority(Enum):
@@ -76,7 +95,7 @@ def get_savings_rules(tax_data: Dict) -> Dict:
 
 def estimate_marginal_rate(taxable_income: float, filing_status: str, tax_brackets: Dict) -> float:
     """Determine marginal tax rate."""
-    brackets = tax_brackets.get(filing_status, tax_brackets["single"])
+    brackets = select_for_status(tax_brackets, filing_status, "tax brackets")
     for bracket_top, rate in brackets:
         if taxable_income <= bracket_top:
             return rate
@@ -88,7 +107,7 @@ def analyze_retirement_contributions(data: Dict, rules: Dict) -> List[TaxOpportu
     opportunities = []
 
     age = data.get("age", 40)
-    filing_status = data.get("filing_status", "single")
+    filing_status = require_filing_status(data)
     agi = data.get("agi", 0)
     tax_brackets = rules["tax_brackets"]
 
@@ -144,8 +163,10 @@ def analyze_deductions(data: Dict, rules: Dict) -> List[TaxOpportunity]:
     opportunities = []
     
     agi = data.get("agi", 0)
-    filing_status = data.get("filing_status", "single")
-    std_deduction = rules["standard_deduction"].get(filing_status, rules["standard_deduction"]["single"])
+    filing_status = require_filing_status(data)
+    std_deduction = select_for_status(
+        rules["standard_deduction"], filing_status, "standard deduction"
+    )
     
     # Bunching opportunity
     current_deductions = data.get("itemized_total", 0)
@@ -166,7 +187,7 @@ def analyze_deductions(data: Dict, rules: Dict) -> List[TaxOpportunity]:
 def main():
     parser = argparse.ArgumentParser(description="Tax Savings Finder")
     parser.add_argument("--data", required=True, help="Path to JSON file with user tax profile")
-    parser.add_argument("--year", type=str, default="2025", choices=["2024", "2025"], help="Tax year")
+    make_year_arg(parser)
     parser.add_argument("--output-format", choices=["json", "text"], default="text")
 
     args = parser.parse_args()
@@ -189,9 +210,13 @@ def main():
         sys.exit(1)
 
     # Perform analyses
-    opportunities = []
-    opportunities.extend(analyze_retirement_contributions(user_data, rules))
-    opportunities.extend(analyze_deductions(user_data, rules))
+    try:
+        opportunities = []
+        opportunities.extend(analyze_retirement_contributions(user_data, rules))
+        opportunities.extend(analyze_deductions(user_data, rules))
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
     if args.output_format == "json":
         print(json.dumps([opportunity_to_dict(o) for o in opportunities], indent=2))

@@ -96,6 +96,8 @@
       "additional_medicare_threshold_single": 200000,
       "additional_medicare_threshold_married": 250000,
       "additional_medicare_threshold_married_separately": 125000,
+      "additional_medicare_threshold_head_of_household": 200000,
+      "additional_medicare_threshold_qualifying_surviving_spouse": 200000,
       "se_adjustment_factor": 0.9235
     },
     "fica_employee": {
@@ -230,6 +232,8 @@
       "additional_medicare_threshold_single": 200000,
       "additional_medicare_threshold_married": 250000,
       "additional_medicare_threshold_married_separately": 125000,
+      "additional_medicare_threshold_head_of_household": 200000,
+      "additional_medicare_threshold_qualifying_surviving_spouse": 200000,
       "se_adjustment_factor": 0.9235
     },
     "fica_employee": {

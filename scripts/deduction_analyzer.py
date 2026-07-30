@@ -11,7 +11,12 @@ from typing import Dict, List
 
 # Add the scripts directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from utils import load_tax_constants
+from utils import (
+    get_status_value,
+    load_tax_constants,
+    make_year_arg,
+    normalize_filing_status,
+)
 
 
 def analyze_medical_deduction(expenses: float, agi: float) -> Dict:
@@ -113,8 +118,9 @@ def analyze_charitable(
 def main():
     parser = argparse.ArgumentParser(description="Deduction Analyzer")
     parser.add_argument("--agi", type=float, required=True, help="Adjusted Gross Income")
-    parser.add_argument("--year", type=str, default="2025", choices=["2024", "2025"], help="Tax year")
-    parser.add_argument("--filing-status", default="single", help="Filing status")
+    make_year_arg(parser)
+    parser.add_argument("--filing-status", default="single",
+                        help="Filing status (single, mfj, mfs, hoh, qss or canonical form)")
     parser.add_argument("--property-tax", type=float, default=0)
     parser.add_argument("--state-income-tax", type=float, default=0)
     parser.add_argument("--state-sales-tax", type=float, default=0)
@@ -140,6 +146,13 @@ def main():
         sys.exit(1)
     if not (0 <= args.age_65_plus <= 2) or not (0 <= args.blind <= 2):
         print("Error: Age 65+ and blind counts must be between 0 and 2.")
+        sys.exit(1)
+
+    # Normalize filing status before any lookup (finding D2)
+    try:
+        args.filing_status = normalize_filing_status(args.filing_status)
+    except ValueError as e:
+        print(f"Error: {e}")
         sys.exit(1)
 
     # Load Tax Data for specified year
@@ -172,8 +185,10 @@ def main():
                      mortgage["deductible_amount"] + charitable["deductible_amount"]
 
     # Calculate standard deduction
-    base_std = standard_deductions.get(args.filing_status, standard_deductions["single"])
-    add_amt = additional_deductions.get(args.filing_status, 1950)
+    base_std = get_status_value(standard_deductions, args.filing_status, "standard deduction")
+    add_amt = get_status_value(
+        additional_deductions, args.filing_status, "additional 65/blind deduction"
+    )
     standard_deduction = base_std + (add_amt * args.age_65_plus) + (add_amt * args.blind)
 
     use_itemized = total_itemized > standard_deduction

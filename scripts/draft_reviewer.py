@@ -20,7 +20,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Add the scripts directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from utils import load_tax_constants
+from utils import (
+    get_status_value,
+    load_tax_constants,
+    make_year_arg,
+    normalize_filing_status,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -128,13 +133,15 @@ def check_income(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Findin
 
 def check_deductions(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
     findings = []
-    status = draft.get("filing_status", "single")
-    
+    if not draft.get("filing_status"):
+        raise ValueError("Draft return must specify 'filing_status'.")
+    status = normalize_filing_status(draft["filing_status"])
+
     # Standard vs Itemized
     draft_deduction = draft.get("deductions", {}).get("total", 0)
-    
+
     # Calculate expected standard deduction
-    base_sd = ctx.standard_deductions.get(status, ctx.standard_deductions["single"])
+    base_sd = get_status_value(ctx.standard_deductions, status, "standard deduction")
     age_blind_amt = ctx.add_deduction_married if "married" in status else ctx.add_deduction_single
     
     num_age_blind = draft.get("taxpayer_info", {}).get("age_65_plus", 0) + \
@@ -167,7 +174,7 @@ def main():
     parser = argparse.ArgumentParser(description="Draft Tax Return Reviewer")
     parser.add_argument("--draft", required=True, help="Path to draft return JSON")
     parser.add_argument("--computed", required=True, help="Path to computed tax data JSON")
-    parser.add_argument("--year", type=str, default="2025", choices=["2024", "2025"], help="Tax year")
+    make_year_arg(parser)
     parser.add_argument("--output-format", choices=["text", "json"], default="text")
 
     args = parser.parse_args()
@@ -213,7 +220,11 @@ def main():
         print(f"Error loading input files: {e}")
         sys.exit(1)
 
-    findings = run_review(draft_data, computed_data, ctx)
+    try:
+        findings = run_review(draft_data, computed_data, ctx)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
     if args.output_format == "json":
         from dataclasses import asdict

@@ -13,7 +13,13 @@ from typing import Dict, List
 
 # Add the scripts directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from utils import load_tax_constants
+from utils import (
+    get_status_value,
+    load_tax_constants,
+    make_year_arg,
+    normalize_filing_status,
+    select_for_status,
+)
 
 
 def get_due_dates(year: str) -> List:
@@ -36,7 +42,7 @@ def get_due_dates(year: str) -> List:
 
 def calculate_income_tax(taxable_income: float, filing_status: str, tax_brackets: Dict) -> float:
     """Calculate federal income tax."""
-    brackets = tax_brackets.get(filing_status, tax_brackets["single"])
+    brackets = select_for_status(tax_brackets, filing_status, "tax brackets")
 
     tax = 0
     prev_bracket = 0
@@ -106,12 +112,20 @@ def main():
     parser.add_argument("--projected-se-income", type=float, default=0, help="Projected net self-employment income")
     parser.add_argument("--prior-year-tax", type=float, required=True, help="Total tax from prior year return")
     parser.add_argument("--prior-year-agi", type=float, default=0, help="AGI from prior year return")
-    parser.add_argument("--filing-status", default="single", help="Filing status")
+    parser.add_argument("--filing-status", default="single",
+                        help="Filing status (single, mfj, mfs, hoh, qss or canonical form)")
     parser.add_argument("--withholding-to-date", type=float, default=0, help="Federal withholding to date")
-    parser.add_argument("--year", type=str, default="2025", choices=["2024", "2025"], help="Tax year for calculation")
+    make_year_arg(parser)
     parser.add_argument("--output-format", choices=["json", "text"], default="text")
 
     args = parser.parse_args()
+
+    # Normalize filing status before any lookup (finding D2)
+    try:
+        args.filing_status = normalize_filing_status(args.filing_status)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
     # Load Tax Data for specified year
     try:
@@ -132,7 +146,9 @@ def main():
     agi = args.projected_income - se_results["deduction"]
 
     # Calculate Taxable Income
-    std_deduction = standard_deductions.get(args.filing_status, standard_deductions["single"])
+    std_deduction = get_status_value(
+        standard_deductions, args.filing_status, "standard deduction"
+    )
     taxable_income = max(0, agi - std_deduction)
 
     # Calculate Federal Income Tax

@@ -23,7 +23,13 @@ from decimal import Decimal, ROUND_HALF_UP
 
 # Add the scripts directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from utils import load_tax_constants
+from utils import (
+    get_status_value,
+    load_tax_constants,
+    make_year_arg,
+    normalize_filing_status,
+    select_for_status,
+)
 
 
 @dataclass
@@ -101,9 +107,37 @@ def calculate_holding_period(vesting_date: str, sale_date: str) -> Tuple[str, in
     return "short_term", days
 
 
+def additional_medicare_threshold(filing_status: str, se_tax_data: Dict) -> float:
+    """Additional Medicare wage threshold for a filing status.
+
+    Reads the figure from constants and raises when a status has no threshold
+    defined, rather than defaulting to the single-filer $200,000 (findings
+    D2/F12 — a hard-coded default silently produced the wrong surtax for MFS).
+    """
+    status = normalize_filing_status(filing_status)
+    # IRC 3101(b)(2) / IRS Topic 560: $250,000 joint, $125,000 MFS,
+    # $200,000 "in any other case" — which includes head of household AND
+    # qualifying surviving spouse (QSS uses joint *rates* but is not a joint
+    # return, so it takes the $200,000 threshold). Not inflation-indexed.
+    key_by_status = {
+        "single": "additional_medicare_threshold_single",
+        "married_jointly": "additional_medicare_threshold_married",
+        "married_separately": "additional_medicare_threshold_married_separately",
+        "head_of_household": "additional_medicare_threshold_head_of_household",
+        "qualifying_surviving_spouse": "additional_medicare_threshold_qualifying_surviving_spouse",
+    }
+    key = key_by_status[status]
+    if key not in se_tax_data or se_tax_data[key] is None:
+        raise ValueError(
+            f"No Additional Medicare threshold defined for filing status "
+            f"{status!r} (expected key {key!r} in se_tax constants)."
+        )
+    return se_tax_data[key]
+
+
 def calculate_marginal_rate(taxable_income: float, filing_status: str, tax_brackets: Dict) -> float:
     """Get marginal tax rate for given income and filing status."""
-    brackets = tax_brackets.get(filing_status, tax_brackets["single"])
+    brackets = select_for_status(tax_brackets, filing_status, "tax brackets")
     for bracket_top, rate in brackets:
         if taxable_income <= bracket_top:
             return rate
@@ -153,14 +187,8 @@ def calculate_withholding_estimate(
     medicare_withheld = vesting_income * medicare_rate
 
     # Additional Medicare (typically not withheld correctly)
-    threshold_key = f"additional_medicare_threshold_{filing_status}"
-    if filing_status == "married_jointly":
-        threshold_key = "additional_medicare_threshold_married"
-    elif filing_status == "married_separately":
-        threshold_key = "additional_medicare_threshold_married_separately"
-    
-    medicare_threshold = se_tax_data.get(threshold_key, 200000)
-    
+    medicare_threshold = additional_medicare_threshold(filing_status, se_tax_data)
+
     if ytd_wages + vesting_income > medicare_threshold:
         additional_medicare_income = min(vesting_income, ytd_wages + vesting_income - medicare_threshold)
         additional_medicare = additional_medicare_income * se_tax_data["additional_medicare_rate"]
@@ -174,7 +202,9 @@ def calculate_withholding_estimate(
 
     # Estimate actual tax (simplified - assumes this income on top of other income)
     total_income = ytd_wages + vesting_income
-    standard_deduction = standard_deductions.get(filing_status, 15000)
+    standard_deduction = get_status_value(
+        standard_deductions, filing_status, "standard deduction"
+    )
     taxable_income = max(0, total_income - standard_deduction)
 
     marginal_rate = calculate_marginal_rate(taxable_income, filing_status, tax_brackets)
@@ -355,8 +385,9 @@ def main():
     withhold_parser = subparsers.add_parser("withholding", help="Calculate withholding shortfall")
     withhold_parser.add_argument("--vesting-income", type=float, required=True, help="Total income from vesting")
     withhold_parser.add_argument("--ytd-wages", type=float, default=0, help="Year-to-date wages before this vesting")
-    withhold_parser.add_argument("--year", type=str, default="2025", choices=["2024", "2025"], help="Tax year")
-    withhold_parser.add_argument("--filing-status", default="single", help="Filing status")
+    make_year_arg(withhold_parser)
+    withhold_parser.add_argument("--filing-status", default="single",
+                                help="Filing status (single, mfj, mfs, hoh, qss or canonical form)")
     withhold_parser.add_argument("--state-rate", type=float, default=0.05, help="Flat state tax rate (e.g., 0.05 for 5%%)")
 
     # Lot tracking command
@@ -373,7 +404,7 @@ def main():
     sale_parser.add_argument("--reported-basis", type=float, default=0, help="Cost basis reported on 1099-B")
     sale_parser.add_argument("--method", choices=["fifo", "specific"], default="fifo", help="Cost basis method")
     sale_parser.add_argument("--from-date", help="Vesting date for specific ID method")
-    sale_parser.add_argument("--year", type=str, default="2025", choices=["2024", "2025"], help="Tax year")
+    make_year_arg(sale_parser)
     sale_parser.add_argument("--summary-threshold", type=int, default=10, help="Collapse output if more than N lots")
 
     # Simple basis calculation
@@ -381,7 +412,7 @@ def main():
     basis_parser.add_argument("--shares-vested", type=float, required=True)
     basis_parser.add_argument("--fmv", type=float, required=True)
     basis_parser.add_argument("--shares-withheld", type=float, default=0)
-    basis_parser.add_argument("--year", type=str, default="2025", choices=["2024", "2025"], help="Tax year")
+    make_year_arg(basis_parser)
 
     args = parser.parse_args()
 
@@ -396,9 +427,13 @@ def main():
             print(f"Error: {e}")
             sys.exit(1)
             
-        result = calculate_withholding_estimate(
-            args.vesting_income, args.ytd_wages, args.filing_status, args.state_rate, tax_data
-        )
+        try:
+            result = calculate_withholding_estimate(
+                args.vesting_income, args.ytd_wages, args.filing_status, args.state_rate, tax_data
+            )
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
         print(f"\n--- RSU Withholding Analysis ({args.year}) ---")
         print(f"Vesting Income:       ${result['vesting_income']:,.2f}")
         print("-" * 35)

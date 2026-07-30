@@ -12,12 +12,18 @@ from typing import Dict, Tuple, List
 
 # Add the scripts directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from utils import load_tax_constants
+from utils import (
+    get_status_value,
+    load_tax_constants,
+    make_year_arg,
+    normalize_filing_status,
+    select_for_status,
+)
 
 
 def calculate_tax(taxable_income: float, filing_status: str, tax_brackets: Dict) -> Tuple[float, List[Dict]]:
     """Calculate federal income tax and return breakdown by bracket."""
-    brackets = tax_brackets.get(filing_status, tax_brackets["single"])
+    brackets = select_for_status(tax_brackets, filing_status, "tax brackets")
 
     tax = 0
     breakdown = []
@@ -56,7 +62,7 @@ def calculate_effective_rate(tax: float, gross_income: float) -> float:
 
 def calculate_marginal_rate(taxable_income: float, filing_status: str, tax_brackets: Dict) -> float:
     """Determine marginal tax rate based on taxable income."""
-    brackets = tax_brackets.get(filing_status, tax_brackets["single"])
+    brackets = select_for_status(tax_brackets, filing_status, "tax brackets")
 
     for bracket_top, rate in brackets:
         if taxable_income <= bracket_top:
@@ -67,9 +73,16 @@ def calculate_marginal_rate(taxable_income: float, filing_status: str, tax_brack
 
 def calculate_standard_deduction(filing_status: str, standard_deductions: Dict, additional_deductions: Dict, 
                                  age_65_plus: int = 0, blind: int = 0) -> float:
-    """Calculate standard deduction including additional amounts for age/blindness."""
-    base = standard_deductions.get(filing_status, standard_deductions["single"])
-    additional = additional_deductions.get(filing_status, 1950)
+    """Calculate standard deduction including additional amounts for age/blindness.
+
+    Both lookups raise on an unknown filing status. The previous
+    `additional_deductions.get(status, 1950)` hard-coded the 2024 single
+    amount as a default for unknown statuses (finding F12).
+    """
+    base = get_status_value(standard_deductions, filing_status, "standard deduction")
+    additional = get_status_value(
+        additional_deductions, filing_status, "additional 65/blind deduction"
+    )
 
     return base + (additional * age_65_plus) + (additional * blind)
 
@@ -77,8 +90,9 @@ def calculate_standard_deduction(filing_status: str, standard_deductions: Dict, 
 def main():
     parser = argparse.ArgumentParser(description="Calculate federal income tax")
     parser.add_argument("--gross-income", type=float, required=True, help="Gross income")
-    parser.add_argument("--year", type=str, default="2025", choices=["2024", "2025"], help="Tax year")
-    parser.add_argument("--filing-status", default="single", help="Filing status")
+    make_year_arg(parser)
+    parser.add_argument("--filing-status", default="single",
+                        help="Filing status (single, mfj, mfs, hoh, qss or canonical form)")
     parser.add_argument("--deductions", type=float, default=0,
                         help="Itemized deductions (if greater than standard, will use itemized)")
     parser.add_argument("--adjustments", type=float, default=0,
@@ -116,19 +130,16 @@ def main():
     standard_deductions = tax_data["standard_deductions"]
     additional_deductions = tax_data["additional_deduction_65_blind"]
 
-    # Normalize common filing status aliases
-    aliases = {
-        "mfj": "married_jointly",
-        "mfs": "married_separately",
-        "hoh": "head_of_household",
-        "qss": "qualifying_surviving_spouse",
-        "single": "single",
-    }
-    args.filing_status = aliases.get(args.filing_status.lower(), args.filing_status)
+    # Normalize filing status via the shared alias map (finding D2)
+    try:
+        args.filing_status = normalize_filing_status(args.filing_status)
+    except ValueError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
 
-    # Validate filing status
     if args.filing_status not in tax_brackets:
-        print(f"Error: Invalid filing status '{args.filing_status}'. Must be one of: {', '.join(tax_brackets.keys())}")
+        print(f"Error: No {args.year} tax brackets for filing status "
+              f"'{args.filing_status}'. Available: {', '.join(sorted(tax_brackets))}")
         sys.exit(1)
 
     # Calculate AGI
