@@ -86,23 +86,54 @@ def calculate_se_tax(net_se_income: float, se_tax_data: Dict) -> Dict:
     }
 
 
-def calculate_safe_harbor(prior_year_tax: float, prior_year_agi: float) -> Dict:
-    """Calculate safe harbor amounts to avoid underpayment penalty."""
-    # Standard safe harbor: 100% of prior year tax
-    standard_safe_harbor = prior_year_tax
+#: AGI above which the prior-year safe harbor rises from 100% to 110%.
+#: Source: IRS Form 1040-ES, https://www.irs.gov/pub/irs-pdf/f1040es.pdf —
+#: "If your adjusted gross income (AGI) ... was more than $150,000 ($75,000 if
+#: your filing status ... is married filing separately), substitute 110% for
+#: 100%". Statutory (IRC 6654(d)(1)(C)), not inflation-indexed.
+HIGH_INCOME_THRESHOLD = 150000
+HIGH_INCOME_THRESHOLD_MFS = 75000
 
-    # High income safe harbor: 110% if AGI > $150k
-    high_income_threshold = 150000
-    if prior_year_agi > high_income_threshold:
-        high_income_safe_harbor = prior_year_tax * 1.10
-    else:
-        high_income_safe_harbor = prior_year_tax
+
+def high_income_threshold(filing_status: str) -> float:
+    """Prior-year AGI threshold that triggers the 110% safe harbor.
+
+    Married filing separately uses half the general threshold. Applying the
+    $150,000 figure to an MFS filer understated the required payment and would
+    have caused an underpayment penalty (finding F9).
+    """
+    status = normalize_filing_status(filing_status)
+    if status == "married_separately":
+        return HIGH_INCOME_THRESHOLD_MFS
+    return HIGH_INCOME_THRESHOLD
+
+
+def calculate_safe_harbor(prior_year_tax: float, prior_year_agi: float,
+                          filing_status: str) -> Dict:
+    """Calculate safe harbor amounts to avoid the underpayment penalty.
+
+    Required annual payment (Form 1040-ES General Rule) is the LESSER of:
+      (a) 90% of the tax shown on the current-year return, and
+      (b) 100% of the tax shown on the prior-year return — substituting 110%
+          when prior-year AGI exceeded the high-income threshold.
+    This function computes leg (b); the caller applies the min() against leg (a).
+    """
+    threshold = high_income_threshold(filing_status)
+    # The statute says "more than", so AGI exactly at the threshold does not
+    # trigger the higher percentage.
+    applies_high_income = prior_year_agi > threshold
+
+    standard_safe_harbor = prior_year_tax
+    high_income_safe_harbor = prior_year_tax * 1.10 if applies_high_income else prior_year_tax
 
     return {
         "standard": round(standard_safe_harbor, 2),
         "high_income": round(high_income_safe_harbor, 2),
-        "applies_high_income": prior_year_agi > high_income_threshold,
-        "minimum_required": round(high_income_safe_harbor if prior_year_agi > high_income_threshold else standard_safe_harbor, 2)
+        "threshold_used": threshold,
+        "applies_high_income": applies_high_income,
+        "minimum_required": round(
+            high_income_safe_harbor if applies_high_income else standard_safe_harbor, 2
+        )
     }
 
 
@@ -158,7 +189,9 @@ def main():
     total_estimated_tax = income_tax + se_results["total"]
 
     # Safe Harbor analysis
-    safe_harbor = calculate_safe_harbor(args.prior_year_tax, args.prior_year_agi)
+    safe_harbor = calculate_safe_harbor(
+        args.prior_year_tax, args.prior_year_agi, args.filing_status
+    )
 
     # Calculate remaining amount to pay
     total_target = min(total_estimated_tax * 0.90, safe_harbor["minimum_required"])

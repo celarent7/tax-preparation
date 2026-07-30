@@ -78,7 +78,11 @@ Collect all tax documents. Use the checklist in `./references/document_checklist
 python ./scripts/tax_calculator.py --gross-income <confirmed_amount> --adjustments <amount> --year 2025
 ```
 
-> **Estimated payment safe harbor**: Use `estimated_tax_calculator.py` for quarterly payment amounts. The IRS safe harbor is the **lesser of** (a) 90% of current-year projected tax or (b) 100% of prior-year tax (110% if prior-year AGI > $150,000). Always compute both and present the lower figure to minimize required payments.
+> **Estimated payment safe harbor**: Use `estimated_tax_calculator.py` for quarterly payment amounts. The IRS safe harbor is the **lesser of** (a) 90% of current-year projected tax or (b) 100% of prior-year tax — **110% if prior-year AGI exceeded $150,000, or $75,000 for married filing separately**. Always compute both and present the lower figure to minimize required payments.
+>
+> The MFS threshold is half the general one; applying $150,000 to an MFS filer
+> understates the required payment and causes an underpayment penalty.
+> *Source: IRS Form 1040-ES, <https://www.irs.gov/pub/irs-pdf/f1040es.pdf>.*
 
 ### Step 3: Determine Deductions
 Compare standard deduction against itemized total:
