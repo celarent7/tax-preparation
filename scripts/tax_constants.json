@@ -74,7 +74,9 @@
       "retirement_limits.401k.total_415c": "Section 415(c) annual additions limit not verified for 2025/2026.",
       "2023.retirement_limits": "2023 401(k)/IRA limits come from IRS Notice 2022-55 and HSA limits from Rev. Proc. 2022-24; neither was fetched. All null.",
       "2023.credits.savers_credit": "Saver's Credit AGI bands for 2023 not verified.",
-      "2023.mileage_rate": "Standard mileage rate is announced in a separate IRS Notice."
+      "2023.mileage_rate": "Standard mileage rate is announced in a separate IRS Notice.",
+      "states.WA.capital_gains_excise.standard_deduction_2025": "WA capital gains excise standard deduction indexes annually; the 2025 figure was not verified (finding F13).",
+      "states.CA.2023": "CA 2023 and 2024 bracket/deduction data not collected in this engagement; only 2025 is populated. Requesting another year raises."
     },
     "rev_proc_2024_40_ty2025": {
       "url": "https://www.irs.gov/pub/irs-drop/rp-24-40.pdf",
@@ -161,6 +163,46 @@
         "niit_thresholds"
       ],
       "note": "MFJ $250,000; MFS $125,000; single or head of household $200,000; qualifying widow(er) with a child $250,000. NOTE the asymmetry with the Additional Medicare Tax, where QSS takes the $200,000 'any other case' threshold. Statutory, not indexed."
+    },
+    "ftb_2025_rate_schedules": {
+      "url": "https://www.ftb.ca.gov/forms/2025/2025-540-tax-rate-schedules.pdf",
+      "title": "2025 California Tax Rate Schedules (FTB)",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "states.CA.2025.brackets"
+      ],
+      "note": "Schedule X single/MFS, Schedule Y MFJ/QSS, Schedule Z HoH. Nine brackets 1% to 12.3%. MFJ boundaries are exactly 2x the single boundaries (R&TC 17041)."
+    },
+    "ftb_2025_form_540": {
+      "url": "https://www.ftb.ca.gov/forms/2025/2025-540.pdf",
+      "title": "2025 Form 540, California Resident Income Tax Return + booklet",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "states.CA.2025.standard_deduction",
+        "states.CA.2025.exemption_credit",
+        "states.CA.2025.renters_credit",
+        "states.CA.2025.behavioral_health_tax"
+      ],
+      "note": "Line 18 standard deduction $5,706 single/MFS, $11,412 MFJ/HoH/QSS. Exemptions $153 personal/blind/senior, $475 per dependent; line 32 phase-out above federal AGI $252,203. Line 62 Behavioral Health Services Tax = 1% of taxable income over $1,000,000 (renamed from Mental Health Services Tax for 2025). Renter's credit $60/$120 with AGI limits $53,994/$107,988."
+    },
+    "edd_de44_2025": {
+      "url": "https://edd.ca.gov/siteassets/files/pdf_pub_ctr/de44.pdf",
+      "title": "2025 California Employer's Guide (DE 44), EDD",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "states.CA.2025.supplemental_withholding",
+        "states.CA.2025.sdi"
+      ],
+      "note": "Supplemental wages: bonuses and stock options 10.23 percent (.1023); other types (overtime, commissions, sales awards, severance, vacation) 6.6 percent (.066). SDI rate 1.2% for 2025 with NO taxable wage limit (SB 951 removed it effective 2024-01-01)."
+    },
+    "ftb_2025_540es": {
+      "url": "https://www.ftb.ca.gov/forms/2025/2025-540-es-instructions.html",
+      "title": "2025 Instructions for Form 540-ES",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "states.CA.2025.estimated_tax"
+      ],
+      "note": "Installments are 30% / 40% / 0% / 30% of the required annual payment. CA AGI over $150,000 ($75,000 MFS) uses the lesser of 90% current or 110% prior year. CA AGI at or above $1,000,000 ($500,000 MFS) must use 90% of the CURRENT year \u2014 the prior-year safe harbor is unavailable."
     }
   },
   "2023": {
@@ -1859,19 +1901,6 @@
       ]
     ]
   },
-  "state_tax_rates": {
-    "CA": 0.133,
-    "WA": 0.0,
-    "NY": 0.109,
-    "TX": 0.0,
-    "FL": 0.0,
-    "NJ": 0.1075,
-    "MA": 0.05,
-    "IL": 0.0495,
-    "PA": 0.0307,
-    "OR": 0.099,
-    "NONE": 0.0
-  },
   "filing_status_map": {
     "mfj": "married_jointly",
     "mfs": "married_separately",
@@ -1908,5 +1937,316 @@
       "agi_for_min": 43000
     },
     "savers_credit_max_contribution": 2000
+  },
+  "states": {
+    "CA": {
+      "type": "progressive",
+      "2025": {
+        "brackets": {
+          "single": [
+            {
+              "top": 11079,
+              "rate": 0.01
+            },
+            {
+              "top": 26264,
+              "rate": 0.02
+            },
+            {
+              "top": 41452,
+              "rate": 0.04
+            },
+            {
+              "top": 57542,
+              "rate": 0.06
+            },
+            {
+              "top": 72724,
+              "rate": 0.08
+            },
+            {
+              "top": 371479,
+              "rate": 0.093
+            },
+            {
+              "top": 445771,
+              "rate": 0.103
+            },
+            {
+              "top": 742953,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "married_separately": [
+            {
+              "top": 11079,
+              "rate": 0.01
+            },
+            {
+              "top": 26264,
+              "rate": 0.02
+            },
+            {
+              "top": 41452,
+              "rate": 0.04
+            },
+            {
+              "top": 57542,
+              "rate": 0.06
+            },
+            {
+              "top": 72724,
+              "rate": 0.08
+            },
+            {
+              "top": 371479,
+              "rate": 0.093
+            },
+            {
+              "top": 445771,
+              "rate": 0.103
+            },
+            {
+              "top": 742953,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "married_jointly": [
+            {
+              "top": 22158,
+              "rate": 0.01
+            },
+            {
+              "top": 52528,
+              "rate": 0.02
+            },
+            {
+              "top": 82904,
+              "rate": 0.04
+            },
+            {
+              "top": 115084,
+              "rate": 0.06
+            },
+            {
+              "top": 145448,
+              "rate": 0.08
+            },
+            {
+              "top": 742958,
+              "rate": 0.093
+            },
+            {
+              "top": 891542,
+              "rate": 0.103
+            },
+            {
+              "top": 1485906,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "qualifying_surviving_spouse": [
+            {
+              "top": 22158,
+              "rate": 0.01
+            },
+            {
+              "top": 52528,
+              "rate": 0.02
+            },
+            {
+              "top": 82904,
+              "rate": 0.04
+            },
+            {
+              "top": 115084,
+              "rate": 0.06
+            },
+            {
+              "top": 145448,
+              "rate": 0.08
+            },
+            {
+              "top": 742958,
+              "rate": 0.093
+            },
+            {
+              "top": 891542,
+              "rate": 0.103
+            },
+            {
+              "top": 1485906,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "head_of_household": [
+            {
+              "top": 22173,
+              "rate": 0.01
+            },
+            {
+              "top": 52530,
+              "rate": 0.02
+            },
+            {
+              "top": 67716,
+              "rate": 0.04
+            },
+            {
+              "top": 83805,
+              "rate": 0.06
+            },
+            {
+              "top": 98990,
+              "rate": 0.08
+            },
+            {
+              "top": 505208,
+              "rate": 0.093
+            },
+            {
+              "top": 606251,
+              "rate": 0.103
+            },
+            {
+              "top": 1010417,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ]
+        },
+        "behavioral_health_tax": {
+          "name": "Behavioral Health Services Tax",
+          "former_name": "Mental Health Services Tax",
+          "rate": 0.01,
+          "threshold": 1000000
+        },
+        "standard_deduction": {
+          "single": 5706,
+          "married_separately": 5706,
+          "married_jointly": 11412,
+          "head_of_household": 11412,
+          "qualifying_surviving_spouse": 11412
+        },
+        "exemption_credit": {
+          "personal": 153,
+          "blind": 153,
+          "senior": 153,
+          "dependent": 475,
+          "phaseout_federal_agi_start": 252203
+        },
+        "renters_credit": {
+          "amount_single": 60,
+          "amount_joint": 120,
+          "agi_limit_single": 53994,
+          "agi_limit_joint": 107988
+        },
+        "sdi": {
+          "rate": 0.012,
+          "wage_cap": null,
+          "excess_credit_multiple_employers": true
+        },
+        "supplemental_withholding": {
+          "rsu_bonus_stock_options": 0.1023,
+          "other": 0.066
+        },
+        "nonconformity": {
+          "hsa_deductible": false,
+          "hsa_earnings_taxable": true,
+          "qbi_deductible": false,
+          "capital_gains_preferential": false,
+          "mortgage_debt_limit": 1000000,
+          "heloc_limit": 100000,
+          "bonus_depreciation": false,
+          "salt_deductible_on_state_return": false,
+          "obbba_tips_overtime_senior": false,
+          "conformity_date": "2015-01-01"
+        },
+        "estimated_tax": {
+          "installment_pct": [
+            0.3,
+            0.4,
+            0.0,
+            0.3
+          ],
+          "high_income_agi": 150000,
+          "high_income_agi_mfs": 75000,
+          "high_income_prior_year_pct": 1.1,
+          "safe_harbor_unavailable_agi": 1000000,
+          "safe_harbor_unavailable_agi_mfs": 500000,
+          "due_dates": [
+            [
+              "Q1",
+              "2025-04-15"
+            ],
+            [
+              "Q2",
+              "2025-06-16"
+            ],
+            [
+              "Q3",
+              "2025-09-15"
+            ],
+            [
+              "Q4",
+              "2026-01-15"
+            ]
+          ]
+        }
+      }
+    },
+    "WA": {
+      "type": "none",
+      "capital_gains_excise": {
+        "rate": 0.07,
+        "surtax_rate": 0.029,
+        "surtax_threshold": 1000000,
+        "standard_deduction_2025": null
+      }
+    },
+    "TX": {
+      "type": "none"
+    },
+    "FL": {
+      "type": "none"
+    },
+    "NV": {
+      "type": "none"
+    }
+  },
+  "state_top_marginal_rates": {
+    "_note": "TOP MARGINAL rates for rough estimation only \u2014 NOT flat effective rates. Treating CA's top marginal rate as flat overstated CA tax by ~132% at $200K MFJ (finding C1). Use the 'states' block for any state with real brackets.",
+    "estimate_only": true,
+    "rates": {
+      "WA": 0.0,
+      "NY": 0.109,
+      "TX": 0.0,
+      "FL": 0.0,
+      "NJ": 0.1075,
+      "MA": 0.05,
+      "IL": 0.0495,
+      "PA": 0.0307,
+      "OR": 0.099,
+      "NONE": 0.0
+    }
   }
 }

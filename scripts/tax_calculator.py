@@ -19,6 +19,7 @@ from utils import (
     normalize_filing_status,
     select_for_status,
     additional_medicare_threshold,
+    load_state_constants,
 )
 
 
@@ -192,6 +193,146 @@ def assess_amt_risk(taxable_income: float, salt_lost_to_cap: float,
     }
 
 
+def calculate_california_tax(federal_agi: float, filing_status: str, state_data: Dict,
+                             hsa_contributions: float = 0,
+                             qbi_deduction: float = 0,
+                             obbba_deductions: float = 0,
+                             itemized_deductions: float = 0,
+                             state_income_tax_in_itemized: float = 0,
+                             dependents: int = 0,
+                             age_65_plus: int = 0, blind: int = 0,
+                             is_renter: bool = False) -> Dict:
+    """Compute California tax from federal AGI (findings C1-C4, C7; task P2.5).
+
+    California has its own progressive brackets and does NOT conform to several
+    federal rules, so federal AGI must be adjusted on Schedule CA (540):
+
+      + HSA contributions        CA does not allow the deduction (C2)
+      + QBI deduction            CA has no section 199A (C3)
+      - OBBBA-only deductions    CA's conformity date is 2015-01-01, so the
+                                 tips/overtime/senior deductions do not exist
+                                 for CA and must be added back (C3)
+
+    California also taxes capital gains and qualified dividends as ORDINARY
+    income — there is no preferential rate — so the whole CA taxable income
+    runs through one bracket table.
+
+    The Behavioral Health Services Tax (1% over $1,000,000 of taxable income,
+    renamed from the Mental Health Services Tax for 2025) is a SEPARATE
+    additive tax, not a bracket. The top bracket is 12.3%; the "13.3%" the
+    plugin previously applied as a flat rate is the combined marginal rate
+    above $1M and overstated CA tax by ~132% at $200,000 of MFJ income (C1).
+    """
+    status = normalize_filing_status(filing_status)
+    nonconformity = state_data["nonconformity"]
+
+    # --- Schedule CA (540) adjustments: federal AGI -> CA AGI ---
+    adjustments = []
+    ca_agi = federal_agi
+
+    if not nonconformity["hsa_deductible"] and hsa_contributions:
+        ca_agi += hsa_contributions
+        adjustments.append({
+            "item": "HSA contributions", "amount": round(hsa_contributions, 2),
+            "direction": "add-back",
+            "reason": "California does not allow a deduction for HSA contributions "
+                      "(Schedule CA 540 Part I). HSA earnings are also CA-taxable.",
+        })
+
+    if not nonconformity["qbi_deductible"] and qbi_deduction:
+        ca_agi += qbi_deduction
+        adjustments.append({
+            "item": "Qualified business income deduction", "amount": round(qbi_deduction, 2),
+            "direction": "add-back",
+            "reason": "California has no IRC 199A deduction.",
+        })
+
+    if not nonconformity["obbba_tips_overtime_senior"] and obbba_deductions:
+        ca_agi += obbba_deductions
+        adjustments.append({
+            "item": "OBBBA deductions (tips / overtime / senior / car-loan interest)",
+            "amount": round(obbba_deductions, 2), "direction": "add-back",
+            "reason": f"California conformity date is {nonconformity['conformity_date']}, "
+                      "so post-2015 federal deductions do not apply for CA.",
+        })
+
+    # --- CA deduction: standard vs itemized (a SEPARATE decision from federal) ---
+    ca_standard = get_status_value(state_data["standard_deduction"], status,
+                                   "California standard deduction")
+    # CA itemized deductions exclude state income tax entirely.
+    ca_itemized = max(0.0, itemized_deductions - state_income_tax_in_itemized)
+    use_itemized = ca_itemized > ca_standard
+    ca_deduction = max(ca_standard, ca_itemized)
+
+    ca_taxable_income = max(0.0, ca_agi - ca_deduction)
+
+    # --- Tax from the CA bracket table (all income at ordinary rates) ---
+    brackets = [
+        (b["top"] if b["top"] is not None else float("inf"), b["rate"])
+        for b in select_for_status(state_data["brackets"], status, "California brackets")
+    ]
+    ca_tax, ca_breakdown = calculate_tax(ca_taxable_income, status, {status: brackets})
+
+    # --- Behavioral Health Services Tax: separate 1% above $1M ---
+    bhst_cfg = state_data["behavioral_health_tax"]
+    bhst_base = max(0.0, ca_taxable_income - bhst_cfg["threshold"])
+    bhst = round(bhst_base * bhst_cfg["rate"], 2)
+
+    # --- Exemption credits (nonrefundable) ---
+    ex = state_data["exemption_credit"]
+    personal_count = 2 if status in ("married_jointly", "qualifying_surviving_spouse") else 1
+    exemption_credit = (personal_count * ex["personal"]
+                        + age_65_plus * ex["senior"]
+                        + blind * ex["blind"]
+                        + dependents * ex["dependent"])
+    exemption_phased_out = federal_agi > ex["phaseout_federal_agi_start"]
+    if exemption_phased_out:
+        # The FTB worksheet reduces the credit as AGI rises; flag rather than
+        # approximate, so the user is told to run the worksheet.
+        exemption_note = (f"Federal AGI ${federal_agi:,.0f} exceeds "
+                          f"${ex['phaseout_federal_agi_start']:,.0f}; the exemption "
+                          "credit is reduced — see the Form 540 line 32 worksheet. "
+                          "The full credit is shown here and is an UPPER BOUND.")
+    else:
+        exemption_note = "Full exemption credit applies."
+
+    # --- Renter's credit (nonrefundable) ---
+    rc = state_data["renters_credit"]
+    is_joint = status in ("married_jointly", "head_of_household", "qualifying_surviving_spouse")
+    rc_limit = rc["agi_limit_joint"] if is_joint else rc["agi_limit_single"]
+    rc_amount = rc["amount_joint"] if is_joint else rc["amount_single"]
+    renters_credit = rc_amount if (is_renter and ca_agi <= rc_limit) else 0
+
+    credits = exemption_credit + renters_credit
+    tax_after_credits = max(0.0, ca_tax + bhst - credits)
+
+    return {
+        "state": "CA",
+        "federal_agi": round(federal_agi, 2),
+        "ca_agi": round(ca_agi, 2),
+        "adjustments": adjustments,
+        "ca_standard_deduction": ca_standard,
+        "ca_itemized_deductions": round(ca_itemized, 2),
+        "ca_deduction_used": round(ca_deduction, 2),
+        "using_itemized": use_itemized,
+        "ca_taxable_income": round(ca_taxable_income, 2),
+        "ca_tax_before_credits": ca_tax,
+        "behavioral_health_tax": bhst,
+        "exemption_credit": exemption_credit,
+        "exemption_credit_note": exemption_note,
+        "exemption_credit_phased_out": exemption_phased_out,
+        "renters_credit": renters_credit,
+        "total_credits": credits,
+        "ca_tax": round(tax_after_credits, 2),
+        "breakdown": ca_breakdown,
+        "notes": [
+            "California taxes long-term capital gains and qualified dividends as "
+            "ORDINARY income — there is no preferential rate.",
+            "State income tax is not deductible on the California return.",
+        ],
+    }
+
+
 def calculate_effective_rate(tax: float, gross_income: float) -> float:
     """Calculate effective tax rate."""
     if gross_income <= 0:
@@ -265,6 +406,22 @@ def main():
                         help="ISO exercise spread, for the AMT risk flag")
     parser.add_argument("--salt-lost-to-cap", type=float, default=0,
                         help="SALT disallowed by the cap, for the AMT risk flag")
+
+    # State layer (task P2.5)
+    parser.add_argument("--state", type=str, default=None,
+                        help="State of residence for a state-tax section (e.g. CA)")
+    parser.add_argument("--hsa-contributions", type=float, default=0,
+                        help="HSA contributions (added back for CA — CA does not conform)")
+    parser.add_argument("--qbi-deduction", type=float, default=0,
+                        help="Federal QBI deduction (added back for CA)")
+    parser.add_argument("--obbba-deductions", type=float, default=0,
+                        help="Federal tips/overtime/senior/car-loan deductions (added back for CA)")
+    parser.add_argument("--state-income-tax-paid", type=float, default=0,
+                        help="State income tax inside itemized deductions (not deductible for CA)")
+    parser.add_argument("--dependents", type=int, default=0,
+                        help="Dependents, for state exemption credits")
+    parser.add_argument("--renter", action="store_true",
+                        help="Claim the CA nonrefundable renter's credit if eligible")
 
     parser.add_argument("--output-format", choices=["json", "text"], default="text",
                         help="Output format")
@@ -376,6 +533,30 @@ def main():
     effective_rate = calculate_effective_rate(max(0.0, tax_after_credits), args.gross_income)
     marginal_rate = calculate_marginal_rate(ordinary_income, args.filing_status, tax_brackets)
 
+    state_result = None
+    if args.state:
+        try:
+            state_data = load_state_constants(args.state, args.year)
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+        if state_data.get("type") == "progressive" and args.state.upper() == "CA":
+            state_result = calculate_california_tax(
+                federal_agi=agi, filing_status=args.filing_status, state_data=state_data,
+                hsa_contributions=args.hsa_contributions,
+                qbi_deduction=args.qbi_deduction,
+                obbba_deductions=args.obbba_deductions,
+                itemized_deductions=args.deductions,
+                state_income_tax_in_itemized=args.state_income_tax_paid,
+                dependents=args.dependents,
+                age_65_plus=args.age_65_plus, blind=args.blind,
+                is_renter=args.renter,
+            )
+        elif state_data.get("type") == "none":
+            state_result = {"state": args.state.upper(), "type": "none",
+                            "ca_tax": 0, "state_tax": 0,
+                            "notes": [f"{args.state.upper()} has no personal income tax."]}
+
     result = {
         "input": {
             "gross_income": args.gross_income,
@@ -418,6 +599,8 @@ def main():
         "breakdown": breakdown,
         "preferential_breakdown": preferential_breakdown
     }
+    if state_result is not None:
+        result["state"] = state_result
 
     if args.output_format == "json":
         print(json.dumps(result, indent=2))
@@ -461,6 +644,26 @@ def main():
                 ceiling = format(b['bracket_ceiling'], ',.0f') if isinstance(b['bracket_ceiling'], (int, float)) else b['bracket_ceiling']
                 print(f"  {int(b['rate']*100):>2}% on ${b['preferential_income_in_bracket']:>12,.2f} "
                       f"(band up to {ceiling}): ${b['tax_from_bracket']:,.2f}")
+
+        if state_result and state_result.get("state") == "CA":
+            st = state_result
+            print(f"\n--- California (Form 540) ---")
+            print(f"Federal AGI:            ${st['federal_agi']:,.2f}")
+            for adj in st["adjustments"]:
+                print(f"  + {adj['item']}: ${adj['amount']:,.2f} ({adj['direction']})")
+            print(f"CA AGI:                 ${st['ca_agi']:,.2f}")
+            print(f"CA Deduction:           ${st['ca_deduction_used']:,.2f} "
+                  f"({'Itemized' if st['using_itemized'] else 'Standard'})")
+            print(f"CA Taxable Income:      ${st['ca_taxable_income']:,.2f}")
+            print(f"CA Tax Before Credits:  ${st['ca_tax_before_credits']:,.2f}")
+            if st["behavioral_health_tax"]:
+                print(f"Behavioral Health Tax:  ${st['behavioral_health_tax']:,.2f}")
+            print(f"Exemption Credit:       ${st['exemption_credit']:,.2f}")
+            if st["renters_credit"]:
+                print(f"Renter's Credit:        ${st['renters_credit']:,.2f}")
+            print(f"CA TAX:                 ${st['ca_tax']:,.2f}")
+            for n in st["notes"]:
+                print(f"  note: {n}")
 
         if amt_risk["amt_risk"]:
             print("\n⚠️  AMT RISK FLAGGED (this tool does not compute Form 6251):")
