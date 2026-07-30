@@ -60,7 +60,7 @@
     {
       "id": 2,
       "prompt": "I'm married filing jointly, two kids under 17. AGI is $138,000. I have: $8,400 in mortgage interest, $6,200 in property taxes, $3,800 in charitable donations, $2,100 in unreimbursed medical expenses. Should I itemize or take the standard deduction? Am I eligible for the Child Tax Credit, and if so how much? Are there any commonly missed deductions or credits I should look into based on my situation?",
-      "expected_output": "Comparison of standard deduction ($30,000 MFJ 2025) vs itemized total (~$18,500 — note: SALT capped at $10,000, medical expenses subject to 7.5% AGI floor so $2,100 - $10,350 threshold = $0 deductible). Recommend standard deduction. Full $2,000/child CTC = $4,000 (AGI $138k well under phase-out at $400k MFJ). Suggest probing for: student loan interest, HSA contributions, retirement account contributions, childcare/dependent care FSA, AOTC if college-aged kids.",
+      "expected_output": "Comparison of standard deduction ($31,500 MFJ 2025, post-OBBBA) vs itemized total (~$18,400 — note: SALT for 2025 is capped at $40,000, so the full $6,200 of property tax is deductible; medical expenses subject to 7.5% AGI floor so $2,100 - $10,350 threshold = $0 deductible). Recommend standard deduction. Full $2,200/child CTC = $4,400 (AGI $138k well under phase-out at $400k MFJ). Suggest probing for: student loan interest, HSA contributions, retirement account contributions, childcare/dependent care FSA, AOTC if college-aged kids.",
       "files": [],
       "assertions": [
         {
@@ -69,7 +69,7 @@
         },
         {
           "name": "applies-salt-cap",
-          "description": "Output applies the $10,000 SALT cap to the $6,200 property taxes (full amount is under cap, so this is $6,200)"
+          "description": "Output applies the year-correct SALT cap ($40,000 for 2025, not the pre-OBBBA $10,000) to the $6,200 property taxes; the full amount is under the cap, so this is $6,200"
         },
         {
           "name": "medical-deduction-threshold",
@@ -77,7 +77,7 @@
         },
         {
           "name": "child-tax-credit-amount",
-          "description": "Output states Child Tax Credit eligibility and the $4,000 amount (2 x $2,000)"
+          "description": "Output states Child Tax Credit eligibility and the $4,400 amount (2 x $2,200 for 2025 under OBBBA, not the pre-OBBBA 2 x $2,000)"
         },
         {
           "name": "suggests-additional-deductions",

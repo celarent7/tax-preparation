@@ -152,6 +152,15 @@
         "credits_static.child_dependent_care"
       ],
       "note": "AOTC ($2,500 max, 40% refundable, $80k-$90k / $160k-$180k phase-out) and the Child and Dependent Care Credit ($3,000/$6,000 expense limits, 35% to 20% between $15,000 and $43,000 AGI) are fixed by statute and are NOT inflation-indexed, so one shared block serves every year."
+    },
+    "irs_niit": {
+      "url": "https://www.irs.gov/individuals/net-investment-income-tax",
+      "title": "Net Investment Income Tax (IRC 1411)",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "niit_thresholds"
+      ],
+      "note": "MFJ $250,000; MFS $125,000; single or head of household $200,000; qualifying widow(er) with a child $250,000. NOTE the asymmetry with the Additional Medicare Tax, where QSS takes the $200,000 'any other case' threshold. Statutory, not indexed."
     }
   },
   "2023": {
@@ -810,13 +819,28 @@
           "top": null,
           "rate": 0.2
         }
+      ],
+      "qualifying_surviving_spouse": [
+        {
+          "top": 94050,
+          "rate": 0.0
+        },
+        {
+          "top": 583750,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
       ]
     },
     "niit_thresholds": {
       "single": 200000,
       "married_jointly": 250000,
       "married_separately": 125000,
-      "head_of_household": 200000
+      "head_of_household": 200000,
+      "qualifying_surviving_spouse": 250000
     },
     "se_tax": {
       "ss_rate": 0.124,
@@ -1190,13 +1214,28 @@
           "top": null,
           "rate": 0.2
         }
+      ],
+      "qualifying_surviving_spouse": [
+        {
+          "top": 96700,
+          "rate": 0.0
+        },
+        {
+          "top": 600050,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
       ]
     },
     "niit_thresholds": {
       "single": 200000,
       "married_jointly": 250000,
       "married_separately": 125000,
-      "head_of_household": 200000
+      "head_of_household": 200000,
+      "qualifying_surviving_spouse": 250000
     },
     "se_tax": {
       "ss_rate": 0.124,

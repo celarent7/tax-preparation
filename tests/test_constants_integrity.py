@@ -109,13 +109,46 @@ def test_brackets_are_ascending_and_open_ended(year):
 
 
 @pytest.mark.parametrize("year", SUPPORTED_YEARS)
-def test_all_filing_statuses_present_in_income_brackets(year):
-    """Every canonical filing status has an ordinary-income bracket table."""
+@pytest.mark.parametrize("table", ["tax_brackets", "ltcg_brackets", "niit_thresholds",
+                                   "standard_deductions", "additional_deduction_65_blind"])
+def test_all_filing_statuses_present_in_every_status_table(year, table):
+    """Every canonical filing status appears in every per-status table.
+
+    Regression guard: `ltcg_brackets` and `niit_thresholds` originally omitted
+    `qualifying_surviving_spouse`. Before the D2 fix that silently fell back to
+    the single-filer figures (wrong); after it, a QSS filer with capital gains
+    raised ValueError instead. Asserting over ALL per-status tables — not just
+    tax_brackets — is what catches this class of gap.
+    """
     from utils import CANONICAL_FILING_STATUSES
 
-    brackets = load_tax_constants(year)["tax_brackets"]
+    mapping = load_tax_constants(year)[table]
     for status in CANONICAL_FILING_STATUSES:
-        assert status in brackets, f"{year} tax_brackets missing {status!r}"
+        assert status in mapping, f"{year} {table} missing {status!r}"
+
+
+@pytest.mark.parametrize("year", SUPPORTED_YEARS)
+def test_qss_thresholds_follow_the_right_statute(year):
+    """QSS is treated differently by the LTCG, NIIT and Additional Medicare rules.
+
+    * LTCG — Rev. Proc. tables read "Married Individuals Filing Joint Returns
+      AND SURVIVING SPOUSE", so QSS takes the MFJ thresholds.
+    * NIIT — IRC 1411(b)(1) lists "qualifying widow(er) with a child" at
+      $250,000, i.e. the MFJ figure.
+    * Additional Medicare — IRC 3101(b)(2) says $250,000 only for "a joint
+      return"; QSS falls into "any other case" at $200,000.
+
+    Getting the last one wrong by analogy to the first two is an easy mistake,
+    so it is asserted explicitly.
+    """
+    data = load_tax_constants(year)
+
+    assert data["ltcg_brackets"]["qualifying_surviving_spouse"] == \
+        data["ltcg_brackets"]["married_jointly"]
+    assert data["niit_thresholds"]["qualifying_surviving_spouse"] == \
+        data["niit_thresholds"]["married_jointly"] == 250000
+    assert data["se_tax"]["additional_medicare_threshold_qualifying_surviving_spouse"] == 200000
+    assert data["se_tax"]["additional_medicare_threshold_married"] == 250000
 
 
 def test_sources_map_exists_and_entries_are_well_formed():
