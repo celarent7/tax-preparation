@@ -448,7 +448,7 @@ def main():
             print(f"  CA Standard Deduction: ${c['ca_standard_deduction']:,.2f}")
             print(f"  CA Itemized Total:     ${c['ca_itemized_total']:,.2f}")
             if c["mortgage_deduction_delta_vs_federal"]:
-                print(f"  Extra CA mortgage interest (\$1M limit): "
+                print(f"  Extra CA mortgage interest ($1M limit): "
                       f"${c['mortgage_deduction_delta_vs_federal']:,.2f}")
             print(f"  RESULT: {c['recommendation']}")
             if c["differs_from_federal_decision"]:
