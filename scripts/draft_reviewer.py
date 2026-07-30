@@ -66,8 +66,7 @@ class ReviewContext:
     standard_deductions: Dict
     add_deduction_married: float
     add_deduction_single: float
-    salt_cap: float
-    salt_cap_mfs: float
+    salt_constants: Dict
     capital_loss_limit: float
     capital_loss_limit_mfs: float
     ss_wage_base: float
@@ -192,8 +191,7 @@ def main():
         standard_deductions=tax_data["standard_deductions"],
         add_deduction_married=tax_data["additional_deduction_65_blind"]["married_jointly"],
         add_deduction_single=tax_data["additional_deduction_65_blind"]["single"],
-        salt_cap=tax_data["salt_cap"],
-        salt_cap_mfs=tax_data["salt_cap_mfs"],
+        salt_constants=tax_data["salt"],
         capital_loss_limit=tax_data["capital_loss_limit"],
         capital_loss_limit_mfs=tax_data["capital_loss_limit_mfs"],
         ss_wage_base=tax_data["se_tax"]["ss_wage_base"],

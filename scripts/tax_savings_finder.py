@@ -80,7 +80,7 @@ def get_savings_rules(tax_data: Dict) -> Dict:
             "catchup_50_plus": tax_data["retirement_limits"]["401k"]["catchup_50_plus"]
         },
         "standard_deduction": tax_data["standard_deductions"],
-        "salt_cap": tax_data["salt_cap"],
+        "salt": tax_data["salt"],
         "medical_threshold": tax_data["credits"]["medical_threshold"],
         "charitable_cash_limit": tax_data["credits"]["charitable_cash_limit"],
         "eitc_limits": {

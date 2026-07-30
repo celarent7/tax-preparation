@@ -12,6 +12,7 @@ from typing import Dict, List
 # Add the scripts directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils import (
+    get_constant,
     get_status_value,
     load_tax_constants,
     make_year_arg,
@@ -32,16 +33,53 @@ def analyze_medical_deduction(expenses: float, agi: float) -> Dict:
     }
 
 
+def resolve_salt_cap(salt_constants: Dict, filing_status: str, magi: float = 0) -> float:
+    """Resolve the SALT cap for a filing status and MAGI (audit finding F1).
+
+    Post-OBBBA (2025-2029) the cap is $40,000 ($20,000 MFS), reduced by 30% of
+    the amount by which MAGI exceeds $500,000 ($250,000 MFS), but never below
+    $10,000 ($5,000 MFS). Pre-OBBBA years carry `phasedown: false` and a flat
+    $10,000/$5,000 cap.
+
+    Source: IRS, Instructions for Schedule A (Form 1040) (2025),
+    https://www.irs.gov/instructions/i1040sca
+    """
+    status = normalize_filing_status(filing_status)
+    is_mfs = status == "married_separately"
+
+    cap = get_constant(salt_constants, "cap_mfs" if is_mfs else "cap")
+
+    if not salt_constants.get("phasedown", False):
+        return cap
+
+    start = get_constant(
+        salt_constants,
+        "phasedown_magi_start_mfs" if is_mfs else "phasedown_magi_start",
+    )
+    rate = get_constant(salt_constants, "phasedown_rate")
+    floor = get_constant(salt_constants, "floor_mfs" if is_mfs else "floor")
+
+    if magi is None or magi <= start:
+        return cap
+
+    reduced = cap - rate * (magi - start)
+    return round(max(floor, reduced), 2)
+
+
 def analyze_salt_deduction(
     property_tax: float,
     state_income_tax: float,
     state_sales_tax: float,
     filing_status: str,
-    salt_cap: float = 10000,
-    salt_cap_mfs: float = 5000
+    salt_constants: Dict,
+    magi: float = 0
 ) -> Dict:
-    """Analyze state and local tax deduction with cap."""
-    cap = salt_cap_mfs if filing_status == "married_separately" else salt_cap
+    """Analyze state and local tax deduction with the year-correct cap."""
+    cap_before_phasedown = get_constant(
+        salt_constants,
+        "cap_mfs" if normalize_filing_status(filing_status) == "married_separately" else "cap",
+    )
+    cap = resolve_salt_cap(salt_constants, filing_status, magi)
 
     # Can use income OR sales tax, not both
     income_or_sales = max(state_income_tax, state_sales_tax)
@@ -59,6 +97,9 @@ def analyze_salt_deduction(
         "income_or_sales_used": round(income_or_sales, 2),
         "total_before_cap": round(total_before_cap, 2),
         "salt_cap": cap,
+        "cap_before_phasedown": cap_before_phasedown,
+        "phasedown_applied": cap < cap_before_phasedown,
+        "magi_used": magi,
         "deductible_amount": round(deductible, 2),
         "lost_to_cap": round(lost_to_cap, 2)
     }
@@ -118,6 +159,9 @@ def analyze_charitable(
 def main():
     parser = argparse.ArgumentParser(description="Deduction Analyzer")
     parser.add_argument("--agi", type=float, required=True, help="Adjusted Gross Income")
+    parser.add_argument("--magi", type=float, default=None,
+                        help="Modified AGI for the SALT cap phase-down "
+                             "(2025+; defaults to --agi when omitted)")
     make_year_arg(parser)
     parser.add_argument("--filing-status", default="single",
                         help="Filing status (single, mfj, mfs, hoh, qss or canonical form)")
@@ -164,16 +208,19 @@ def main():
 
     standard_deductions = tax_data["standard_deductions"]
     additional_deductions = tax_data["additional_deduction_65_blind"]
-    salt_cap = tax_data["salt_cap"]
-    salt_cap_mfs = tax_data["salt_cap_mfs"]
+    salt_constants = tax_data["salt"]
     mortgage_debt_limit = tax_data["mortgage_debt_limit"]
     mortgage_debt_limit_mfs = tax_data["mortgage_debt_limit_mfs"]
+
+    # MAGI drives the SALT phase-down; absent an explicit figure, AGI is the
+    # best available proxy (they differ only by a few uncommon add-backs).
+    magi = args.magi if args.magi is not None else args.agi
 
     # Analyze categories
     medical = analyze_medical_deduction(args.medical_expenses, args.agi)
     salt = analyze_salt_deduction(
-        args.property_tax, args.state_income_tax, args.state_sales_tax, 
-        args.filing_status, salt_cap, salt_cap_mfs
+        args.property_tax, args.state_income_tax, args.state_sales_tax,
+        args.filing_status, salt_constants, magi
     )
     mortgage = analyze_mortgage_interest(
         args.mortgage_interest, args.acquisition_debt, args.filing_status,
@@ -237,7 +284,10 @@ def main():
 
         print("\nItemized Breakdown:")
         print(f"  Medical (above 7.5%):  ${medical['deductible_amount']:,.2f}")
-        print(f"  SALT (capped at $10k): ${salt['deductible_amount']:,.2f}")
+        print(f"  SALT (cap ${salt['salt_cap']:,.0f}):{'':<4} ${salt['deductible_amount']:,.2f}")
+        if salt["phasedown_applied"]:
+            print(f"    (Cap phased down from ${salt['cap_before_phasedown']:,.0f} "
+                  f"at MAGI ${salt['magi_used']:,.0f})")
         if salt['lost_to_cap'] > 0:
             print(f"    (Lost to SALT cap: ${salt['lost_to_cap']:,.2f})")
         print(f"  Mortgage Interest:     ${mortgage['deductible_amount']:,.2f}")

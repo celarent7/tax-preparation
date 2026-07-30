@@ -89,7 +89,7 @@ Comprehensive validation rules for reviewing a draft tax return before filing. U
 | 5c | Real estate taxes | Verify from property tax bills |
 | 5d | Personal property taxes | If applicable |
 | 5e | Total SALT | Sum of chosen option |
-| **6** | **SALT deduction** | **MUST be capped at $10,000 ($5,000 MFS)** — most common error |
+| **6** | **SALT deduction** | **Capped at the year-correct amount — see "SALT cap by year" below.** For 2025: $40,000 ($20,000 MFS), phased down above $500,000 MAGI. For 2018–2024: $10,000 ($5,000 MFS). |
 | 8a | Home mortgage interest | Must match 1098 Box 1 |
 | 10 | Mortgage interest points | Must match 1098 Box 6 |
 | 11 | Investment interest | Subject to net investment income limitation |
@@ -149,12 +149,38 @@ Comprehensive validation rules for reviewing a draft tax return before filing. U
 
 ---
 
+## SALT cap by year <!-- YEAR: 2018-2029 -->
+
+The One Big Beautiful Bill Act raised the SALT cap for 2025. Applying the old
+$10,000 rule to a 2025 return flags a **correct** return as an error — this was
+audit finding F2. Always resolve the cap from `scripts/tax_constants.json`
+(`<year>.salt`) rather than from memory.
+
+| Tax year | Cap | MFS cap | Phase-down |
+|---|---|---|---|
+| 2018–2024 | $10,000 | $5,000 | none |
+| 2025 | $40,000 | $20,000 | reduced by 30% of MAGI over $500,000 ($250,000 MFS), floor $10,000 ($5,000 MFS) |
+| 2026–2029 | indexed ~1%/yr | half | same structure, indexed thresholds |
+| 2030+ | reverts to $10,000 | $5,000 | none (unless further legislation) |
+
+**Phase-down worked example (2025, MFJ, MAGI $550,000):**
+cap = $40,000 − 30% × ($550,000 − $500,000) = $40,000 − $15,000 = **$25,000**.
+The cap reaches its $10,000 floor at MAGI $600,000 and never goes below it.
+
+**Detection rule:** compute the cap for the return's year and MAGI, then compare
+Schedule A Line 6. Only a Line 6 above *that* figure is an error.
+
+*Source: IRS, Instructions for Schedule A (Form 1040) (2025),
+<https://www.irs.gov/instructions/i1040sca> (retrieved 2026-07-29).*
+
+---
+
 ## Top 20 Common Filing Errors
 
 | # | Error | Detection Rule | Severity |
 |---|-------|---------------|----------|
 | 1 | RSU cost basis reported as $0 | 1099-B basis = 0 for RSU sales | 🔴 ERROR |
-| 2 | SALT cap not applied | Schedule A Line 6 > $10,000 | 🔴 ERROR |
+| 2 | SALT cap not applied | Schedule A Line 6 > the **year-correct** cap (see below) | 🔴 ERROR |
 | 3 | Wrong filing status | MFS when MFJ would save money (or vice versa) | 🟡 WARNING |
 | 4 | Missing income source | 1099 in documents but not on return | 🔴 ERROR |
 | 5 | Math error in totals | Any line that should be a sum doesn't match | 🔴 ERROR |
