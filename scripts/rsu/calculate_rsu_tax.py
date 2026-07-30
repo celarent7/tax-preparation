@@ -10,6 +10,19 @@ Calculates federal and state tax liability for RSU compensation including:
 
 Uses 2025 IRS tax brackets and rates.
 
+DEPRECATED (audit finding F13)
+------------------------------
+This module duplicates logic that now lives in the main engines and is kept
+only for backward compatibility with existing callers:
+
+  * NIIT and Additional Medicare Tax  -> scripts/tax_calculator.py
+    (calculate_niit / calculate_additional_medicare)
+  * State tax                         -> scripts/tax_calculator.py
+    (calculate_california_tax) and the `states` block in tax_constants.json
+
+Two divergent code paths for the same tax is exactly how F13-class rot happens.
+Prefer the main calculators; do not add new logic here.
+
 Usage:
     python calculate_rsu_tax.py --filing-status single --total-income 300000 \
         --rsu-vesting-income 100000 --short-term-gains 5000 --long-term-gains 20000
@@ -24,7 +37,7 @@ from typing import Dict, List, Tuple
 # Add the scripts directory to the path to import utils
 # This is in a subdirectory scripts/rsu/, so we need to go up two levels
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import load_tax_constants
+from utils import load_tax_constants, additional_medicare_threshold, select_for_status
 
 # Load 2025 Tax Data
 TAX_DATA = load_tax_constants()
@@ -38,9 +51,17 @@ def get_std_status(status: str) -> str:
 TAX_BRACKETS = {s: TAX_DATA["tax_brackets_processed"][get_std_status(s)] for s in MAP}
 LTCG_BRACKETS = {s: TAX_DATA["ltcg_brackets_processed"][get_std_status(s)] for s in MAP}
 NIIT_THRESHOLDS = {s: TAX_DATA["niit_thresholds"][get_std_status(s)] for s in MAP}
-ADDITIONAL_MEDICARE_THRESHOLDS = {s: TAX_DATA["niit_thresholds"][get_std_status(s)] for s in MAP}
+# NIIT and Additional Medicare thresholds are NOT the same table: a qualifying
+# surviving spouse takes $250,000 for NIIT but $200,000 for Additional Medicare.
+# This previously aliased niit_thresholds for both.
+ADDITIONAL_MEDICARE_THRESHOLDS = {
+    s: additional_medicare_threshold(get_std_status(s), TAX_DATA["se_tax"]) for s in MAP
+}
 STANDARD_DEDUCTION = {s: TAX_DATA["standard_deductions"][get_std_status(s)] for s in MAP}
-STATE_TAX_RATES = TAX_DATA["state_tax_rates"]
+# Top MARGINAL rates for rough estimation only — never effective rates. The old
+# flat `state_tax_rates` table (with CA at 13.3%) was removed in finding C1.
+STATE_TAX_RATES = TAX_DATA.get("state_top_marginal_rates", {}).get("rates", {})
+STATES = TAX_DATA.get("states", {})
 
 
 def calculate_ordinary_income_tax(taxable_income: float, filing_status: str) -> Tuple[float, List[Dict]]:
@@ -54,7 +75,7 @@ def calculate_ordinary_income_tax(taxable_income: float, filing_status: str) -> 
     Returns:
         Tuple of (total_tax, breakdown_by_bracket)
     """
-    brackets = TAX_BRACKETS.get(filing_status, TAX_BRACKETS["single"])
+    brackets = select_for_status(TAX_BRACKETS, filing_status, "tax brackets")
     total_tax = 0
     breakdown = []
     prev_limit = 0
@@ -93,7 +114,7 @@ def calculate_ltcg_tax(taxable_income_before_gains: float, long_term_gains: floa
     Returns:
         Tuple of (total_ltcg_tax, breakdown_by_bracket)
     """
-    brackets = LTCG_BRACKETS.get(filing_status, LTCG_BRACKETS["single"])
+    brackets = select_for_status(LTCG_BRACKETS, filing_status, "LTCG brackets")
     total_tax = 0
     breakdown = []
 
@@ -220,15 +241,38 @@ def estimate_state_tax(taxable_income: float, state: str, long_term_gains: float
     state = state.upper()
     rate = STATE_TAX_RATES.get(state, 0)
 
-    # Special handling for Washington
-    if state == "WA" and long_term_gains > 270000:
-        wa_cap_gains_tax = (long_term_gains - 270000) * 0.07
+    # Special handling for Washington's capital gains excise tax.
+    if state == "WA":
+        excise = (STATES.get("WA") or {}).get("capital_gains_excise") or {}
+        deduction = excise.get("standard_deduction_2025")
+        if deduction is None:
+            return {
+                "state": state,
+                "income_tax": 0,
+                "capital_gains_tax": None,
+                "total_state_tax": None,
+                "note": ("WA capital gains excise tax could not be computed: the "
+                         "annual standard deduction indexes each year and has no "
+                         "verified value in tax_constants.json "
+                         "(_sources.TODO_VERIFY). Supply it before relying on a "
+                         "WA figure."),
+            }
+        taxable = max(0.0, long_term_gains - deduction)
+        tax = taxable * excise["rate"]
+        # WA added a surtax on the portion of gains above $1,000,000 (2025).
+        surtax_threshold = excise.get("surtax_threshold")
+        surtax_rate = excise.get("surtax_rate")
+        if surtax_threshold and surtax_rate and long_term_gains > surtax_threshold:
+            tax += (long_term_gains - surtax_threshold) * surtax_rate
         return {
             "state": state,
             "income_tax": 0,
-            "capital_gains_tax": round(wa_cap_gains_tax, 2),
-            "total_state_tax": round(wa_cap_gains_tax, 2),
-            "note": "WA has 7% capital gains tax on gains over $270,000 (2025)"
+            "capital_gains_tax": round(tax, 2),
+            "total_state_tax": round(tax, 2),
+            "note": (f"WA capital gains excise: {excise['rate']:.0%} above a "
+                     f"${deduction:,.0f} standard deduction"
+                     + (f", plus a {surtax_rate:.1%} surtax above "
+                        f"${surtax_threshold:,.0f}" if surtax_rate else "")),
         }
 
     if rate == 0:
@@ -291,7 +335,7 @@ def calculate_full_rsu_tax(
         Dictionary with complete tax calculation
     """
     # Determine deduction
-    standard_deduction = STANDARD_DEDUCTION.get(filing_status, STANDARD_DEDUCTION["single"])
+    standard_deduction = select_for_status(STANDARD_DEDUCTION, filing_status, "standard deduction")
     deduction = max(itemized_deductions, standard_deduction)
     deduction_type = "itemized" if itemized_deductions > standard_deduction else "standard"
 
