@@ -24,12 +24,14 @@ from decimal import Decimal, ROUND_HALF_UP
 # Add the scripts directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils import (
+    load_state_constants,
     get_status_value,
     load_tax_constants,
     make_year_arg,
     normalize_filing_status,
     select_for_status,
     additional_medicare_threshold,
+    is_long_term,
 )
 
 
@@ -102,8 +104,11 @@ def calculate_holding_period(vesting_date: str, sale_date: str) -> Tuple[str, in
     sale = parse_date(sale_date)
     days = (sale - vesting).days
 
-    # Long-term if held more than 1 year (365 days)
-    if days > 365:
+    # Long-term requires MORE THAN one year measured by calendar anniversary
+    # (IRS Pub 544), not a fixed 365-day count: a span crossing a leap day
+    # reaches its anniversary at 366 days, so `days > 365` wrongly classified
+    # such a sale as long-term (finding F10).
+    if is_long_term(vesting, sale):
         return "long_term", days
     return "short_term", days
 
@@ -361,7 +366,13 @@ def main():
     make_year_arg(withhold_parser)
     withhold_parser.add_argument("--filing-status", default="single",
                                 help="Filing status (single, mfj, mfs, hoh, qss or canonical form)")
-    withhold_parser.add_argument("--state-rate", type=float, default=0.05, help="Flat state tax rate (e.g., 0.05 for 5%%)")
+    withhold_parser.add_argument("--state-rate", type=float, default=None,
+                                 help="Flat state withholding rate (e.g. 0.1023). "
+                                      "If --state is given, defaults to that state's "
+                                      "supplemental rate instead of a guess.")
+    withhold_parser.add_argument("--state", type=str, default=None,
+                                 help="State of residence, e.g. CA. Sets the supplemental "
+                                      "withholding rate and includes SDI where applicable.")
 
     # Lot tracking command
     lots_parser = subparsers.add_parser("lots", help="Load and display vesting lot summary")
@@ -400,13 +411,46 @@ def main():
             print(f"Error: {e}")
             sys.exit(1)
             
+        # Resolve the state withholding rate from the state's supplemental rate
+        # rather than a flat 5% guess (finding C6: CA withholds RSU/bonus at
+        # 10.23% per EDD DE 44, which the old 0.05 default contradicted).
+        state_rate = args.state_rate
+        sdi = None
+        if state_rate is None and args.state:
+            try:
+                state_data = load_state_constants(args.state, args.year)
+            except ValueError as e:
+                print(f"Error: {e}")
+                sys.exit(1)
+            supplemental = state_data.get("supplemental_withholding") or {}
+            state_rate = supplemental.get("rsu_bonus_stock_options", 0.0)
+            sdi = state_data.get("sdi")
+        if state_rate is None:
+            state_rate = 0.0
+            print("Note: no --state or --state-rate given; state withholding assumed 0.")
+
         try:
             result = calculate_withholding_estimate(
-                args.vesting_income, args.ytd_wages, args.filing_status, args.state_rate, tax_data
+                args.vesting_income, args.ytd_wages, args.filing_status, state_rate, tax_data
             )
         except ValueError as e:
             print(f"Error: {e}")
             sys.exit(1)
+
+        args.state_rate = state_rate
+        if sdi and sdi.get("rate"):
+            cap = sdi.get("wage_cap")
+            sdi_wages = args.vesting_income if cap is None else max(
+                0.0, min(args.vesting_income, cap - args.ytd_wages))
+            result["state_sdi"] = {
+                "rate": sdi["rate"],
+                "wage_cap": cap,
+                "amount": round(sdi_wages * sdi["rate"], 2),
+                "note": ("SDI has no wage cap since SB 951 (2024), so it applies to the "
+                         "full vest." if cap is None else None),
+            }
+            result["withholding"]["total_withheld"] = round(
+                result["withholding"]["total_withheld"] + result["state_sdi"]["amount"], 2)
         print(f"\n--- RSU Withholding Analysis ({args.year}) ---")
         print(f"Vesting Income:       ${result['vesting_income']:,.2f}")
         print("-" * 35)
@@ -414,7 +458,9 @@ def main():
         print(f"  Federal (22%):      ${result['withholding']['federal']:,.2f}")
         print(f"  Social Security:    ${result['withholding']['social_security']:,.2f}")
         print(f"  Medicare:           ${result['withholding']['medicare']:,.2f}")
-        print(f"  State ({args.state_rate*100}%):      ${result['withholding']['state']:,.2f}")
+        print(f"  State ({args.state_rate*100:.4g}%):      ${result['withholding']['state']:,.2f}")
+        if result.get("state_sdi"):
+            print(f"  State SDI ({result['state_sdi']['rate']*100:.4g}%):   ${result['state_sdi']['amount']:,.2f}")
         print(f"  Total Withheld:     ${result['withholding']['total_withheld']:,.2f}")
         print("-" * 35)
         print("Estimated Actual Tax Liability:")

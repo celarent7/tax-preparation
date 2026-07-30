@@ -18,6 +18,7 @@ Design rules (see docs/audit_improvement_blueprint.md):
 import argparse
 import json
 import os
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Sequence
 
 # ---------------------------------------------------------------------------
@@ -330,6 +331,41 @@ def get_status_value(mapping: Dict[str, Any], filing_status: str, label: str = "
 # ---------------------------------------------------------------------------
 # State constants
 # ---------------------------------------------------------------------------
+
+
+def _as_date(d) -> date:
+    """Coerce a date or datetime to a plain date."""
+    return d.date() if isinstance(d, datetime) else d
+
+
+def add_years(d, years: int) -> date:
+    """Add calendar years to a date, handling Feb 29 on non-leap years.
+
+    Feb 29 + 1 year lands on Mar 1 of the following year, which is the
+    conservative reading: the holding period is not satisfied until the day
+    after the anniversary, and Feb 29 has no anniversary in a common year.
+    """
+    d = _as_date(d)
+    try:
+        return d.replace(year=d.year + years)
+    except ValueError:
+        # Feb 29 -> Mar 1 in a non-leap year.
+        return d.replace(year=d.year + years, month=3, day=1)
+
+
+def is_long_term(acquisition_date, sale_date, years: int = 1) -> bool:
+    """True when the holding period EXCEEDS `years` calendar years.
+
+    IRS Pub 544: "To determine how long you held the investment property, begin
+    counting on the date after the day you acquired the property. The day you
+    disposed of the property is part of your holding period." Property held for
+    exactly one year is SHORT term; you must hold for one year *and one day*.
+
+    Measured by calendar anniversary, not a fixed day count. A fixed `> 365`
+    test misclassifies any holding period that spans a leap day, because such a
+    span reaches its anniversary at 366 days (finding F10).
+    """
+    return _as_date(sale_date) > add_years(acquisition_date, years)
 
 
 def additional_medicare_threshold(filing_status: str, se_tax_data: Dict[str, Any]) -> float:

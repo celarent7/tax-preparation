@@ -13,9 +13,14 @@ Handles:
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+
+# Add the scripts directory to the path to import utils
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from utils import add_years, is_long_term
 from typing import Dict, List, Optional, Tuple
 
 
@@ -25,6 +30,36 @@ from typing import Dict, List, Optional, Tuple
 
 ESPP_MAX_DISCOUNT = 0.15  # Typical 15% discount
 ESPP_ANNUAL_LIMIT = 25000  # $25,000 annual FMV limit under Section 423
+
+
+def check_annual_limit(fmv_at_offering_total: float,
+                       limit: float = ESPP_ANNUAL_LIMIT) -> dict:
+    """Warn when purchases exceed the IRC 423(b)(8) $25,000 annual limit.
+
+    Section 423(b)(8) caps an employee's right to accrue ESPP purchases at
+    $25,000 of stock **valued at the OFFERING date** per calendar year. Amounts
+    above the cap are not purchased under the 423 plan at all, so they get no
+    qualifying-disposition treatment. The constant was declared but never
+    enforced or surfaced (finding F11).
+    """
+    over = max(0.0, fmv_at_offering_total - limit)
+    return {
+        "limit": limit,
+        "offering_date_value_used": round(fmv_at_offering_total, 2),
+        "within_limit": over == 0,
+        "excess": round(over, 2),
+        "warning": (
+            None if over == 0 else
+            f"Purchases of ${fmv_at_offering_total:,.2f} valued at the offering date "
+            f"exceed the IRC 423(b)(8) limit of ${limit:,.0f} by ${over:,.2f}. The "
+            "excess cannot be purchased under the Section 423 plan and does not "
+            "qualify for favorable disposition treatment — confirm how your plan "
+            "handled the overage."
+        ),
+        "note": ("The $25,000 limit is measured by the stock's value at the OFFERING "
+                 "date, not the discounted purchase price, so a 15% discount plan "
+                 "typically permits about $21,250 of actual purchases."),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -141,15 +176,21 @@ def determine_disposition(
     offering_to_sale = (sale_date - offering_date).days
     purchase_to_sale = (sale_date - purchase_date).days
 
-    offering_requirement = 730   # 2 years
-    purchase_requirement = 366   # 1 year + 1 day
+    # IRC 423(a)(1) measures the holding period by CALENDAR ANNIVERSARY — more
+    # than 2 years from the offering/grant date and more than 1 year from the
+    # purchase date. Fixed day counts (730 / 366) misclassify any span that
+    # crosses a leap day, since such a span reaches its anniversary a day
+    # early (finding F10).
+    offering_requirement = 730   # nominal, reported for reference only
+    purchase_requirement = 366   # nominal, reported for reference only
 
-    offering_met = offering_to_sale >= offering_requirement
-    purchase_met = purchase_to_sale >= purchase_requirement
+    # The period must EXCEED the anniversary, so the first qualifying day is
+    # the day after it.
+    earliest_from_offering = add_years(offering_date, 2) + timedelta(days=1)
+    earliest_from_purchase = add_years(purchase_date, 1) + timedelta(days=1)
 
-    # Earliest qualifying date is the later of the two requirements
-    earliest_from_offering = offering_date + timedelta(days=offering_requirement)
-    earliest_from_purchase = purchase_date + timedelta(days=purchase_requirement)
+    offering_met = is_long_term(offering_date, sale_date, years=2)
+    purchase_met = is_long_term(purchase_date, sale_date, years=1)
     earliest_qualifying = max(earliest_from_offering, earliest_from_purchase)
 
     is_qualifying = offering_met and purchase_met
@@ -224,7 +265,9 @@ def calculate_tax_breakdown(
 
         # Holding period for the capital gain portion
         purchase_to_sale = (sale.sale_date - purchase.purchase_date).days
-        cap_type = "long-term" if purchase_to_sale >= 366 else "short-term"
+        cap_type = ("long-term"
+                    if is_long_term(purchase.purchase_date, sale.sale_date)
+                    else "short-term")
 
     # Form 8949 adjustment
     adj_code = None
