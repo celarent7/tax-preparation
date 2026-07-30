@@ -1,28 +1,59 @@
 {
-  "tax_year": 2024,
+  "_comment": "SYNTHETIC 2025 MFJ return used as the phase-2 acceptance fixture. Contains no real taxpayer data. Figures are internally consistent and hand-verified; see tests/test_draft_reviewer.py for the worksheet.",
+  "tax_year": 2025,
   "filing_status": "married_jointly",
-  "draft_source": "Test Draft",
-  "form_1040": {
-    "line_1a_wages": 150000,
-    "line_2b_taxable_interest": 500,
-    "line_3b_ordinary_dividends": 1800,
-    "line_7_capital_gain_loss": 5000,
-    "line_8_other_income": 0,
-    "line_9_total_income": 157300,
-    "line_10_adjustments": 3000,
-    "line_11_agi": 154300,
-    "line_12_deduction": 29200,
-    "line_15_taxable_income": 125100,
-    "line_16_tax": 18832,
-    "line_24_total_tax": 14832,
-    "line_25a_w2_withholding": 22000,
-    "line_25d_total_withholding": 22000,
-    "line_26_estimated_payments": 0,
-    "line_33_total_payments": 22000,
-    "line_34_overpayment": 7168,
-    "line_35a_refund": 7168
+  "draft_source": "Synthetic full return (wages + qualified dividends + LTCG + SE income)",
+  "taxpayer_info": {
+    "age_65_plus": 0,
+    "blind": 0,
+    "children_under_17": 0
   },
-  "schedule_b": {"interest_payers": ["Bank of America"], "dividend_payers": ["Vanguard"], "foreign_accounts": false},
-  "schedule_d": {"short_term_gain_loss": 2000, "long_term_gain_loss": 3000, "total_gain_loss": 5000},
-  "form_8949": {"entries": [{"description": "ACME RSU", "cost_basis": 0, "proceeds": 12000}, {"description": "VTI", "cost_basis": 5000, "proceeds": 8000}]}
+  "form_1040": {
+    "line_1a_wages": 120000,
+    "line_2b_taxable_interest": 2000,
+    "line_3a_qualified_dividends": 8000,
+    "line_3b_ordinary_dividends": 8000,
+    "line_7_capital_gain_loss": 25000,
+    "line_8_other_income": 40000,
+    "line_9_total_income": 195000,
+    "line_10_adjustments": 2825.91,
+    "line_11_agi": 192174.09,
+    "line_12_deduction": 31500,
+    "line_15_taxable_income": 160674.09,
+    "line_16_tax": 22866.30,
+    "line_23_other_taxes": 5651.82,
+    "line_24_total_tax": 28518.12,
+    "line_25a_w2_withholding": 21000,
+    "line_25d_total_withholding": 21000,
+    "line_26_estimated_payments": 6000,
+    "line_33_total_payments": 27000,
+    "line_37_amount_owed": 1518.12
+  },
+  "schedule_1": {
+    "line_3_business_income": 40000,
+    "line_15_deductible_se_tax": 2825.91
+  },
+  "schedule_2": {
+    "line_4_self_employment_tax": 5651.82
+  },
+  "schedule_se": {
+    "net_profit": 40000,
+    "se_income_subject_to_tax": 36940.00,
+    "social_security_portion": 4580.56,
+    "medicare_portion": 1071.26,
+    "total_se_tax": 5651.82
+  },
+  "schedule_b": {
+    "interest_payers": ["Synthetic Savings Bank"],
+    "dividend_payers": ["Synthetic Index Fund"],
+    "foreign_accounts": false
+  },
+  "schedule_d": {
+    "short_term_gain_loss": 0,
+    "long_term_gain_loss": 25000,
+    "total_gain_loss": 25000
+  },
+  "w2_records": [
+    {"employer": "Synthetic Employer Inc", "box_1_wages": 120000, "box_2_federal_withheld": 21000}
+  ]
 }

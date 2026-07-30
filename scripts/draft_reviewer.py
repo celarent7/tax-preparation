@@ -20,11 +20,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Add the scripts directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from credit_eligibility_checker import calculate_child_tax_credit, get_credit_params
+from deduction_analyzer import resolve_salt_cap
+from tax_calculator import calculate_preferential_tax, calculate_tax
 from utils import (
     get_status_value,
     load_tax_constants,
     make_year_arg,
     normalize_filing_status,
+    select_for_status,
 )
 
 
@@ -63,9 +67,10 @@ class Finding:
 class ReviewContext:
     year: str
     tax_brackets: Dict
+    ltcg_brackets: Dict
     standard_deductions: Dict
-    add_deduction_married: float
-    add_deduction_single: float
+    additional_deductions: Dict
+    ctc_params: Dict
     salt_constants: Dict
     capital_loss_limit: float
     capital_loss_limit_mfs: float
@@ -94,85 +99,344 @@ def compare_values(draft: float, computed: float, tolerance: float = 1.0) -> Tup
     return abs(diff) <= tolerance, diff
 
 
-def calculate_tax(taxable_income: float, filing_status: str, brackets: List[Tuple[float, float]]) -> float:
-    tax = 0
-    prev_bracket = 0
-    for bracket_top, rate in brackets:
-        if taxable_income <= prev_bracket:
-            break
-        bracket_income = min(taxable_income - prev_bracket, bracket_top - prev_bracket)
-        tax += bracket_income * rate
-        prev_bracket = bracket_top
-    return round(tax, 2)
-
-
 # ---------------------------------------------------------------------------
 # Core Review Logic
 # ---------------------------------------------------------------------------
 
+def _f(draft: Dict, key: str, default: float = 0.0) -> float:
+    """Read a numeric line from the draft's form_1040 block."""
+    return float(draft.get("form_1040", {}).get(key, default) or 0.0)
+
+
+def _status(draft: Dict) -> str:
+    if not draft.get("filing_status"):
+        raise ValueError("Draft return must specify 'filing_status'.")
+    return normalize_filing_status(draft["filing_status"])
+
+
+def _ok(category, field, message, draft_value=None, computed_value=None):
+    return Finding(Severity.OK, category, field, message, draft_value, computed_value)
+
+
 def check_income(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
+    """Total income (line 9) must equal the sum of its components."""
     findings = []
-    
-    # Box 1 wages vs W-2 records
-    draft_wages = draft.get("income", {}).get("wages", 0)
-    computed_wages = computed.get("income", {}).get("wages", 0)
-    match, diff = compare_values(draft_wages, computed_wages, ctx.exact_tolerance)
-    
+    components = {
+        "wages (1a)": _f(draft, "line_1a_wages"),
+        "taxable interest (2b)": _f(draft, "line_2b_taxable_interest"),
+        "ordinary dividends (3b)": _f(draft, "line_3b_ordinary_dividends"),
+        "capital gain/loss (7)": _f(draft, "line_7_capital_gain_loss"),
+        "other income (8)": _f(draft, "line_8_other_income"),
+    }
+    expected = sum(components.values())
+    stated = _f(draft, "line_9_total_income")
+    match, diff = compare_values(stated, expected, ctx.exact_tolerance)
+
     if not match:
         findings.append(Finding(
-            Severity.ERROR, "Income", "Wages (1040 Line 1z)",
-            f"Wages on draft return do not match W-2 records.",
-            draft_wages, computed_wages, diff
-        ))
+            Severity.ERROR, "Income", "Total income (1040 Line 9)",
+            "Total income does not equal the sum of its components: "
+            + ", ".join(f"{k} ${v:,.2f}" for k, v in components.items()),
+            stated, round(expected, 2), round(diff, 2)))
     else:
-        findings.append(Finding(Severity.OK, "Income", "Wages", "Matches W-2 records", draft_wages, computed_wages))
+        findings.append(_ok("Income", "Total income (Line 9)",
+                            "Matches the sum of its components", stated, round(expected, 2)))
 
+    # Wages should tie to the W-2 records when they are supplied.
+    w2s = draft.get("w2_records") or []
+    if w2s:
+        w2_total = sum(float(w.get("box_1_wages", 0)) for w in w2s)
+        match, diff = compare_values(_f(draft, "line_1a_wages"), w2_total, ctx.exact_tolerance)
+        if not match:
+            findings.append(Finding(
+                Severity.ERROR, "Income", "Wages (Line 1a)",
+                "Wages on the return do not match the sum of W-2 Box 1 amounts.",
+                _f(draft, "line_1a_wages"), round(w2_total, 2), round(diff, 2)))
+        else:
+            findings.append(_ok("Income", "Wages (Line 1a)", "Matches W-2 Box 1 total",
+                                _f(draft, "line_1a_wages"), round(w2_total, 2)))
     return findings
 
 
+def check_agi(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
+    """AGI (line 11) = total income (9) - adjustments (10)."""
+    expected = _f(draft, "line_9_total_income") - _f(draft, "line_10_adjustments")
+    stated = _f(draft, "line_11_agi")
+    match, diff = compare_values(stated, expected, ctx.exact_tolerance)
+    if not match:
+        return [Finding(Severity.ERROR, "AGI", "AGI (1040 Line 11)",
+                        "AGI does not equal total income minus adjustments.",
+                        stated, round(expected, 2), round(diff, 2))]
+    return [_ok("AGI", "AGI (Line 11)", "Total income minus adjustments", stated, round(expected, 2))]
+
+
 def check_deductions(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
+    """Standard deduction must match filing status, age and blindness."""
     findings = []
-    if not draft.get("filing_status"):
-        raise ValueError("Draft return must specify 'filing_status'.")
-    status = normalize_filing_status(draft["filing_status"])
+    status = _status(draft)
+    stated = _f(draft, "line_12_deduction")
 
-    # Standard vs Itemized
-    draft_deduction = draft.get("deductions", {}).get("total", 0)
-
-    # Calculate expected standard deduction
     base_sd = get_status_value(ctx.standard_deductions, status, "standard deduction")
-    age_blind_amt = ctx.add_deduction_married if "married" in status else ctx.add_deduction_single
-    
-    num_age_blind = draft.get("taxpayer_info", {}).get("age_65_plus", 0) + \
-                    draft.get("taxpayer_info", {}).get("blind", 0)
-    
-    expected_sd = base_sd + (age_blind_amt * num_age_blind)
-    
-    # If not itemizing, draft should match expected SD
-    if not draft.get("deductions", {}).get("itemizing", False):
-        match, diff = compare_values(draft_deduction, expected_sd, ctx.exact_tolerance)
+    age_blind_amt = get_status_value(ctx.additional_deductions, status,
+                                     "additional 65/blind deduction")
+    info = draft.get("taxpayer_info", {})
+    count = int(info.get("age_65_plus", 0)) + int(info.get("blind", 0))
+    expected_sd = base_sd + age_blind_amt * count
+
+    if draft.get("deductions", {}).get("itemizing") or draft.get("schedule_a"):
+        findings.append(Finding(
+            Severity.INFO, "Deductions", "Itemized deduction (Line 12)",
+            f"Return itemizes. Standard deduction would have been ${expected_sd:,.2f} — "
+            "confirm itemizing is actually better.",
+            stated, expected_sd))
+        return findings
+
+    match, diff = compare_values(stated, expected_sd, ctx.exact_tolerance)
+    if not match:
+        findings.append(Finding(
+            Severity.ERROR, "Deductions", "Standard deduction (Line 12)",
+            f"Standard deduction is incorrect for {status} in {ctx.year}.",
+            stated, expected_sd, round(diff, 2)))
+    else:
+        findings.append(_ok("Deductions", "Standard deduction (Line 12)",
+                            f"Correct for {status} in {ctx.year}", stated, expected_sd))
+
+    # Taxable income (15) = AGI (11) - deduction (12), floored at zero.
+    expected_ti = max(0.0, _f(draft, "line_11_agi") - stated)
+    stated_ti = _f(draft, "line_15_taxable_income")
+    match, diff = compare_values(stated_ti, expected_ti, ctx.exact_tolerance)
+    if not match:
+        findings.append(Finding(
+            Severity.ERROR, "Deductions", "Taxable income (Line 15)",
+            "Taxable income does not equal AGI minus the deduction.",
+            stated_ti, round(expected_ti, 2), round(diff, 2)))
+    else:
+        findings.append(_ok("Deductions", "Taxable income (Line 15)",
+                            "AGI minus deduction", stated_ti, round(expected_ti, 2)))
+    return findings
+
+
+def check_tax(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
+    """Recompute line 16 through the full preferential-rate stack.
+
+    This is the check SKILL.md Step 5 always promised. The reviewer used to
+    verify only wages and the standard deduction (finding D3).
+    """
+    status = _status(draft)
+    taxable_income = _f(draft, "line_15_taxable_income")
+
+    qualified_dividends = _f(draft, "line_3a_qualified_dividends")
+    long_term_gain = max(0.0, float(draft.get("schedule_d", {}).get("long_term_gain_loss", 0) or 0))
+    preferential = min(qualified_dividends + long_term_gain, taxable_income)
+    ordinary = taxable_income - preferential
+
+    ordinary_tax, _ = calculate_tax(ordinary, status, ctx.tax_brackets)
+    preferential_tax, _ = calculate_preferential_tax(
+        ordinary, preferential,
+        select_for_status(ctx.ltcg_brackets, status, "long-term capital gain brackets"))
+    expected = round(ordinary_tax + preferential_tax, 2)
+
+    stated = _f(draft, "line_16_tax")
+    match, diff = compare_values(stated, expected, ctx.exact_tolerance)
+
+    detail = (f"ordinary ${ordinary:,.2f} -> ${ordinary_tax:,.2f}; "
+              f"preferential ${preferential:,.2f} -> ${preferential_tax:,.2f}")
+    if not match:
+        return [Finding(Severity.ERROR, "Tax", "Tax (1040 Line 16)",
+                        f"Recomputed tax differs from the draft ({detail}).",
+                        stated, expected, round(diff, 2))]
+    return [_ok("Tax", "Tax (Line 16)", f"Matches recomputation ({detail})", stated, expected)]
+
+
+def check_se_tax(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
+    """Recompute Schedule SE and its deductible half."""
+    findings = []
+    se = draft.get("schedule_se") or {}
+    net_profit = float(se.get("net_profit", draft.get("schedule_1", {}).get("line_3_business_income", 0)) or 0)
+    if net_profit <= 0:
+        return findings
+
+    base = net_profit * ctx.se_tax_factor
+    wages = _f(draft, "line_1a_wages")
+    remaining_ss_base = max(0.0, ctx.ss_wage_base - wages)
+    ss_tax = min(base, remaining_ss_base) * ctx.se_ss_rate
+    medicare_tax = base * ctx.se_medicare_rate
+    expected = round(ss_tax + medicare_tax, 2)
+
+    stated = float(se.get("total_se_tax", draft.get("schedule_2", {}).get("line_4_self_employment_tax", 0)) or 0)
+    match, diff = compare_values(stated, expected, ctx.exact_tolerance)
+    if not match:
+        findings.append(Finding(
+            Severity.ERROR, "SE Tax", "Self-employment tax (Schedule 2 Line 4)",
+            f"Recomputed SE tax differs (base ${base:,.2f}, SS ${ss_tax:,.2f}, "
+            f"Medicare ${medicare_tax:,.2f}). Note W-2 wages consume the Social "
+            "Security wage base first.",
+            stated, expected, round(diff, 2)))
+    else:
+        findings.append(_ok("SE Tax", "Self-employment tax", "Matches recomputation",
+                            stated, expected))
+
+    # Half of SE tax is deductible on Schedule 1.
+    expected_ded = round(expected / 2, 2)
+    stated_ded = float(draft.get("schedule_1", {}).get("line_15_deductible_se_tax", 0) or 0)
+    if stated_ded:
+        match, diff = compare_values(stated_ded, expected_ded, ctx.exact_tolerance)
         if not match:
             findings.append(Finding(
-                Severity.ERROR, "Deductions", "Standard Deduction",
-                f"Standard deduction amount is incorrect for {status} status.",
-                draft_deduction, expected_sd, diff
-            ))
-    
+                Severity.ERROR, "SE Tax", "Deductible half of SE tax (Schedule 1 Line 15)",
+                "Deductible portion should be exactly half of the SE tax.",
+                stated_ded, expected_ded, round(diff, 2)))
+        else:
+            findings.append(_ok("SE Tax", "Deductible half of SE tax",
+                                "Half of SE tax", stated_ded, expected_ded))
+    return findings
+
+
+def check_total_tax(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
+    """Total tax (line 24) = tax (16) + other taxes (23)."""
+    expected = _f(draft, "line_16_tax") + _f(draft, "line_23_other_taxes")
+    stated = _f(draft, "line_24_total_tax")
+    match, diff = compare_values(stated, expected, ctx.exact_tolerance)
+    if not match:
+        return [Finding(Severity.ERROR, "Tax", "Total tax (1040 Line 24)",
+                        "Total tax does not equal line 16 plus other taxes.",
+                        stated, round(expected, 2), round(diff, 2))]
+    return [_ok("Tax", "Total tax (Line 24)", "Line 16 plus other taxes",
+                stated, round(expected, 2))]
+
+
+def check_capital_gains(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
+    """Schedule D net loss is limited to $3,000 ($1,500 MFS) per year."""
+    findings = []
+    sched_d = draft.get("schedule_d")
+    if not sched_d:
+        return findings
+
+    status = _status(draft)
+    limit = ctx.capital_loss_limit_mfs if status == "married_separately" else ctx.capital_loss_limit
+    total = float(sched_d.get("total_gain_loss", 0) or 0)
+    reported = _f(draft, "line_7_capital_gain_loss")
+
+    if total < 0 and reported < -limit:
+        findings.append(Finding(
+            Severity.ERROR, "Capital Gains", "Capital loss (1040 Line 7)",
+            f"Net capital loss deduction is limited to ${limit:,.0f} per year; "
+            "the excess carries forward.",
+            reported, -limit, round(reported + limit, 2)))
+    elif abs(reported - total) > ctx.exact_tolerance and total >= 0:
+        findings.append(Finding(
+            Severity.ERROR, "Capital Gains", "Capital gain (1040 Line 7)",
+            "Line 7 does not match the Schedule D total.",
+            reported, total, round(reported - total, 2)))
+    else:
+        findings.append(_ok("Capital Gains", "Schedule D", "Consistent with Line 7",
+                            reported, total))
+    return findings
+
+
+def check_withholding(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
+    """Total withholding (25d) must tie to the W-2 Box 2 amounts."""
+    findings = []
+    w2s = draft.get("w2_records") or []
+    if w2s:
+        expected = sum(float(w.get("box_2_federal_withheld", 0)) for w in w2s)
+        stated = _f(draft, "line_25a_w2_withholding")
+        match, diff = compare_values(stated, expected, ctx.exact_tolerance)
+        if not match:
+            findings.append(Finding(
+                Severity.ERROR, "Payments", "W-2 withholding (Line 25a)",
+                "Withholding does not match the sum of W-2 Box 2 amounts.",
+                stated, round(expected, 2), round(diff, 2)))
+        else:
+            findings.append(_ok("Payments", "W-2 withholding (Line 25a)",
+                                "Matches W-2 Box 2 total", stated, round(expected, 2)))
+
+    # Total payments (33) = withholding (25d) + estimated payments (26)
+    expected_payments = _f(draft, "line_25d_total_withholding") + _f(draft, "line_26_estimated_payments")
+    stated_payments = _f(draft, "line_33_total_payments")
+    if stated_payments or expected_payments:
+        match, diff = compare_values(stated_payments, expected_payments, ctx.exact_tolerance)
+        if not match:
+            findings.append(Finding(
+                Severity.ERROR, "Payments", "Total payments (Line 33)",
+                "Total payments do not equal withholding plus estimated payments.",
+                stated_payments, round(expected_payments, 2), round(diff, 2)))
+        else:
+            findings.append(_ok("Payments", "Total payments (Line 33)",
+                                "Withholding plus estimated payments",
+                                stated_payments, round(expected_payments, 2)))
+    return findings
+
+
+def check_salt(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
+    """Schedule A SALT against the YEAR-CORRECT cap (findings F1/F2).
+
+    The old checklist rule flagged any SALT above $10,000 as an error, which
+    for 2025 condemns a correct return.
+    """
+    findings = []
+    sched_a = draft.get("schedule_a")
+    if not sched_a:
+        return findings
+
+    status = _status(draft)
+    magi = _f(draft, "line_11_agi")
+    cap = resolve_salt_cap(ctx.salt_constants, status, magi)
+    stated = float(sched_a.get("line_6_salt_deduction", 0) or 0)
+
+    if stated > cap + ctx.exact_tolerance:
+        findings.append(Finding(
+            Severity.ERROR, "Deductions", "SALT (Schedule A Line 6)",
+            f"SALT deduction exceeds the {ctx.year} cap of ${cap:,.0f} for {status} "
+            f"at MAGI ${magi:,.0f}.",
+            stated, cap, round(stated - cap, 2)))
+    else:
+        findings.append(_ok("Deductions", "SALT (Schedule A Line 6)",
+                            f"Within the {ctx.year} cap of ${cap:,.0f}", stated, cap))
+    return findings
+
+
+def check_credits(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
+    """Child Tax Credit recomputation (per task P4)."""
+    findings = []
+    children = int(draft.get("taxpayer_info", {}).get("children_under_17", 0) or 0)
+    if not children:
+        return findings
+
+    result = calculate_child_tax_credit({
+        "children_under_17": children,
+        "agi": _f(draft, "line_11_agi"),
+        "filing_status": _status(draft),
+        "earned_income": _f(draft, "line_1a_wages"),
+    }, ctx.ctc_params)
+
+    stated = _f(draft, "line_19_child_tax_credit")
+    match, diff = compare_values(stated, result.amount, ctx.exact_tolerance)
+    if not match:
+        findings.append(Finding(
+            Severity.ERROR, "Credits", "Child Tax Credit (Line 19)",
+            f"Recomputed CTC for {children} qualifying child(ren) differs.",
+            stated, result.amount, round(diff, 2)))
+    else:
+        findings.append(_ok("Credits", "Child Tax Credit (Line 19)",
+                            "Matches recomputation", stated, result.amount))
     return findings
 
 
 def run_review(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
     all_findings = []
-    all_findings.extend(check_income(draft, computed, ctx))
-    all_findings.extend(check_deductions(draft, computed, ctx))
-    # In a full implementation, we would call check_tax, check_credits, etc.
+    for check in (check_income, check_agi, check_deductions, check_tax,
+                  check_se_tax, check_total_tax, check_capital_gains,
+                  check_withholding, check_salt, check_credits):
+        all_findings.extend(check(draft, computed, ctx))
     return all_findings
 
 
 def main():
     parser = argparse.ArgumentParser(description="Draft Tax Return Reviewer")
     parser.add_argument("--draft", required=True, help="Path to draft return JSON")
-    parser.add_argument("--computed", required=True, help="Path to computed tax data JSON")
+    parser.add_argument("--computed", required=False, default=None,
+                        help="Optional computed tax data JSON for cross-reference")
     make_year_arg(parser)
     parser.add_argument("--output-format", choices=["text", "json"], default="text")
 
@@ -188,9 +452,10 @@ def main():
     ctx = ReviewContext(
         year=args.year,
         tax_brackets=tax_data["tax_brackets_processed"],
+        ltcg_brackets=tax_data["ltcg_brackets_processed"],
         standard_deductions=tax_data["standard_deductions"],
-        add_deduction_married=tax_data["additional_deduction_65_blind"]["married_jointly"],
-        add_deduction_single=tax_data["additional_deduction_65_blind"]["single"],
+        additional_deductions=tax_data["additional_deduction_65_blind"],
+        ctc_params=get_credit_params(tax_data)["child_tax_credit"],
         salt_constants=tax_data["salt"],
         capital_loss_limit=tax_data["capital_loss_limit"],
         capital_loss_limit_mfs=tax_data["capital_loss_limit_mfs"],
@@ -212,8 +477,10 @@ def main():
     try:
         with open(args.draft, "r") as f:
             draft_data = json.load(f)
-        with open(args.computed, "r") as f:
-            computed_data = json.load(f)
+        computed_data = {}
+        if args.computed:
+            with open(args.computed, "r") as f:
+                computed_data = json.load(f)
     except Exception as e:
         print(f"Error loading input files: {e}")
         sys.exit(1)
@@ -226,7 +493,16 @@ def main():
 
     if args.output_format == "json":
         from dataclasses import asdict
-        print(json.dumps([asdict(f) for f in findings], indent=2, default=str))
+
+        def to_dict(finding):
+            # asdict leaves Severity as an Enum member; `default=str` would
+            # render it "Severity.ERROR" rather than "ERROR", which is the same
+            # class of defect as finding D1. Flatten it explicitly.
+            payload = asdict(finding)
+            payload["severity"] = finding.severity.value
+            return payload
+
+        print(json.dumps([to_dict(f) for f in findings], indent=2, default=str))
     else:
         print(f"\n--- {args.year} Draft Return Review Summary ---")
         errors = [f for f in findings if f.severity == Severity.ERROR]
