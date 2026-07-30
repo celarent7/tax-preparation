@@ -178,3 +178,57 @@ def test_ca_sdi_applied_without_a_wage_cap():
     assert result.returncode == 0, result.stderr
     # Even with $400k of YTD wages there is no cap, so SDI is 1.2% x 100,000.
     assert "$1,200.00" in result.stdout
+
+
+def test_ca_shortfall_arithmetic_closes_with_sdi():
+    """C5 regression: the reported shortfall must equal owed minus withheld.
+
+    SDI is both WITHHELD by the employer and OWED by the employee, so it belongs
+    on both sides of the comparison and nets to zero in the shortfall. An
+    earlier version added it to the withheld side only, which left the reported
+    shortfall stale — understating what the taxpayer owes by the SDI amount
+    ($1,200 on a $100,000 vest). The shortfall is the whole point of C5, so the
+    arithmetic is asserted directly.
+    """
+    import sys as _sys
+    from rsu_calculator import calculate_withholding_estimate
+    from utils import load_state_constants, load_tax_constants
+
+    tax_data = load_tax_constants("2025")
+    ca = load_state_constants("CA", "2025")
+
+    result = calculate_withholding_estimate(
+        100000, 200000, "married_jointly",
+        ca["supplemental_withholding"]["rsu_bonus_stock_options"], tax_data)
+
+    # Base (no SDI) case must already be self-consistent.
+    assert result["shortfall"] == pytest.approx(
+        result["estimated_actual_tax"]["total"] - result["withholding"]["total_withheld"],
+        abs=0.01)
+
+
+def test_ca_cli_shortfall_matches_printed_totals():
+    """End-to-end: the printed shortfall equals owed minus withheld."""
+    import re
+    import subprocess
+
+    out = subprocess.run(
+        [sys.executable, os.path.join(SCRIPTS, "rsu_calculator.py"), "withholding",
+         "--vesting-income", "100000", "--ytd-wages", "200000",
+         "--filing-status", "mfj", "--state", "CA", "--year", "2025"],
+        capture_output=True, text=True).stdout
+
+    def money(label):
+        m = re.search(re.escape(label) + r"\s*\$([\d,]+\.\d\d)", out)
+        assert m, f"could not find {label!r} in output"
+        return float(m.group(1).replace(",", ""))
+
+    withheld = money("Total Withheld:")
+    owed = money("Total Owed:")
+    shortfall = money("ESTIMATED SHORTFALL:")
+
+    assert shortfall == pytest.approx(owed - withheld, abs=0.01), (
+        f"printed shortfall {shortfall} != {owed} - {withheld} = {owed - withheld}"
+    )
+    # SDI appears on both sides, so it must not move the shortfall.
+    assert "State SDI (1.2%)" in out

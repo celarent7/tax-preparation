@@ -442,15 +442,30 @@ def main():
             cap = sdi.get("wage_cap")
             sdi_wages = args.vesting_income if cap is None else max(
                 0.0, min(args.vesting_income, cap - args.ytd_wages))
+            sdi_amount = round(sdi_wages * sdi["rate"], 2)
             result["state_sdi"] = {
                 "rate": sdi["rate"],
                 "wage_cap": cap,
-                "amount": round(sdi_wages * sdi["rate"], 2),
+                "amount": sdi_amount,
                 "note": ("SDI has no wage cap since SB 951 (2024), so it applies to the "
                          "full vest." if cap is None else None),
             }
+            # SDI is both WITHHELD by the employer and OWED by the employee, so
+            # it belongs on both sides of the comparison and nets to zero in the
+            # shortfall. Adding it to the withheld side alone would understate
+            # the shortfall by the SDI amount.
+            result["withholding"]["state_sdi"] = sdi_amount
             result["withholding"]["total_withheld"] = round(
-                result["withholding"]["total_withheld"] + result["state_sdi"]["amount"], 2)
+                result["withholding"]["total_withheld"] + sdi_amount, 2)
+            result["estimated_actual_tax"]["state_sdi"] = sdi_amount
+            result["estimated_actual_tax"]["total"] = round(
+                result["estimated_actual_tax"]["total"] + sdi_amount, 2)
+            result["shortfall"] = round(
+                result["estimated_actual_tax"]["total"]
+                - result["withholding"]["total_withheld"], 2)
+            result["shortfall_percent"] = (
+                round((result["shortfall"] / args.vesting_income) * 100, 1)
+                if args.vesting_income > 0 else 0)
         print(f"\n--- RSU Withholding Analysis ({args.year}) ---")
         print(f"Vesting Income:       ${result['vesting_income']:,.2f}")
         print("-" * 35)
