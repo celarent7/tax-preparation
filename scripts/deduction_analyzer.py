@@ -7,7 +7,7 @@ import argparse
 import json
 import os
 import sys
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 # Add the scripts directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -20,13 +20,20 @@ from utils import (
 )
 
 
-def analyze_medical_deduction(expenses: float, agi: float) -> Dict:
-    """Calculate deductible medical expenses (>7.5% of AGI)."""
-    threshold = agi * 0.075
+def analyze_medical_deduction(expenses: float, agi: float, threshold_rate: float) -> Dict:
+    """Calculate deductible medical expenses above the AGI floor.
+
+    The floor rate is read from constants rather than the inline 0.075 the
+    script used to hard-code (finding D4).
+    """
+    threshold = agi * threshold_rate
     deductible = max(0, expenses - threshold)
 
     return {
         "total_expenses": expenses,
+        "threshold_rate": threshold_rate,
+        "agi_threshold": round(threshold, 2),
+        # Retained under its old name so existing consumers keep working.
         "agi_threshold_75": round(threshold, 2),
         "deductible_amount": round(deductible, 2),
         "non_deductible": round(min(expenses, threshold), 2)
@@ -105,29 +112,70 @@ def analyze_salt_deduction(
     }
 
 
+#: Debt incurred on or before this date keeps the pre-TCJA $1,000,000 limit
+#: ($500,000 MFS). IRC 163(h)(3)(F); see IRS Pub 936 "Grandfathered debt" and
+#: "Home acquisition debt limit".
+GRANDFATHER_CUTOFF = "2017-12-15"
+GRANDFATHERED_LIMIT = 1000000
+GRANDFATHERED_LIMIT_MFS = 500000
+
+
+def mortgage_debt_limit_for(filing_status: str, origination_date: Optional[str],
+                            mortgage_debt_limit: float,
+                            mortgage_debt_limit_mfs: float) -> Tuple[float, bool]:
+    """Resolve the acquisition-debt limit, honoring pre-TCJA grandfathering.
+
+    Debt incurred on or before December 15, 2017 keeps the $1,000,000 limit
+    ($500,000 MFS); later debt is capped at $750,000 ($375,000 MFS). The script
+    previously applied $750,000 unconditionally, understating the deduction for
+    anyone with an older mortgage (finding D4).
+    """
+    is_mfs = normalize_filing_status(filing_status) == "married_separately"
+
+    if origination_date and str(origination_date) <= GRANDFATHER_CUTOFF:
+        return (GRANDFATHERED_LIMIT_MFS if is_mfs else GRANDFATHERED_LIMIT), True
+    return (mortgage_debt_limit_mfs if is_mfs else mortgage_debt_limit), False
+
+
 def analyze_mortgage_interest(
     interest_paid: float,
     acquisition_debt: float,
     filing_status: str,
     mortgage_debt_limit: float = 750000,
-    mortgage_debt_limit_mfs: float = 375000
+    mortgage_debt_limit_mfs: float = 375000,
+    origination_date: Optional[str] = None,
+    average_balance: Optional[float] = None
 ) -> Dict:
-    """Analyze mortgage interest deduction."""
-    debt_limit = mortgage_debt_limit_mfs if filing_status == "married_separately" else mortgage_debt_limit
+    """Analyze mortgage interest deduction.
 
-    if acquisition_debt <= debt_limit:
+    `average_balance` implements the average-balance method of Pub 936: when the
+    principal is paid down over the year, the limit is applied against the
+    average balance rather than the original balance, which is more favorable.
+    """
+    debt_limit, grandfathered = mortgage_debt_limit_for(
+        filing_status, origination_date, mortgage_debt_limit, mortgage_debt_limit_mfs
+    )
+
+    # Pub 936 applies the limit against the average balance when one is given.
+    balance_used = average_balance if average_balance is not None else acquisition_debt
+
+    if balance_used <= debt_limit:
         deductible = interest_paid
         limited = False
     else:
         # Pro-rate the interest
-        ratio = debt_limit / acquisition_debt
+        ratio = debt_limit / balance_used
         deductible = interest_paid * ratio
         limited = True
 
     return {
         "interest_paid": interest_paid,
         "acquisition_debt": acquisition_debt,
+        "average_balance": average_balance,
+        "balance_used_for_limit": balance_used,
         "debt_limit": debt_limit,
+        "grandfathered_pre_tcja": grandfathered,
+        "origination_date": origination_date,
         "deductible_amount": round(deductible, 2),
         "limited_by_debt_cap": limited
     }
@@ -136,23 +184,50 @@ def analyze_mortgage_interest(
 def analyze_charitable(
     cash_donations: float,
     appreciated_property: float,
-    agi: float
+    agi: float,
+    cash_limit_rate: float = 0.60,
+    property_limit_rate: float = 0.30,
+    cash_to_30_percent_orgs: float = 0,
+    property_to_30_percent_orgs: float = 0
 ) -> Dict:
-    """Calculate deductible charitable contributions."""
-    # Simplified limits (typically 60% for cash, 30% for property)
-    cash_limit = agi * 0.60
-    property_limit = agi * 0.30
+    """Calculate deductible charitable contributions with 30%-limit orgs.
+
+    IRC 170(b) sets different AGI ceilings by both the type of gift and the type
+    of donee. Public charities ("50% limit organizations") take cash up to 60%
+    of AGI and appreciated capital-gain property up to 30%. Gifts to "30% limit
+    organizations" (private non-operating foundations, veterans' organizations,
+    fraternal societies) are capped at 30% of AGI for cash and 20% for
+    appreciated property. The script previously modeled only the public-charity
+    case (finding D4).
+    """
+    cash_limit = agi * cash_limit_rate
+    property_limit = agi * property_limit_rate
+    cash_30_limit = agi * 0.30
+    property_20_limit = agi * 0.20
 
     deductible_cash = min(cash_donations, cash_limit)
     deductible_property = min(appreciated_property, property_limit)
+    deductible_cash_30 = min(cash_to_30_percent_orgs, cash_30_limit)
+    deductible_property_20 = min(property_to_30_percent_orgs, property_20_limit)
+
+    total = deductible_cash + deductible_property + deductible_cash_30 + deductible_property_20
+    carryover = (max(0, cash_donations - cash_limit)
+                 + max(0, appreciated_property - property_limit)
+                 + max(0, cash_to_30_percent_orgs - cash_30_limit)
+                 + max(0, property_to_30_percent_orgs - property_20_limit))
 
     return {
         "cash_donations": cash_donations,
         "appreciated_property": appreciated_property,
+        "cash_to_30_percent_orgs": cash_to_30_percent_orgs,
+        "property_to_30_percent_orgs": property_to_30_percent_orgs,
         "cash_limit": round(cash_limit, 2),
         "property_limit": round(property_limit, 2),
-        "deductible_amount": round(deductible_cash + deductible_property, 2),
-        "carryover_potential": round(max(0, cash_donations - cash_limit) + max(0, appreciated_property - property_limit), 2)
+        "cash_30_percent_org_limit": round(cash_30_limit, 2),
+        "property_30_percent_org_limit": round(property_20_limit, 2),
+        "deductible_amount": round(total, 2),
+        "carryover_potential": round(carryover, 2),
+        "carryover_note": "Excess contributions carry forward up to 5 years (IRC 170(d))."
     }
 
 
@@ -173,6 +248,15 @@ def main():
     parser.add_argument("--charitable-cash", type=float, default=0)
     parser.add_argument("--charitable-property", type=float, default=0)
     parser.add_argument("--medical-expenses", type=float, default=0)
+    parser.add_argument("--loan-origination-date", type=str, default=None,
+                        help="Mortgage origination date YYYY-MM-DD; on or before "
+                             "2017-12-15 keeps the pre-TCJA $1M limit")
+    parser.add_argument("--average-mortgage-balance", type=float, default=None,
+                        help="Average balance for the Pub 936 average-balance method")
+    parser.add_argument("--charitable-cash-30-org", type=float, default=0,
+                        help="Cash gifts to 30%%-limit organizations (private foundations)")
+    parser.add_argument("--charitable-property-30-org", type=float, default=0,
+                        help="Appreciated property gifts to 30%%-limit organizations")
     parser.add_argument("--age-65-plus", type=int, default=0)
     parser.add_argument("--blind", type=int, default=0)
     parser.add_argument("--output-format", choices=["json", "text"], default="text")
@@ -217,16 +301,26 @@ def main():
     magi = args.magi if args.magi is not None else args.agi
 
     # Analyze categories
-    medical = analyze_medical_deduction(args.medical_expenses, args.agi)
+    medical = analyze_medical_deduction(
+        args.medical_expenses, args.agi, tax_data["credits"]["medical_threshold"]
+    )
     salt = analyze_salt_deduction(
         args.property_tax, args.state_income_tax, args.state_sales_tax,
         args.filing_status, salt_constants, magi
     )
     mortgage = analyze_mortgage_interest(
         args.mortgage_interest, args.acquisition_debt, args.filing_status,
-        mortgage_debt_limit, mortgage_debt_limit_mfs
+        mortgage_debt_limit, mortgage_debt_limit_mfs,
+        origination_date=args.loan_origination_date,
+        average_balance=args.average_mortgage_balance,
     )
-    charitable = analyze_charitable(args.charitable_cash, args.charitable_property, args.agi)
+    charitable = analyze_charitable(
+        args.charitable_cash, args.charitable_property, args.agi,
+        cash_limit_rate=tax_data["credits"]["charitable_cash_limit"],
+        property_limit_rate=tax_data["charitable_property_agi_limit"],
+        cash_to_30_percent_orgs=args.charitable_cash_30_org,
+        property_to_30_percent_orgs=args.charitable_property_30_org,
+    )
 
     total_itemized = medical["deductible_amount"] + salt["deductible_amount"] + \
                      mortgage["deductible_amount"] + charitable["deductible_amount"]
@@ -283,7 +377,7 @@ def main():
             print("   contributions or property tax payments into alternating years.")
 
         print("\nItemized Breakdown:")
-        print(f"  Medical (above 7.5%):  ${medical['deductible_amount']:,.2f}")
+        print(f"  Medical (above {medical['threshold_rate']:.1%}):  ${medical['deductible_amount']:,.2f}")
         print(f"  SALT (cap ${salt['salt_cap']:,.0f}):{'':<4} ${salt['deductible_amount']:,.2f}")
         if salt["phasedown_applied"]:
             print(f"    (Cap phased down from ${salt['cap_before_phasedown']:,.0f} "
