@@ -67,7 +67,7 @@
       "note": "0.9% on wages/SE income over $250,000 joint, $125,000 MFS, $200,000 in any other case (incl. HoH and QSS). Statutory, not inflation-indexed."
     },
     "TODO_VERIFY": {
-      "2026.salt": "OBBBA indexes the SALT cap for 2026 but Rev. Proc. 2025-32 does not publish it. cap, cap_mfs and both phasedown_magi_start values are null pending the IRS release or statute text stating the 2026 figures.",
+      "2026.salt": "Genuinely CONFLICTING secondary sources, no IRS primary published (Rev. Proc. 2025-32 does not cover SALT -- confirmed by direct text search). IRC 164(b)(6) as amended by OBBBA provides that for 2027-2029 the cap is 101% of the prior year's amount; multiple professional tax publications (Journal of Accountancy/thetaxadviser.com, Venable LLP, Anchin) state this escalator ALREADY applies starting 2026, giving cap=$40,400, phasedown_magi_start=$505,000 (=$500,000 x 1.01) by clean arithmetic. However: (a) one source explicitly stated the MFS cap is NOT increased for 2026 and remains $20,000 rather than the arithmetically-implied $20,200; (b) another source gave the phase-down threshold as $500,500 rather than $505,000, which does not match a clean 1% escalation and appears to be an error, but cannot be ruled out without the statute text (Congress.gov blocked WebFetch with a 403). Do NOT resolve this by picking the majority-consensus numbers -- get the actual bill text (H.R. 1 / Public Law 119-21, IRC 164(b)(6) as amended) or a direct IRS statement before writing a value.",
       "2026.se_tax.ss_wage_base": "Social Security wage base is announced by SSA, not in the Rev. Proc. Needs the SSA 2026 fact sheet.",
       "2026.retirement_limits": "401(k)/IRA/HSA limits come from an IRS Notice (401k/IRA) and Rev. Proc. (HSA), neither fetched. All null.",
       "2026.credits.savers_credit": "Saver's Credit AGI bands for 2026 not verified.",
@@ -206,6 +206,85 @@
         "states.CA.2025.estimated_tax"
       ],
       "note": "Installments are 30% / 40% / 0% / 30% of the required annual payment. CA AGI over $150,000 ($75,000 MFS) uses the lesser of 90% current or 110% prior year. CA AGI at or above $1,000,000 ($500,000 MFS) must use 90% of the CURRENT year \u2014 the prior-year safe harbor is unavailable."
+    },
+    "notice_2022_55_ty2023": {
+      "url": "https://www.irs.gov/pub/irs-drop/n-22-55.pdf",
+      "title": "Notice 2022-55, 2023 Amounts Relating to Retirement Plans and IRAs",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2023.retirement_limits.401k",
+        "2023.retirement_limits.ira",
+        "2023.credits.savers_credit"
+      ],
+      "note": "401(k)/403(b)/457 elective deferral limit $22,500; catch-up (50+) $7,500; \u00a7415(c) DC limit $66,000; IRA limit $6,500 (\u00a7219(b)(5)(A)). IRA catch-up remains $1,000 (not COLA-indexed until SECURE 2.0's later change). Saver's Credit MFJ bands 43,500/47,500/73,000; all-other bands 21,750/23,750/36,500."
+    },
+    "rev_proc_2022_24_ty2023_hsa": {
+      "url": "https://www.irs.gov/pub/irs-drop/rp-22-24.pdf",
+      "title": "Rev. Proc. 2022-24, 2023 HSA/HDHP inflation adjustments",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2023.retirement_limits.hsa"
+      ],
+      "note": "\u00a7223(b)(2)(A)/(B): self-only $3,850, family $7,750."
+    },
+    "notice_2023_03_mileage": {
+      "url": "https://www.irs.gov/pub/irs-drop/n-23-03.pdf",
+      "title": "Notice 2023-03, 2023 Standard Mileage Rates",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2023.mileage_rate"
+      ],
+      "note": "Business standard mileage rate 65.5 cents/mile for 2023."
+    },
+    "notice_2025_67_ty2026": {
+      "url": "https://www.irs.gov/pub/irs-drop/n-25-67.pdf",
+      "title": "Notice 2025-67, 2026 Amounts Relating to Retirement Plans and IRAs",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2026.retirement_limits.401k",
+        "2026.retirement_limits.ira",
+        "2026.credits.savers_credit",
+        "2025.retirement_limits.401k.super_catchup_60_63",
+        "2025.retirement_limits.401k.total_415c"
+      ],
+      "note": "401(k)/403(b)/457/TSP elective deferral limit $24,500 (was $23,500); catch-up (50+) $8,000 (was $7,500); age-60-63 SECURE 2.0 super catch-up REMAINS $11,250 for 2026 (verified directly against statutory text: 'remains $11,250' -- confirms the same figure applies to 2025 and 2026); \u00a7415(c) DC limit $72,000 (was $70,000, confirming the 2025 figure via the same source series, Notice 2024-80). IRA limit $7,500, IRA catch-up $1,100. Saver's Credit MFJ bands 48,500/52,500/80,500; all-other bands 24,250/26,250/40,250."
+    },
+    "notice_2024_80_ty2025_super_catchup": {
+      "url": "https://www.irs.gov/pub/irs-drop/n-24-80.pdf",
+      "title": "Notice 2024-80, 2025 Amounts Relating to Retirement Plans and IRAs",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2025.retirement_limits.401k.super_catchup_60_63",
+        "2025.retirement_limits.401k.total_415c"
+      ],
+      "note": "Age-60-63 super catch-up for 2025 is $11,250 (this is the primary source the audit blueprint referenced but which was never actually fetched during Phase 2 -- now verified directly). \u00a7415(c) DC limit $70,000 for 2025."
+    },
+    "rev_proc_2025_19_ty2026_hsa": {
+      "url": "https://www.irs.gov/pub/irs-drop/rp-25-19.pdf",
+      "title": "Rev. Proc. 2025-19, 2026 HSA/HDHP inflation adjustments",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2026.retirement_limits.hsa"
+      ],
+      "note": "\u00a7223(b)(2)(A)/(B): self-only $4,400, family $8,750."
+    },
+    "notice_2026_10_mileage": {
+      "url": "https://www.irs.gov/pub/irs-drop/n-26-10.pdf",
+      "title": "Notice 2026-10, 2026 Standard Mileage Rates",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2026.mileage_rate"
+      ],
+      "note": "Business standard mileage rate 72.5 cents/mile for all of 2026 (flat for the year -- a secondary-source summary claimed a mid-year revision to 76 cents effective 2026-07-01 citing 'Announcement 2026-11'; the primary notice text contains no such revision, so that claim was NOT used)."
+    },
+    "ssa_2026_wage_base": {
+      "url": "https://www.ssa.gov/news/en/press/releases/2025-10-24.html",
+      "title": "SSA, \"Social Security Announces 2.8 Percent Benefit Increase for 2026\"",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2026.se_tax.ss_wage_base"
+      ],
+      "note": "2026 taxable maximum (wage base) $184,500, up from $176,100 in 2025. DIRECT FETCH OF SSA.GOV WAS BLOCKED (HTTP 403 via WebFetch and curl); this figure is corroborated by multiple independent secondary reports of the same SSA press release (Thomson Reuters Tax & Accounting, Kiplinger, Paycor, HRWatchdog, Mercer) that all agree exactly on $184,500, which is a materially stronger corroboration than a single secondary source."
     }
   },
   "2023": {
@@ -487,24 +566,24 @@
       "supplemental_rate": 0.22,
       "supplemental_rate_over_1m": 0.37
     },
-    "mileage_rate": null,
+    "mileage_rate": 0.655,
     "home_office_simplified_rate": 5.0,
     "home_office_max_sqft": 300,
     "retirement_limits": {
       "hsa": {
-        "single": null,
-        "family": null,
+        "single": 3850,
+        "family": 7750,
         "catchup_55_plus": 1000
       },
       "ira": {
-        "limit": null,
-        "catchup_50_plus": null
+        "limit": 6500,
+        "catchup_50_plus": 1000
       },
       "401k": {
-        "limit": null,
-        "catchup_50_plus": null,
+        "limit": 22500,
+        "catchup_50_plus": 7500,
         "super_catchup_60_63": null,
-        "total_415c": null
+        "total_415c": 66000
       }
     },
     "ctc": {
@@ -594,14 +673,14 @@
       },
       "savers_credit": {
         "mfj": {
-          "50_percent": null,
-          "20_percent": null,
-          "10_percent": null
+          "50_percent": 43500,
+          "20_percent": 47500,
+          "10_percent": 73000
         },
         "single": {
-          "50_percent": null,
-          "20_percent": null,
-          "10_percent": null
+          "50_percent": 21750,
+          "20_percent": 23750,
+          "10_percent": 36500
         }
       }
     },
@@ -1346,8 +1425,8 @@
       "401k": {
         "limit": 23500,
         "catchup_50_plus": 7500,
-        "super_catchup_60_63": null,
-        "total_415c": null
+        "super_catchup_60_63": 11250,
+        "total_415c": 70000
       }
     },
     "credits": {
@@ -1689,7 +1768,7 @@
     "mortgage_debt_limit_mfs": 375000,
     "capital_loss_limit": 3000,
     "capital_loss_limit_mfs": 1500,
-    "educator_expense_limit": null,
+    "educator_expense_limit": 350,
     "student_loan_interest_limit": 2500,
     "charitable_property_agi_limit": 0.3,
     "ltcg_brackets": {
@@ -1774,7 +1853,7 @@
     "se_tax": {
       "ss_rate": 0.124,
       "medicare_rate": 0.029,
-      "ss_wage_base": null,
+      "ss_wage_base": 184500,
       "additional_medicare_rate": 0.009,
       "additional_medicare_threshold_single": 200000,
       "additional_medicare_threshold_married": 250000,
@@ -1791,24 +1870,24 @@
       "supplemental_rate": 0.22,
       "supplemental_rate_over_1m": 0.37
     },
-    "mileage_rate": null,
+    "mileage_rate": 0.725,
     "home_office_simplified_rate": 5.0,
     "home_office_max_sqft": 300,
     "retirement_limits": {
       "hsa": {
-        "single": null,
-        "family": null,
+        "single": 4400,
+        "family": 8750,
         "catchup_55_plus": 1000
       },
       "ira": {
-        "limit": null,
-        "catchup_50_plus": null
+        "limit": 7500,
+        "catchup_50_plus": 1100
       },
       "401k": {
-        "limit": null,
-        "catchup_50_plus": null,
-        "super_catchup_60_63": null,
-        "total_415c": null
+        "limit": 24500,
+        "catchup_50_plus": 8000,
+        "super_catchup_60_63": 11250,
+        "total_415c": 72000
       }
     },
     "ctc": {
@@ -1898,14 +1977,14 @@
       },
       "savers_credit": {
         "mfj": {
-          "50_percent": null,
-          "20_percent": null,
-          "10_percent": null
+          "50_percent": 48500,
+          "20_percent": 52500,
+          "10_percent": 80500
         },
         "single": {
-          "50_percent": null,
-          "20_percent": null,
-          "10_percent": null
+          "50_percent": 24250,
+          "20_percent": 26250,
+          "10_percent": 40250
         }
       }
     },

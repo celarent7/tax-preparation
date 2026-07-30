@@ -242,13 +242,34 @@ def test_unverified_2026_salt_cap_raises_when_read():
         get_constant(salt_2026, "cap")
 
 
-def test_unverified_2026_ss_wage_base_raises_when_read():
-    """The SSA wage base is not in the Rev. Proc.; it must not be guessed."""
+def test_2026_ss_wage_base_is_verified():
+    """The SSA wage base for 2026 is $184,500, per the SSA COLA announcement.
+
+    Originally left null/TODO_VERIFY because Rev. Proc. 2025-32 does not cover
+    it (it's an SSA figure, not an IRS one). Direct SSA.gov fetch was blocked
+    (403), so this is corroborated by multiple independent secondary reports
+    of the same SSA press release rather than a direct primary quote —
+    documented as such in _sources.ssa_2026_wage_base.
+    """
+    se = load_tax_constants("2026")["se_tax"]
+    assert get_constant(se, "ss_wage_base") == 184500
+
+
+def test_unverified_2026_salt_cap_still_raises_when_read():
+    """The 2026 SALT cap has genuinely conflicting secondary sources and no
+    published IRS primary source, so it remains null.
+
+    Multiple professional tax publications state the OBBBA 101%-escalator
+    already applies for 2026 (cap $40,400, threshold $505,000), but one source
+    says the MFS cap is frozen at $20,000 (not the arithmetically-implied
+    $20,200) and another gives a different threshold ($500,500). Rather than
+    pick the majority answer, this stays null — see _sources.TODO_VERIFY.
+    """
     from utils import UnverifiedConstantError
 
-    se = load_tax_constants("2026")["se_tax"]
+    salt_2026 = load_tax_constants("2026")["salt"]
     with pytest.raises(UnverifiedConstantError):
-        get_constant(se, "ss_wage_base")
+        get_constant(salt_2026, "cap")
 
 
 def test_verified_2026_figures_are_readable():
@@ -257,3 +278,104 @@ def test_verified_2026_figures_are_readable():
     assert get_constant(data, "standard_deductions", "married_jointly") == 32200
     assert get_constant(data, "ctc", "per_child") == 2200
     assert get_constant(data, "amt", "exemption_mfj") == 140200
+    assert get_constant(data, "se_tax", "ss_wage_base") == 184500
+    assert get_constant(data, "mileage_rate") == 0.725
+    assert get_constant(data, "retirement_limits", "401k", "limit") == 24500
+
+
+# ---------------------------------------------------------------------------
+# 2023/2026 retirement limits, mileage rates, and Saver's Credit bands
+# (added after the initial Phase 2 pass, on explicit request)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("year,limit,catchup,total_415c", [
+    ("2023", 22500, 7500, 66000),
+    ("2024", 23000, 7500, None),   # 2024 total_415c was not separately verified
+    ("2025", 23500, 7500, 70000),
+    ("2026", 24500, 8000, 72000),
+])
+def test_401k_limits_by_year(year, limit, catchup, total_415c):
+    """401(k)/403(b)/457/TSP elective deferral limit and catch-up, per year.
+
+    Sources: Notice 2022-55 (2023), Notice 2024-80 (2025 super catch-up/415(c)),
+    Notice 2025-67 (2026).
+    """
+    r = load_tax_constants(year)["retirement_limits"]["401k"]
+    assert r["limit"] == limit
+    assert r["catchup_50_plus"] == catchup
+    if total_415c is not None:
+        assert r["total_415c"] == total_415c
+
+
+def test_super_catchup_60_63_did_not_exist_before_2025():
+    """SECURE 2.0's age-60-63 catch-up (IRC 414(v)(2)(E)) applies only to tax
+    years beginning after 2024. For 2023 the null is a definitive 'not
+    applicable', not a research gap — distinct from the 2026 SALT cap case,
+    which genuinely could not be resolved.
+    """
+    from utils import UnverifiedConstantError
+
+    r2023 = load_tax_constants("2023")["retirement_limits"]["401k"]
+    assert r2023["super_catchup_60_63"] is None
+    with pytest.raises(UnverifiedConstantError):
+        get_constant(r2023, "super_catchup_60_63")
+
+
+@pytest.mark.parametrize("year,value", [("2025", 11250), ("2026", 11250)])
+def test_super_catchup_60_63_verified_for_2025_and_2026(year, value):
+    """Confirmed directly from the statutory text of Notice 2024-80/2025-67:
+    the age-60-63 catch-up is $11,250 for both years (it does not increase
+    from 2025 to 2026, unlike the base and 50+ catch-up amounts)."""
+    r = load_tax_constants(year)["retirement_limits"]["401k"]
+    assert r["super_catchup_60_63"] == value
+
+
+@pytest.mark.parametrize("year,single,family", [
+    ("2023", 3850, 7750),
+    ("2024", 4150, 8300),
+    ("2025", 4300, 8550),
+    ("2026", 4400, 8750),
+])
+def test_hsa_limits_by_year(year, single, family):
+    """HSA self-only/family contribution limits, Rev. Proc. 2022-24 (2023) and
+    Rev. Proc. 2025-19 (2026)."""
+    r = load_tax_constants(year)["retirement_limits"]["hsa"]
+    assert r["single"] == single
+    assert r["family"] == family
+
+
+@pytest.mark.parametrize("year,limit,catchup", [
+    ("2023", 6500, 1000),
+    ("2026", 7500, 1100),
+])
+def test_ira_limits_by_year(year, limit, catchup):
+    r = load_tax_constants(year)["retirement_limits"]["ira"]
+    assert r["limit"] == limit
+    assert r["catchup_50_plus"] == catchup
+
+
+@pytest.mark.parametrize("year,rate", [("2023", 0.655), ("2026", 0.725)])
+def test_mileage_rate_by_year(year, rate):
+    """Notice 2023-03 (2023) and Notice 2026-10 (2026) business mileage rates.
+
+    The 2026 figure is a flat rate for the whole year — a secondary-source
+    summary claimed a mid-year revision to 76 cents effective 2026-07-01, but
+    the primary notice text contains no such change, so it was not used.
+    """
+    assert load_tax_constants(year)["mileage_rate"] == rate
+
+
+def test_2026_educator_expense_limit():
+    """Rev. Proc. 2025-32 sec .12: $350 for 2026 (up from $300)."""
+    assert load_tax_constants("2026")["educator_expense_limit"] == 350
+
+
+@pytest.mark.parametrize("year,mfj,single", [
+    ("2023", (43500, 47500, 73000), (21750, 23750, 36500)),
+    ("2026", (48500, 52500, 80500), (24250, 26250, 40250)),
+])
+def test_savers_credit_bands_by_year(year, mfj, single):
+    """Saver's Credit (IRC 25B) AGI bands, Notice 2022-55 / Notice 2025-67."""
+    sc = load_tax_constants(year)["credits"]["savers_credit"]
+    assert (sc["mfj"]["50_percent"], sc["mfj"]["20_percent"], sc["mfj"]["10_percent"]) == mfj
+    assert (sc["single"]["50_percent"], sc["single"]["20_percent"], sc["single"]["10_percent"]) == single
