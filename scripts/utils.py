@@ -330,6 +330,34 @@ def get_status_value(mapping: Dict[str, Any], filing_status: str, label: str = "
 # ---------------------------------------------------------------------------
 
 
+def additional_medicare_threshold(filing_status: str, se_tax_data: Dict[str, Any]) -> float:
+    """Additional Medicare wage threshold for a filing status.
+
+    IRC 3101(b)(2) / IRS Topic 560: $250,000 joint, $125,000 MFS, $200,000 "in
+    any other case" — which includes head of household AND qualifying surviving
+    spouse (QSS uses joint *rates* but is not a joint return, so it takes the
+    $200,000 threshold). Not inflation-indexed.
+
+    Raises when a status has no threshold defined rather than defaulting to the
+    single-filer $200,000 (findings D2/F12).
+    """
+    status = normalize_filing_status(filing_status)
+    key_by_status = {
+        "single": "additional_medicare_threshold_single",
+        "married_jointly": "additional_medicare_threshold_married",
+        "married_separately": "additional_medicare_threshold_married_separately",
+        "head_of_household": "additional_medicare_threshold_head_of_household",
+        "qualifying_surviving_spouse": "additional_medicare_threshold_qualifying_surviving_spouse",
+    }
+    key = key_by_status[status]
+    if key not in se_tax_data or se_tax_data[key] is None:
+        raise ValueError(
+            f"No Additional Medicare threshold defined for filing status "
+            f"{status!r} (expected key {key!r} in se_tax constants)."
+        )
+    return se_tax_data[key]
+
+
 def load_state_constants(state: str, year: str) -> Dict[str, Any]:
     """Load a state's constants for a year, with clear errors when absent.
 
