@@ -23,7 +23,7 @@ Updating for a new tax year is a centralized, two-step process:
 The plugin currently focuses on Federal taxes. To add a new state:
 
 1. **Add State Constants**: Create a new key in `scripts/tax_constants.json` under `state_tax_rates` or create a new `states/` directory for complex multi-bracket states (like CA or NY).
-2. **Implement Logic**: Create a new script `scripts/state_tax_calculator.py` that imports `utils.py`.
+2. **Implement Logic**: Create a new script (for example a `state_tax_calculator` module under `scripts/`) that imports `utils.py`. Note this file does not exist yet — it is an illustration of where new engines belong.
 3. **Reference Docs**: Create `references/state_ca_guide.md` (example) to provide the LLM agent with state-specific context.
 
 ## ✅ Writing Tests

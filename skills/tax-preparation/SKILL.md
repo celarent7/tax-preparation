@@ -14,10 +14,12 @@ description: >
   results than general knowledge alone.
 allowed-tools: Read, Bash, WebSearch, WebFetch, Grep, Glob, Task, Skill, Write, AskUserQuestion
 metadata:
-  version: 2.2.0
-  last-updated: 2026-04-13
+  version: 3.0.0
+  last-updated: 2026-07-30
   target-users: individuals, families, self-employed
   tax-year: 2025
+  supported-tax-years: "2023-2026"
+  state-coverage: "federal + California (2025)"
 ---
 # Tax Preparation Skill
 
@@ -39,6 +41,9 @@ When the user provides PDF documents (W-2s, 1099s, brokerage statements), follow
 Use the `Read` tool to extract data from provided PDFs.
 - Categorize data using the field-mapping tables in `./references/form_processing.md`.
 - For ambiguous form fields, consult `./references/few_shots.md` for extraction examples.
+- **Required field — tax year**: every checkpoint must state the tax year explicitly. Supported years come from `supported_years` in `./scripts/tax_constants.json` (currently **2023–2026**).
+  > **Tax-year stop rule**: if the requested year is not in `supported_years`, **stop and tell the user** rather than approximating with an adjacent year's figures. Bracket, deduction and credit amounts are indexed annually and OBBBA changed several of them mid-decade, so a neighbouring year is not a safe substitute.
+- **Required field — state of residence**: needed to decide whether the state layer (Step 3.5) applies.
 - **Checkpoint**: Present the extracted data in a structured JSON block to the user and ask: *"Please confirm these values match your documents before we proceed to calculations."*
 
 ### Phase 2: Verification Gate
@@ -89,6 +94,28 @@ Compare standard deduction against itemized total:
 ```bash
 python ./scripts/deduction_analyzer.py --agi <confirmed_agi> --mortgage-interest <amount> --charitable-cash <amount> --year 2025
 ```
+
+### Step 3.5: State Layer
+
+**If the taxpayer is a California resident, always run the CA comparison — never present federal-only results to a CA filer.**
+
+```bash
+python ./scripts/tax_calculator.py --gross-income <amt> --filing-status <status> --year <year> \
+    --state CA --hsa-contributions <amt> --qbi-deduction <amt> --obbba-deductions <amt>
+```
+
+The final summary must contain a **`CA impact`** section that explicitly lists every non-conformity adjustment applied, because California diverges from federal law in ways that change the answer materially:
+
+- **HSA contributions are not deductible** for CA and HSA earnings are CA-taxable annually (added back).
+- **No QBI deduction** — CA has no IRC §199A.
+- **No OBBBA deductions** — CA's conformity date is 2015-01-01, so tips / overtime / senior / car-loan interest deductions are added back.
+- **Capital gains and qualified dividends are taxed as ordinary income** — there is no preferential CA rate.
+- **CA itemize-vs-standard is a separate decision** — the CA standard deduction is roughly a third of the federal one, and state income tax is not deductible on the CA return.
+- **RSU vesting** is withheld at CA's 10.23% supplemental rate, plus uncapped 1.2% SDI, but taxed on the return at progressive rates.
+
+Full detail, including the worked example, is in `./references/california_tax_guide.md`.
+
+For states with no income tax (WA, TX, FL, NV) say so explicitly. For other states the constants carry only a **top marginal rate flagged `estimate_only`** — never present it as an effective rate.
 
 ### Step 4: Handle Complex Compensation (RSU/ESPP)
 **Prerequisite**: Vesting dates and FMVs must be verified against statements.

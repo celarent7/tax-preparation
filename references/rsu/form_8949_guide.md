@@ -67,7 +67,7 @@ Where:
 ## Generating Form 8949 Data
 
 ```bash
-python scripts/generate_form_8949.py \
+python ./scripts/rsu/generate_form_8949.py \
   --sales-file "sales_records.json" \
   --vesting-file "vesting_records.json" \
   --output "form_8949_data.json"

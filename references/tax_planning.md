@@ -19,8 +19,11 @@ If total itemized deductions are near the standard deduction threshold, consider
 - Use donor-advised fund for charitable bunching
 
 ### Multi-Year Projections
+There is no dedicated projector script. Model each year by running the
+calculator with that year's constants (2023–2026 are supported):
 ```bash
-python scripts/tax_projector.py --current-year-data <file.json> --scenarios <params>
+python ./scripts/tax_calculator.py --gross-income <amt> --filing-status <status> --year 2025
+python ./scripts/tax_calculator.py --gross-income <amt> --filing-status <status> --year 2026
 ```
 
 ---
@@ -34,14 +37,14 @@ python scripts/tax_projector.py --current-year-data <file.json> --scenarios <par
 - Check education credit phaseouts with combined income
 
 ### Children
-- Child Tax Credit ($2,000/child under 17)
+- Child Tax Credit ($2,200/child under 17 for 2025+ under OBBBA; $2,000 for 2024 and earlier)
 - Dependent care credit for childcare expenses
 - Education savings (529 plan, state deduction possible)
 - Filing status may change to Head of Household if unmarried
 
 ### Home Purchase
-- Mortgage interest deduction (up to $750k acquisition debt)
-- Property tax deduction (subject to $10,000 SALT cap)
+- Mortgage interest deduction (up to $750k of acquisition debt, or $1M if the debt was incurred on or before 2017-12-15; California allows $1M regardless)
+- Property tax deduction (subject to the SALT cap: $40,000 for 2025, $10,000 for 2018–2024 — see `draft_review_checklist.md`)
 - Points paid at closing (deductible in year paid or amortized)
 - First-time homebuyer considerations
 
@@ -68,12 +71,14 @@ python scripts/tax_projector.py --current-year-data <file.json> --scenarios <par
 
 ### Safe Harbor Rules
 Avoid penalties by paying the lesser of:
-1. **100% of prior year tax** (110% if AGI > $150,000)
+1. **100% of prior year tax** (110% if prior-year AGI > $150,000, or > $75,000 if married filing separately)
 2. **90% of current year tax**
 
 ### Calculation
 ```bash
-python scripts/estimated_tax_calculator.py --projected-income <amount> --withholding <amount>
+python ./scripts/estimated_tax_calculator.py --projected-income <amount> \
+    --prior-year-tax <amount> --prior-year-agi <amount> \
+    --filing-status <status> --year <year> --withholding-to-date <amount>
 ```
 
 ### Due Dates (Calendar Year)
@@ -136,14 +141,17 @@ python scripts/estimated_tax_calculator.py --projected-income <amount> --withhol
 | Category | Limit | Notes |
 |----------|-------|-------|
 | Medical expenses | >7.5% of AGI | Only amount exceeding threshold |
-| State/local taxes (SALT) | $10,000 cap | Property + income or sales tax |
-| Mortgage interest | $750k limit | Primary + one second home |
+| Casualty note | — | California: state income tax is NOT deductible on the CA return; see `california_tax_guide.md` |
+| State/local taxes (SALT) | $40,000 cap for 2025 ($20,000 MFS), phased down above $500,000 MAGI; $10,000 for 2018–2024 | Property + income or sales tax |
+| Mortgage interest | $750k limit ($1M if incurred on or before 2017-12-15) | Primary + one second home |
 | Charitable contributions | 60% AGI cash, 30% appreciated | Substantiation requirements |
 | Casualty/theft losses | Federally declared disasters only | $100 floor + 10% AGI |
 
 ### Comparison Script
 ```bash
-python scripts/deduction_optimizer.py --income <agi> --itemized-items <file.json>
+python ./scripts/deduction_analyzer.py --agi <agi> --filing-status <status> --year <year> \
+    --property-tax <amt> --state-income-tax <amt> --mortgage-interest <amt> \
+    --charitable-cash <amt> --medical-expenses <amt>
 ```
 
 ### Decision Factors
@@ -176,9 +184,16 @@ $125k (MFS). These thresholds are statutory and **not** inflation-indexed.
 - **Qualified dividends**: Understand holding period requirements
 - **Capital loss carryforward**: Track unused losses ($3,000 annual limit against ordinary income)
 
-### Integration with portfolio-analyzer
+### Capital gains and RSU/ESPP lot analysis
 ```bash
-python scripts/capital_gains_analyzer.py --transactions <brokerage_1099b.csv>
+python ./scripts/rsu_calculator.py sale --data <vesting_and_sales.json>
+python ./scripts/espp_calculator.py --data <espp_transactions.json>
+```
+
+To model the preferential-rate stack on a whole return:
+```bash
+python ./scripts/tax_calculator.py --gross-income <amt> --filing-status <status> \
+    --year <year> --ltcg <amt> --qualified-dividends <amt>
 ```
 
 ---
@@ -190,9 +205,12 @@ python scripts/capital_gains_analyzer.py --transactions <brokerage_1099b.csv>
 - **Head of Household**: Requires unmarried, paying >50% household costs, qualifying person
 - **Qualifying Surviving Spouse**: 2 years after spouse's death with dependent child
 
-### Analysis Script
+### Comparing filing statuses
+There is no dedicated filing-status script. Run the calculator once per status
+and compare — note that the MFS safe-harbor threshold is half the general one:
 ```bash
-python scripts/filing_status_analyzer.py --income <amount> --dependents <count> --situation <params>
+python ./scripts/tax_calculator.py --gross-income <amt> --filing-status mfj --year <year>
+python ./scripts/tax_calculator.py --gross-income <amt> --filing-status mfs --year <year>
 ```
 
 ---

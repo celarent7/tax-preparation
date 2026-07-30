@@ -193,3 +193,90 @@ def test_checklist_salt_rule_is_year_aware():
     # The old unconditional rule must be gone.
     assert "Schedule A Line 6 > $10,000" not in text
     assert "MUST be capped at $10,000" not in text
+
+
+# ---------------------------------------------------------------------------
+# D5 — references must not name scripts that do not exist
+# ---------------------------------------------------------------------------
+
+def test_every_script_referenced_in_docs_exists():
+    """D5: `tax_planning.md` invoked a "Comparison Script", a
+    "portfolio-analyzer" integration and an "Analysis Script" that are not in
+    this repo (upstream leftovers). An agent following those instructions hits
+    a missing file mid-workflow.
+
+    This scans every reference/doc for `scripts/<name>.py` and asserts the file
+    is present, so the class of defect cannot be reintroduced.
+    """
+    import glob
+
+    pattern = re.compile(r"(?:\./)?scripts/([A-Za-z0-9_/]+\.py)")
+    missing = []
+
+    doc_paths = (glob.glob(os.path.join(REFS, "**", "*.md"), recursive=True)
+                 + glob.glob(os.path.join(ROOT, "docs", "*.md"))
+                 + [os.path.join(ROOT, "skills", "tax-preparation", "SKILL.md")])
+
+    for doc in doc_paths:
+        with open(doc) as f:
+            text = f.read()
+        for name in pattern.findall(text):
+            if not os.path.exists(os.path.join(ROOT, "scripts", name)):
+                missing.append(f"{os.path.relpath(doc, ROOT)} -> scripts/{name}")
+
+    assert not missing, "docs reference non-existent scripts: " + "; ".join(sorted(set(missing)))
+
+
+# ---------------------------------------------------------------------------
+# Y6 — plugin.json and SKILL.md metadata versions must stay in sync
+# ---------------------------------------------------------------------------
+
+def test_plugin_and_skill_versions_match():
+    """Y6: plugin.json was 2.0.0 while SKILL.md metadata said 2.2.0."""
+    import json
+
+    with open(os.path.join(ROOT, "plugin.json")) as f:
+        plugin_version = json.load(f)["version"]
+
+    with open(os.path.join(ROOT, "skills", "tax-preparation", "SKILL.md")) as f:
+        skill_text = f.read()
+    match = re.search(r"^\s+version:\s*([0-9]+\.[0-9]+\.[0-9]+)\s*$", skill_text, re.M)
+    assert match, "SKILL.md metadata has no version"
+
+    assert plugin_version == match.group(1), (
+        f"plugin.json {plugin_version} != SKILL.md {match.group(1)}"
+    )
+
+
+def test_skill_declares_the_supported_years_it_actually_has():
+    """The tax-year stop rule is only useful if the advertised range is right."""
+    from utils import SUPPORTED_YEARS
+
+    with open(os.path.join(ROOT, "skills", "tax-preparation", "SKILL.md")) as f:
+        text = f.read()
+    assert f"{SUPPORTED_YEARS[0]}–{SUPPORTED_YEARS[-1]}" in text or \
+           f"{SUPPORTED_YEARS[0]}-{SUPPORTED_YEARS[-1]}" in text
+
+
+def test_skill_has_the_state_layer_step():
+    """Blueprint 3.3(a): a CA filer must never get federal-only results."""
+    with open(os.path.join(ROOT, "skills", "tax-preparation", "SKILL.md")) as f:
+        text = f.read()
+    assert "Step 3.5: State Layer" in text
+    assert "CA impact" in text
+    assert "california_tax_guide.md" in text
+
+
+def test_skill_has_the_tax_year_stop_rule():
+    """Blueprint 3.3(b): stop rather than approximate an unsupported year."""
+    with open(os.path.join(ROOT, "skills", "tax-preparation", "SKILL.md")) as f:
+        text = f.read()
+    assert "Tax-year stop rule" in text
+    assert "supported_years" in text
+
+
+def test_skill_safe_harbor_note_includes_mfs_threshold():
+    """Blueprint 3.3(c): the $75,000 MFS threshold must be stated (F9)."""
+    with open(os.path.join(ROOT, "skills", "tax-preparation", "SKILL.md")) as f:
+        text = f.read()
+    assert "$75,000" in text and "$150,000" in text

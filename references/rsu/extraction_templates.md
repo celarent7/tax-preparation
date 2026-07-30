@@ -79,7 +79,7 @@ JSON templates for extracting structured data from RSU-related documents. Use wi
 For CSV files from broker exports, use the parsing script:
 
 ```bash
-python scripts/parse_broker_csv.py --file "path/to/file.csv" --broker "morgan_stanley"
+python ./scripts/rsu/parse_broker_csv.py --file "path/to/file.csv" --broker "morgan_stanley"
 ```
 
 Supported brokers: `morgan_stanley`, `fidelity`, `schwab`, `etrade`
