@@ -6,6 +6,7 @@ and calculate potential credit amounts.
 
 import argparse
 import json
+import math
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
@@ -22,15 +23,23 @@ class CreditResult:
     documentation_needed: List[str]
 
 
-# 2024 Credit Parameters
+# Credit Parameters
+#
+# NOTE (audit findings Y1/P4): this table is being migrated to
+# scripts/tax_constants.json so that figures are year-aware and live in one
+# place. Until that migration lands, the values here are 2025 amounts and this
+# script has no --year switch — do not use it for another tax year.
 CREDIT_PARAMS = {
     "child_tax_credit": {
-        "credit_per_child": 2000,
+        # OBBBA: $2,200 for any taxable year beginning in 2025 (was $2,000).
+        # Source: https://www.irs.gov/credits-deductions/individuals/child-tax-credit
+        "credit_per_child": 2200,
         "refundable_max": 1700,
         "age_limit": 17,
+        # Schedule 8812 (2025): MFJ $400,000; all other filing statuses $200,000.
         "phaseout_start_single": 200000,
         "phaseout_start_mfj": 400000,
-        "phaseout_rate": 50  # $50 per $1000 over threshold
+        "phaseout_rate": 50  # $50 per $1000 (or fraction thereof) over threshold
     },
     "other_dependent_credit": {
         "credit_per_dependent": 500,
@@ -127,7 +136,13 @@ def calculate_child_tax_credit(data: Dict) -> CreditResult:
 
     if agi > phaseout_start:
         excess = agi - phaseout_start
-        reduction = (excess // 1000) * params["phaseout_rate"]
+        # IRC 24(b): $50 for each $1,000 "or fraction thereof" of excess, i.e.
+        # the excess rounds UP to the next $1,000. Schedule 8812 line 10 states
+        # it explicitly: "if the result is $425, enter $1,000; if the result is
+        # $1,025, enter $2,000". The old `excess // 1000` floored instead,
+        # understating the phase-out by up to $50 (finding F4).
+        thousands = math.ceil(excess / 1000)
+        reduction = thousands * params["phaseout_rate"]
         base_credit = max(0, base_credit - reduction)
         phaseout_applied = True
         notes.append(f"Credit reduced by ${reduction:,.0f} due to income phaseout")
