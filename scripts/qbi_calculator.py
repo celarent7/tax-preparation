@@ -576,12 +576,12 @@ def compute_qbi_deduction(
     notes: List[str] = [comp.reason, reit["reason"]]
     min_applied = False
 
-    # 6. 2026+ OBBBA $400 minimum (§199A(i)). The minimum is "the greater of
-    # the otherwise-computed deduction or $400" for an applicable taxpayer
-    # (aggregate active QBI ≥ the floor), and it OVERRIDES the overall
-    # taxable-income limit. Reading the constants is unconditional for years
-    # ≥ 2026: a null/absent figure raises rather than silently skipping
-    # (ground rule 6 / plan §3.1.6).
+    # 6. 2026+ OBBBA minimum (§199A(i)). The minimum is "the greater of the
+    # otherwise-computed deduction or the min_deduction constant" for an
+    # applicable taxpayer (aggregate active QBI ≥ the floor), and it OVERRIDES
+    # the overall taxable-income limit. Reading the constants is unconditional
+    # for years ≥ 2026: a null/absent figure raises rather than silently
+    # skipping (ground rule 6 / plan §3.1.6).
     if year and int(year) >= 2026:
         qbi_block = year_constants["qbi"]
         min_deduction = float(utils.get_constant(qbi_block, "min_deduction"))
@@ -657,7 +657,7 @@ def format_text(result: QBIResult) -> str:
     lines.append("")
     lines.append(f"QBI deduction: ${result.deduction:,.2f}")
     if result.min_deduction_applied:
-        lines.append("  (raised to the §199A(i) $400 minimum)")
+        lines.append("  (raised to the §199A(i) minimum — see Notes)")
     if result.qbi_loss_carryforward:
         lines.append(f"  QBI loss carryforward to next year: ${result.qbi_loss_carryforward:,.2f}")
     if result.reit_loss_carryforward:
