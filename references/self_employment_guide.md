@@ -407,7 +407,103 @@ Total: $57,851 (under $69,000 limit)
 **When to consider**: Net profit consistently over $50,000-$80,000
 
 ### QBI Deduction (Section 199A)
-- Deduct up to 20% of qualified business income
-- Available to sole proprietors, partnerships, S-corps
-- Phaseouts for specified service trades/businesses (SSTB)
-- W-2 wage and capital limitations at higher incomes
+
+The Qualified Business Income deduction is up to **20% of qualified business
+income (QBI)** from a pass-through trade or business. This plugin computes it
+with `./scripts/qbi_calculator.py` — **never estimate it as a flat 20% of
+Schedule C profit.** Profit is reduced first by the attributable above-the-line
+items (½ SE tax, SE health insurance, SE retirement), and the deduction is then
+capped by both a wage/UBIA limit and an overall taxable-income limit.
+
+**Who it covers here:** sole proprietors / single-member LLCs filing Schedule C,
+plus qualified REIT/PTP dividends from 1099-DIV Box 5. K-1 pass-throughs
+(S-corp/partnership QBI), multi-business aggregation, and PTP income are out of
+scope — supplying `k1_qbi` is rejected with a pointer to `./docs/limitations.md`.
+
+**Thresholds and phase-in ranges** (single/HOH/MFS share one threshold; MFS
+maps to the single threshold explicitly — never a silent default):
+
+| Year | Single/HOH/MFS threshold | MFJ threshold | Phase-in range (single / MFJ) | $400 minimum (2026+) |
+|---|---|---|---|---|
+| 2023 | $182,100 | $364,200 | $50,000 / $100,000 | — |
+| 2024 | $191,950 | $383,900 | $50,000 / $100,000 | — |
+| 2025 | $197,300 | $394,600 | $50,000 / $100,000 | — |
+| 2026 | $201,750 ($201,775 MFS) | $403,500 | $75,000 / $150,000 | $400 (active QBI ≥ $1,000) |
+
+OBBBA (P.L. 119-21) made QBI **permanent**, **widened the 2026 phase-in ranges**
+to $75K/$150K, **split the MFS threshold** from single for 2026, and added a
+**$400 minimum deduction** for 2026+ (greater-of; overrides the overall
+taxable-income limit when active QBI is at least $1,000).
+
+**Computation order (Form 8995 / 8995-A):**
+
+1. **Adjusted QBI** = Schedule C net profit − ½ SE tax − SE health insurance −
+   SE retirement (the ½ SE tax is reused byte-identical from
+   `estimated_tax_calculator.calculate_se_tax`, not recomputed).
+2. **Threshold test** on taxable income *before* the QBI deduction:
+   - **Below threshold** → Form 8995 (simplified): component = 20% × adjusted
+     QBI. SSTB status and wages/UBIA are irrelevant below the threshold.
+   - **Within phase-in range** → Form 8995-A: `applicable_pct = 1 −
+     (TI − threshold)/range`. For an **SSTB**, QBI, wages, and UBIA are each
+     multiplied by `applicable_pct` first (≤ 0 zeroes the SSTB component).
+     Wage-limit phase-in: tentative = 20% × QBI; full limit =
+     `max(50% × wages, 25% × wages + 2.5% × UBIA)`; if tentative > full limit,
+     reduction = (tentative − full limit) × (TI − threshold)/range.
+   - **Above range** → full wage/UBIA limit binds; SSTB component = $0.
+3. **REIT/PTP component** = 20% × qualified REIT dividends (1099-DIV Box 5) —
+   never wage-limited.
+4. **Overall limit:** deduction = `min(QBI component + REIT component, 20% ×
+   (taxable income before QBI − net capital gain))`, where net capital gain
+   includes qualified dividends (§1(h)(11)/§199A(e)(3)).
+5. **Negative QBI:** if adjusted QBI < 0, the QBI component is $0 and the loss
+   **carries forward** to reduce next year's QBI (reported prominently).
+   Negative REIT/PTP carries forward separately — no netting against QBI.
+6. **2026+ minimum:** when the $400 minimum constant is non-null, the year is
+   ≥ 2026, and active QBI ≥ $1,000, the deduction is at least $400. If the
+   constant is unverified (`null`), the engine **raises** rather than guessing.
+
+**SSTB (specified service trade or business)** — the tool *asks*, never
+infers: health, law, accounting, consulting, financial services, performing
+arts, athletics, and any business whose principal asset is the reputation or
+skill of its employees/owners (Reg. §1.199A-5). Engineering and architecture are
+exempted by statute.
+
+**Worked examples (mirrors `tests/test_qbi_calculator.py`):**
+
+- *Below threshold (Q1).* MFJ 2025, adjusted QBI $80,000, TI $150,000, no
+  wages/UBIA → deduction = 20% × $80,000 = **$16,000**, Form 8995. SSTB status
+  has no effect below the threshold.
+- *Adjusted-QBI derivation (Q2).* Schedule C $100,000, SE health $10,000 →
+  ½ SE tax = 92,350 × 15.3% ÷ 2 = $7,064.77 (matches
+  `calculate_se_tax`); adjusted QBI = 100,000 − 7,064.77 − 10,000 =
+  **$82,935.23**.
+- *Wage limit binds (Q5).* MFJ 2025, TI $600,000 (above range), QBI $300,000,
+  wages $50,000, UBIA $0 → component = min(60,000, 50%×50,000=25,000) =
+  **$25,000**. With UBIA $1,000,000 → max(25,000, 25%×50,000+2.5%×1,000,000 =
+  12,500+25,000=37,500) = **$37,500**.
+- *Overall taxable-income limit (Q6).* QBI component $20,000, TI before QBI
+  $90,000, net capital gain $60,000 → deduction = min(20,000, 20%×30,000) =
+  **$6,000**.
+- *REIT-only (Q7).* $40.26 of 1099-DIV Box 5 dividends, no SE income →
+  20% × $40.26 = **$8.05**, never wage-limited, Form 8995.
+- *Negative QBI (Q8).* Adjusted QBI −$30,000, REIT $1,000 → QBI component $0,
+  REIT component $200 (not netted), carryforward **−$30,000** reported.
+- *Year gating (Q9).* Single filer at TI $260,000: 2025 (range $50K → above
+  range, full wage limit) vs 2026 (range $75K → still inside phase-in) give
+  different results. The 2026 $400 minimum fires only when active QBI ≥ $1,000.
+
+**CLI:**
+
+```bash
+python ./scripts/qbi_calculator.py \
+  --se-net-profit 120000 --se-health-insurance 8000 \
+  --w2-wages-paid 0 --ubia 0 --sstb \
+  --taxable-income-before-qbi 210000 --net-capital-gain 15000 \
+  --reit-dividends 40.26 --filing-status mfj --year 2025 --output-format json
+```
+
+`tax_calculator.py --compute-qbi` runs the engine and feeds the result into the
+existing CA add-back path automatically; `estimated_tax_calculator.py` subtracts
+the computed deduction from projected taxable income by default (`--no-qbi` for a
+control run); `draft_reviewer.py` recomputes line 13 / Form 8995 line 15 and
+flags a draft that subtracts QBI in the CA state column.

@@ -14,7 +14,7 @@ description: >
   results than general knowledge alone.
 allowed-tools: Read, Bash, WebSearch, WebFetch, Grep, Glob, Task, Skill, Write, AskUserQuestion
 metadata:
-  version: 3.1.0
+  version: 3.2.0
   last-updated: 2026-07-30
   target-users: individuals, families, self-employed
   tax-year: 2025
@@ -83,6 +83,13 @@ Collect all tax documents. Use the checklist in `./references/document_checklist
 python ./scripts/tax_calculator.py --gross-income <confirmed_amount> --adjustments <amount> --year 2025
 ```
 
+> **QBI (§199A) — never estimate as a flat 20% of profit.** If Schedule C profit
+> exists, run the QBI calculator (or `tax_calculator.py --compute-qbi`, which
+> calls the engine and feeds the result into the CA add-back automatically).
+> Profit is first reduced by ½ SE tax, SE health insurance, and SE retirement;
+> the deduction is then capped by a wage/UBIA limit and an overall
+> taxable-income limit. See `./references/self_employment_guide.md`.
+
 > **Estimated payment safe harbor**: Use `estimated_tax_calculator.py` for quarterly payment amounts. The IRS safe harbor is the **lesser of** (a) 90% of current-year projected tax or (b) 100% of prior-year tax — **110% if prior-year AGI exceeded $150,000, or $75,000 for married filing separately**. Always compute both and present the lower figure to minimize required payments.
 >
 > The MFS threshold is half the general one; applying $150,000 to an MFS filer
@@ -145,6 +152,7 @@ python ./scripts/rsu_calculator.py basis --shares-vested <shares> --fmv <fmv>
 | `./scripts/rsu_calculator.py` | RSU cost basis, withholding, and 8949 adjustments |
 | `./scripts/espp_calculator.py` | ESPP disposition and cost basis analysis |
 | `./scripts/draft_reviewer.py` | Cross-check draft returns against verified data |
+| `./scripts/qbi_calculator.py` | §199A QBI deduction (Form 8995/8995-A): adjusted QBI, SSTB phase-out, wage/UBIA limit, REIT/PTP component, overall taxable-income limit, negative-QBI carryforward, and the 2026 OBBBA $400 minimum. Sole-prop/Schedule-C + 1099-DIV Box 5 only — K-1 pass-throughs are rejected (see `./docs/limitations.md`). |
 | `./scripts/tax_savings_finder.py` | Proactive savings engine — reads a flat taxpayer profile and emits ranked opportunities (M1–M11: 401(k) headroom, backdoor Roth + pro-rata, mega backdoor, tax-loss harvesting, appreciated-stock donation, QCD, SE health insurance, §179/bonus, HSA, OBBBA senior bonus, tips/overtime) with dollar estimates, deadlines, and CA nonconformity caveats. See `./references/tax_planning.md`. |
 
 ---

@@ -43,7 +43,7 @@ income or disallowed deductions California does tax.
 |---|---|---|---|
 | **HSA contributions** | Deductible / excluded from Box 1 | **Not deductible** | Add back on Schedule CA Column C |
 | **HSA earnings** | Tax-deferred | **Taxable annually** | Report interest/dividends/gains inside the HSA every year |
-| **QBI (§199A)** | Up to 20% deduction | **No such deduction** | Add back |
+| **QBI (§199A)** | Up to 20% deduction (computed by `qbi_calculator.py`; `tax_calculator.py --compute-qbi` applies it and adds it back here automatically) | **No such deduction** | Add back on Schedule CA — the federal `--compute-qbi` flow performs this add-back in one step, so never also subtract QBI in the CA state column |
 | **Capital gains** | 0/15/20% preferential | **Ordinary rates** | No preferential bracket; a large LTCG is taxed at up to 12.3% |
 | **Qualified dividends** | Preferential | **Ordinary rates** | Same |
 | **Mortgage interest** | $750,000 acquisition debt | **$1,000,000** + $100,000 HELOC | CA is *more* generous — a savings opportunity |
