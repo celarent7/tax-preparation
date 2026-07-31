@@ -174,6 +174,54 @@ def calculate_safe_harbor(prior_year_tax: float, prior_year_agi: float,
     }
 
 
+def calculate_ca_estimated_tax(projected_ca_tax: float, prior_year_ca_tax: float,
+                               ca_agi: float, filing_status: str, est: Dict,
+                               ca_withholding: float = 0) -> Dict:
+    """FTB Form 540-ES required payment and installment schedule.
+
+    Required annual payment is the LESSER of 90% of the current-year CA tax
+    and the prior-year CA tax (110% when CA AGI exceeds the high-income
+    threshold) — EXCEPT that filers with CA AGI at or above $1,000,000
+    ($500,000 MFS) may not use the prior-year leg at all (R&TC 19136.3).
+    Installments are NOT even quarters: 30% / 40% / 0% / 30% (FTB 540-ES).
+    All figures come from the constants block; nothing is hard-coded here.
+    """
+    status = normalize_filing_status(filing_status)
+    is_mfs = status == "married_separately"
+
+    current_leg = round(projected_ca_tax * est["current_year_pct"], 2)
+    hi_threshold = est["high_income_agi_mfs"] if is_mfs else est["high_income_agi"]
+    # The statute says "more than", so AGI exactly at the threshold does not
+    # trigger the 110% factor (mirrors the federal safe-harbor rule).
+    prior_pct = est["high_income_prior_year_pct"] if ca_agi > hi_threshold else 1.0
+    prior_leg = round(prior_year_ca_tax * prior_pct, 2)
+
+    no_sh = est["safe_harbor_unavailable_agi_mfs"] if is_mfs else est["safe_harbor_unavailable_agi"]
+    # "$1,000,000 or more" -> the prior-year leg is unavailable at >= the cap.
+    safe_harbor_available = ca_agi < no_sh
+
+    if safe_harbor_available and prior_leg < current_leg:
+        required, basis = prior_leg, "prior-year safe harbor"
+    else:
+        required, basis = current_leg, "90% current-year"
+
+    installments = [
+        {"quarter": q, "due_date": due, "pct": pct,
+         "amount": round(required * pct, 2)}
+        for (q, due), pct in zip(est["due_dates"], est["installment_pct"])
+    ]
+    return {
+        "required_annual_payment": required,
+        "basis": basis,
+        "current_year_leg": current_leg,
+        "prior_year_leg": prior_leg,
+        "prior_year_pct_applied": prior_pct,
+        "safe_harbor_available": safe_harbor_available,
+        "installments": installments,
+        "remaining_after_withholding": round(max(0.0, required - ca_withholding), 2),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Estimated Tax Calculator")
     parser.add_argument("--projected-income", type=float, required=True, help="Total projected gross income for the year")

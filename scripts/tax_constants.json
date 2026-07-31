@@ -2892,6 +2892,7 @@
           "high_income_agi": 150000,
           "high_income_agi_mfs": 75000,
           "high_income_prior_year_pct": 1.1,
+          "current_year_pct": 0.9,
           "safe_harbor_unavailable_agi": 1000000,
           "safe_harbor_unavailable_agi_mfs": 500000,
           "due_dates": [
