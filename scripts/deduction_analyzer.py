@@ -232,6 +232,44 @@ def analyze_charitable(
     }
 
 
+def student_loan_interest_deduction(interest_paid: float, magi: float,
+                                    filing_status: str, tax_data: Dict) -> Dict:
+    """Above-the-line student-loan interest deduction with the IRC 221 phase-out.
+
+    MFS is statutorily ineligible (IRC 221(e)(2)). The phase-out prorates the
+    allowable amount linearly across the MAGI band; single/HOH/QSS share one
+    band, MFJ has its own. Constants only — no inline figures.
+    """
+    status = normalize_filing_status(filing_status)
+    limit = tax_data["student_loan_interest_limit"]
+    if status == "married_separately":
+        return {"eligible": False, "deduction": 0.0, "limit": limit,
+                "phaseout_applied": False, "fully_phased_out": False,
+                "note": "Married filing separately cannot claim the student-loan "
+                        "interest deduction (IRC 221(e)(2))."}
+
+    band = tax_data["student_loan_interest_phaseout"]
+    is_mfj = status in ("married_jointly", "qualifying_surviving_spouse")
+    lo = get_constant(band, "magi_start_mfj" if is_mfj else "magi_start")
+    hi = get_constant(band, "magi_end_mfj" if is_mfj else "magi_end")
+
+    base = min(max(0.0, interest_paid), limit)
+    if magi >= hi:
+        return {"eligible": True, "deduction": 0.0, "limit": limit,
+                "phaseout_applied": True, "fully_phased_out": True,
+                "note": f"MAGI ${magi:,.0f} is at or above the ${hi:,.0f} "
+                        "phase-out end — deduction fully phased out."}
+    if magi > lo:
+        base = round(base * (hi - magi) / (hi - lo), 2)
+        return {"eligible": True, "deduction": base, "limit": limit,
+                "phaseout_applied": True, "fully_phased_out": False,
+                "note": f"Deduction prorated across the ${lo:,.0f}–${hi:,.0f} "
+                        "MAGI band (Schedule 1 line 21 worksheet)."}
+    return {"eligible": True, "deduction": base, "limit": limit,
+            "phaseout_applied": False, "fully_phased_out": False,
+            "note": "Full deduction — MAGI below the phase-out band."}
+
+
 def main():
     parser = argparse.ArgumentParser(description="Deduction Analyzer")
     parser.add_argument("--agi", type=float, required=True, help="Adjusted Gross Income")
