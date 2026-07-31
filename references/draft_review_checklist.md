@@ -175,6 +175,21 @@ Schedule A Line 6. Only a Line 6 above *that* figure is an error.
 
 ---
 
+## California (Form 540) — state-specific checks
+
+These checks apply only to California resident returns. `draft_reviewer.py`
+performs them automatically when the computed data identifies the return as CA
+(`computed["state"] == "CA"`).
+
+| Check | Rule |
+|-------|------|
+| **Excess SDI (multi-employer)** | For a **capped** SDI year (2023 and earlier, e.g. amended returns), if two or more employers withheld SDI/VPDI and the combined total exceeds `rate × wage_cap`, the excess is claimed as a credit on **Form 540 line 74**. For **2024+** (SB 951 removed the wage cap) the credit CANNOT arise — there is no per-year maximum to exceed, so do NOT flag a missing line 74 entry. A single employer's over-withholding is recovered from the employer, not on the return. |
+
+*The cap-driven logic lives in `excess_sdi_credit()` in `scripts/utils.py`;
+`draft_reviewer.py`'s `check_excess_sdi` applies it to the draft.*
+
+---
+
 ## Top 20 Common Filing Errors
 
 | # | Error | Detection Rule | Severity |

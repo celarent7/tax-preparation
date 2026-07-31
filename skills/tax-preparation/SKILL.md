@@ -158,6 +158,12 @@ python ./scripts/rsu_calculator.py basis --shares-vested <shares> --fmv <fmv>
    ```
 3. **Checklist Validation**: Manually verify items in `./references/draft_review_checklist.md` that require human judgment.
 
+> **Excess SDI (multi-employer, CA):** for a capped SDI year (2023 and earlier),
+> two or more employers whose combined SDI/VPDI withholding exceeds `rate ×
+> wage_cap` claim the excess on Form 540 line 74. For 2024+ (SB 951 removed the
+> wage cap) the credit cannot arise — do not flag a missing line 74. The
+> reviewer's `check_excess_sdi` handles this automatically for CA returns.
+
 ---
 
 ## Scripts Reference

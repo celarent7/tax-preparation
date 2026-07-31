@@ -153,10 +153,24 @@ With no wage cap, SDI is now an uncapped 1.2% surtax on wages, which materially
 changes RSU withholding-shortfall math for high earners: a $500,000 earner pays
 $6,000 of SDI where the old cap would have stopped far earlier.
 
-**Excess SDI credit:** if two or more employers withheld SDI and the total
-exceeds what a single employer would have withheld, the excess is claimed as a
-credit on Form 540. A single employer over-withholding must be corrected by that
-employer, not claimed on the return.
+**Excess SDI credit (Form 540 line 74):** this credit exists ONLY for a year
+that has a taxable wage cap, and ONLY when two or more employers withheld
+SDI/VPDI. The credit is `total withheld − rate × wage_cap` — the amount by which
+combined withholding exceeds what a single employer at the cap would have owed.
+
+- **2024 and later (no cap, SB 951):** the credit CANNOT arise. With no wage cap
+  there is no per-year maximum to exceed, so there is no "excess" no matter how
+  many employers withheld. A single employer's over-withholding is recovered from
+  that employer, not on the return.
+- **2023 and earlier (capped years, relevant to amended returns):** with two or
+  more employers, claim `total withheld − rate × wage_cap` on Form 540 line 74.
+  A single employer's over-withholding is still recovered from the employer.
+
+The `excess_sdi_credit()` function in `scripts/utils.py` encodes this cap-driven
+logic (treating `wage_cap: null` as the semantic "no cap" rather than unverified
+data), and `draft_reviewer.py`'s `check_excess_sdi` flags a Form 540 that omits
+a credit the filer was entitled to — capped years only; for uncapped years it
+emits at most an INFO explaining why no credit is possible.
 
 ---
 
