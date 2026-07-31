@@ -31,9 +31,10 @@
         "2024.amt",
         "2024.qbi",
         "2024.credits.eitc",
-        "2024.section_179"
+        "2024.section_179",
+        "2024.student_loan_interest_phaseout"
       ],
-      "note": "Section .03 Maximum Capital Gains Rate: MFJ 94,050/583,750; MFS 47,025/291,850; HoH 63,000/551,350; all other individuals 47,025/518,900. The MFS 15% ceiling had been 259,450 (half of the single ceiling) \u2014 corrected per this source (finding F14). Section .11 AMT: exemptions 133,300 MFJ / 85,700 single / 66,650 MFS; 28% bracket at 232,600 (116,300 MFS); phaseout thresholds 1,218,700 MFJ / 609,350 other (complete 1,751,900 MFJ, confirming the 25% rate). Section .27 QBI thresholds 383,900 MFJ / 191,950 other with phase-in amounts 483,900 / 241,950. Section .06 EITC table + $11,600 investment income limit."
+      "note": "Section .03 Maximum Capital Gains Rate: MFJ 94,050/583,750; MFS 47,025/291,850; HoH 63,000/551,350; all other individuals 47,025/518,900. The MFS 15% ceiling had been 259,450 (half of the single ceiling) \u2014 corrected per this source (finding F14). Section .11 AMT: exemptions 133,300 MFJ / 85,700 single / 66,650 MFS; 28% bracket at 232,600 (116,300 MFS); phaseout thresholds 1,218,700 MFJ / 609,350 other (complete 1,751,900 MFJ, confirming the 25% rate). Section .27 QBI thresholds 383,900 MFJ / 191,950 other with phase-in amounts 483,900 / 241,950. Section .06 EITC table + $11,600 investment income limit. Section .30 Interest on Education Loans (\u00a7 221): phaseout begins at MAGI $80,000 ($165,000 MFJ) and is fully phased out at $95,000 ($195,000 MFJ); MFS ineligible under \u00a7 221(e)(2)."
     },
     "irs_topic_409": {
       "url": "https://www.irs.gov/taxtopics/tc409",
@@ -89,9 +90,10 @@
       "backs": [
         "2025.credits.eitc",
         "2025.amt",
-        "2025.qbi"
+        "2025.qbi",
+        "2025.student_loan_interest_phaseout"
       ],
-      "note": "sec .06 EITC table + $11,950 investment income limit; sec .11 AMT exemptions 137,000 MFJ / 88,100 single / 68,500 MFS, 28% bracket at 239,100 (119,550 MFS), phaseout thresholds 1,252,700 MFJ / 626,350 other; sec .27 QBI thresholds 394,600 MFJ / 197,300 MFS & all-other, phase-in amounts 494,600 / 247,300 (50,000 single / 100,000 MFJ ranges). MFS = all-other (pre-OBBBA the single threshold applied to MFS)."
+      "note": "sec .06 EITC table + $11,950 investment income limit; sec .11 AMT exemptions 137,000 MFJ / 88,100 single / 68,500 MFS, 28% bracket at 239,100 (119,550 MFS), phaseout thresholds 1,252,700 MFJ / 626,350 other; sec .27 QBI thresholds 394,600 MFJ / 197,300 MFS & all-other, phase-in amounts 494,600 / 247,300 (50,000 single / 100,000 MFJ ranges). MFS = all-other (pre-OBBBA the single threshold applied to MFS). sec .30 Interest on Education Loans (§ 221): phaseout begins at MAGI $85,000 ($170,000 MFJ) and is fully phased out at $100,000 ($200,000 MFJ); MFS ineligible under § 221(e)(2)."
     },
     "rev_proc_2025_32_ty2026": {
       "url": "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
@@ -107,9 +109,10 @@
         "2026.qbi",
         "2026.credits.eitc",
         "2025.section_179",
-        "2026.section_179"
+        "2026.section_179",
+        "2026.student_loan_interest_phaseout"
       ],
-      "note": "sec .03 LTCG; sec .05 CTC 2,200/1,700; sec .06 EITC + 12,200 investment limit; sec .10 AMT (OBBBA phaseout reset to 1,000,000 MFJ / 500,000 other); sec .14 standard deduction 32,200/24,150/16,100 and aged-or-blind 1,650 (2,050 if unmarried and not a surviving spouse); sec .26 QBI thresholds 403,500 MFJ / 201,775 MFS / 201,750 all-other (single/HoH), phase-in 553,500 / 276,775 / 276,750 \u2014 OBBBA \u00a770105 widened the ranges to 150,000 MFJ / 75,000 other; sec .12 \u00a7199A(i) $400 minimum deduction + $1,000 active-QBI floor (OBBBA \u00a770105), effective TY beginning after 12/31/2025."
+      "note": "sec .03 LTCG; sec .05 CTC 2,200/1,700; sec .06 EITC + 12,200 investment limit; sec .10 AMT (OBBBA phaseout reset to 1,000,000 MFJ / 500,000 other); sec .14 standard deduction 32,200/24,150/16,100 and aged-or-blind 1,650 (2,050 if unmarried and not a surviving spouse); sec .26 QBI thresholds 403,500 MFJ / 201,775 MFS / 201,750 all-other (single/HoH), phase-in 553,500 / 276,775 / 276,750 \u2014 OBBBA \u00a770105 widened the ranges to 150,000 MFJ / 75,000 other; sec .12 \u00a7199A(i) $400 minimum deduction + $1,000 active-QBI floor (OBBBA \u00a770105), effective TY beginning after 12/31/2025. sec .29 Interest on Education Loans (\u00a7 221): phaseout begins at MAGI $85,000 ($175,000 MFJ) and is fully phased out at $100,000 ($205,000 MFJ); the single/HoH/QSS band is unchanged from 2025 while the MFJ band rose $5,000; MFS ineligible under \u00a7 221(e)(2)."
     },
     "rev_proc_2022_38_ty2023": {
       "url": "https://www.irs.gov/pub/irs-drop/rp-22-38.pdf",
@@ -120,9 +123,10 @@
         "2023.standard_deductions",
         "2023.ltcg_brackets",
         "2023.section_179",
-        "2023.qbi"
+        "2023.qbi",
+        "2023.student_loan_interest_phaseout"
       ],
-      "note": "sec .03 LTCG 89,250/553,850 MFJ, 44,625/276,900 MFS, 59,750/523,050 HoH, 44,625/492,300 single; sec .15 standard deduction 27,700/20,800/13,850; sec .27 QBI thresholds 364,200 MFJ / 182,100 MFS & all-other, phase-in amounts 464,200 / 232,100 (50,000 single / 100,000 MFJ ranges). MFS = all-other (pre-OBBBA the single threshold applied to MFS)."
+      "note": "sec .03 LTCG 89,250/553,850 MFJ, 44,625/276,900 MFS, 59,750/523,050 HoH, 44,625/492,300 single; sec .15 standard deduction 27,700/20,800/13,850; sec .27 QBI thresholds 364,200 MFJ / 182,100 MFS & all-other, phase-in amounts 464,200 / 232,100 (50,000 single / 100,000 MFJ ranges). MFS = all-other (pre-OBBBA the single threshold applied to MFS). sec .30 Interest on Education Loans (§ 221): phaseout begins at MAGI $75,000 ($155,000 MFJ) and is fully phased out at $90,000 ($185,000 MFJ); MFS ineligible under § 221(e)(2)."
     },
     "schedule_1a_2025": {
       "url": "https://www.irs.gov/pub/irs-pdf/f1040s1a.pdf",
@@ -604,6 +608,12 @@
     "capital_loss_limit_mfs": 1500,
     "educator_expense_limit": 300,
     "student_loan_interest_limit": 2500,
+    "student_loan_interest_phaseout": {
+      "magi_start": 75000,
+      "magi_end": 90000,
+      "magi_start_mfj": 155000,
+      "magi_end_mfj": 185000
+    },
     "charitable_property_agi_limit": 0.3,
     "ltcg_brackets": {
       "single": [
@@ -1112,6 +1122,12 @@
     "capital_loss_limit_mfs": 1500,
     "educator_expense_limit": 300,
     "student_loan_interest_limit": 2500,
+    "student_loan_interest_phaseout": {
+      "magi_start": 80000,
+      "magi_end": 95000,
+      "magi_start_mfj": 165000,
+      "magi_end_mfj": 195000
+    },
     "charitable_property_agi_limit": 0.3,
     "ltcg_brackets": {
       "single": [
@@ -1623,6 +1639,12 @@
     "capital_loss_limit_mfs": 1500,
     "educator_expense_limit": 300,
     "student_loan_interest_limit": 2500,
+    "student_loan_interest_phaseout": {
+      "magi_start": 85000,
+      "magi_end": 100000,
+      "magi_start_mfj": 170000,
+      "magi_end_mfj": 200000
+    },
     "charitable_property_agi_limit": 0.3,
     "ltcg_brackets": {
       "single": [
@@ -2189,6 +2211,12 @@
     "capital_loss_limit_mfs": 1500,
     "educator_expense_limit": 350,
     "student_loan_interest_limit": 2500,
+    "student_loan_interest_phaseout": {
+      "magi_start": 85000,
+      "magi_end": 100000,
+      "magi_start_mfj": 175000,
+      "magi_end_mfj": 205000
+    },
     "charitable_property_agi_limit": 0.3,
     "ltcg_brackets": {
       "single": [
