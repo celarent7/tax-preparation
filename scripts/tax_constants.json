@@ -172,6 +172,29 @@
       ],
       "note": "IRC 904(j) election: a taxpayer may claim the foreign tax credit directly on Schedule 3 (Form 1040), Part I, line 1 without filing Form 1116 when (1) ALL foreign-source gross income is passive-category income, (2) it was reported on a qualified payee statement (1099-DIV Box 7, 1099-INT Box 6, K-1/K-3, etc.), and (3) total creditable foreign taxes are $300 or less ($600 if MFJ). Not available to estates/trusts. The election permanently forfeits FTC carryback/carryforward for that year. $300/$600 limits are statutory and not inflation-indexed, so one shared block serves every year."
     },
+    "ira2022_energy_credits": {
+      "url": "https://www.irs.gov/newsroom/topic-b-frequently-asked-questions-about-income-and-price-limitations-for-the-new-clean-vehicle-credit",
+      "title": "IRA-2022 clean-energy credits — IRC 30D / 25E / 25C / 25D (per-credit IRS sources below)",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2023.energy_credits",
+        "2024.energy_credits",
+        "2025.energy_credits"
+      ],
+      "note": "All figures statutory/non-indexed (identical 2023-2025). §30D new clean vehicle: max $7,500; MAGI caps MFJ/QSS $300k, HoH $225k, single/MFS $150k (lesser of current or prior year, IRC 30D(f)(10)(B)); MSRP $80k (SUV/truck/van) / $55k (other) — IRS Topic B https://www.irs.gov/newsroom/topic-b-frequently-asked-questions-about-income-and-price-limitations-for-the-new-clean-vehicle-credit . §25E previously-owned clean vehicle: lesser of $4,000 or 30% of sale price, sale price <= $25,000; MAGI MFJ/QSS $150k, HoH $112,500, single/MFS $75k (lesser of current/prior year, IRC 25E(b)(2)(B)) — IRS https://www.irs.gov/credits-deductions/used-clean-vehicle-credit . §25C energy-efficient home improvement: 30% of cost; $1,200 general annual limit + separate $2,000 limit for heat pumps/heat-pump water heaters/biomass stoves; sub-caps windows/skylights $600, exterior doors $250/door ($500 total), home energy audit $150 — IRS https://www.irs.gov/credits-deductions/energy-efficient-home-improvement-credit and FS-2025-01 https://www.irs.gov/pub/taxpros/fs-2025-01.pdf . §25D residential clean energy: 30% of qualified expenditure, no annual dollar cap (fuel cells $500/half-kW only); nonrefundable, unused carries forward (IRC 25D(c)) — IRS FS-2025-01 https://www.irs.gov/pub/taxpros/fs-2025-01.pdf ."
+    },
+    "obbba_energy_terminations": {
+      "url": "https://www.irs.gov/newsroom/faqs-for-modification-of-sections-25c-25d-25e-30c-30d-45l-45w-and-179d-under-public-law-119-21-139-stat-72-july-4-2025-commonly-known-as-the-one-big-beautiful-bill",
+      "title": "IRS FAQs — modification of §§25C/25D/25E/30D/45W under Public Law 119-21 (OBBBA)",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2025.energy_credits.new_clean_vehicle_30d.terminated_after",
+        "2025.energy_credits.used_clean_vehicle_25e.terminated_after",
+        "2025.energy_credits.home_improvement_25c.terminated_after",
+        "2025.energy_credits.residential_clean_energy_25d.terminated_after"
+      ],
+      "note": "OBBBA (Pub. L. 119-21) terminated the clean-energy credits on an accelerated schedule: §§30D/25E/45W — no credit for vehicles acquired after 2025-09-30 ('acquired' = written binding contract + payment, incl. a nominal down payment or trade-in, on or before that date); §25C — property placed in service after 2025-12-31; §25D — expenditures made after 2025-12-31. 2023 and 2024 blocks carry NO terminated_after key (credits ran all year pre-OBBBA); 2026 has no energy_credits block at all. Same source cited by the termination table in references/credits_guide.md."
+    },
     "irs_niit": {
       "url": "https://www.irs.gov/individuals/net-investment-income-tax",
       "title": "Net Investment Income Tax (IRC 1411)",
@@ -883,6 +906,31 @@
     },
     "bonus_depreciation_rate": {
       "rate": 0.8
+    },
+    "energy_credits": {
+      "new_clean_vehicle_30d": {
+        "max": 7500,
+        "magi_limit": {"married_jointly": 300000, "qualifying_surviving_spouse": 300000,
+                       "head_of_household": 225000, "single": 150000, "married_separately": 150000},
+        "msrp_limit_suv_truck_van": 80000,
+        "msrp_limit_other": 55000
+      },
+      "used_clean_vehicle_25e": {
+        "max": 4000,
+        "pct_of_price": 0.30,
+        "price_limit": 25000,
+        "magi_limit": {"married_jointly": 150000, "qualifying_surviving_spouse": 150000,
+                       "head_of_household": 112500, "single": 75000, "married_separately": 75000}
+      },
+      "home_improvement_25c": {
+        "pct": 0.30,
+        "annual_limit": 1200,
+        "heat_pump_limit": 2000,
+        "windows_limit": 600,
+        "doors_limit": 500,
+        "audit_limit": 150
+      },
+      "residential_clean_energy_25d": {"pct": 0.30}
     }
   },
   "2024": {
@@ -1364,6 +1412,31 @@
     },
     "bonus_depreciation_rate": {
       "rate": 0.6
+    },
+    "energy_credits": {
+      "new_clean_vehicle_30d": {
+        "max": 7500,
+        "magi_limit": {"married_jointly": 300000, "qualifying_surviving_spouse": 300000,
+                       "head_of_household": 225000, "single": 150000, "married_separately": 150000},
+        "msrp_limit_suv_truck_van": 80000,
+        "msrp_limit_other": 55000
+      },
+      "used_clean_vehicle_25e": {
+        "max": 4000,
+        "pct_of_price": 0.30,
+        "price_limit": 25000,
+        "magi_limit": {"married_jointly": 150000, "qualifying_surviving_spouse": 150000,
+                       "head_of_household": 112500, "single": 75000, "married_separately": 75000}
+      },
+      "home_improvement_25c": {
+        "pct": 0.30,
+        "annual_limit": 1200,
+        "heat_pump_limit": 2000,
+        "windows_limit": 600,
+        "doors_limit": 500,
+        "audit_limit": 150
+      },
+      "residential_clean_energy_25d": {"pct": 0.30}
     }
   },
   "2025": {
@@ -1902,6 +1975,34 @@
       "rate_pre_cutoff": 0.4,
       "rate_post_cutoff": 1.0,
       "cutoff_acquired_after": "2025-01-19"
+    },
+    "energy_credits": {
+      "new_clean_vehicle_30d": {
+        "max": 7500,
+        "magi_limit": {"married_jointly": 300000, "qualifying_surviving_spouse": 300000,
+                       "head_of_household": 225000, "single": 150000, "married_separately": 150000},
+        "msrp_limit_suv_truck_van": 80000,
+        "msrp_limit_other": 55000,
+        "terminated_after": "2025-09-30"
+      },
+      "used_clean_vehicle_25e": {
+        "max": 4000,
+        "pct_of_price": 0.30,
+        "price_limit": 25000,
+        "magi_limit": {"married_jointly": 150000, "qualifying_surviving_spouse": 150000,
+                       "head_of_household": 112500, "single": 75000, "married_separately": 75000},
+        "terminated_after": "2025-09-30"
+      },
+      "home_improvement_25c": {
+        "pct": 0.30,
+        "annual_limit": 1200,
+        "heat_pump_limit": 2000,
+        "windows_limit": 600,
+        "doors_limit": 500,
+        "audit_limit": 150,
+        "terminated_after": "2025-12-31"
+      },
+      "residential_clean_energy_25d": {"pct": 0.30, "terminated_after": "2025-12-31"}
     }
   },
   "2026": {

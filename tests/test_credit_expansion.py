@@ -80,3 +80,19 @@ def test_ftc_over_limit_flags_form_1116(data_2025):
                              _ftc_params(data_2025))
     assert not r.eligible and r.amount == 0
     assert any("1116" in n for n in r.notes)
+
+
+def test_energy_credits_present_2023_2025_absent_2026():
+    for year in ("2023", "2024", "2025"):
+        assert "energy_credits" in load_tax_constants(year), year
+    assert "energy_credits" not in load_tax_constants("2026")
+
+
+def test_energy_termination_dates_only_in_2025():
+    for year in ("2023", "2024"):
+        ec = load_tax_constants(year)["energy_credits"]
+        for block in ec.values():
+            assert "terminated_after" not in block, (year, block)
+    ec25 = load_tax_constants("2025")["energy_credits"]
+    assert ec25["new_clean_vehicle_30d"]["terminated_after"] == "2025-09-30"
+    assert ec25["home_improvement_25c"]["terminated_after"] == "2025-12-31"
