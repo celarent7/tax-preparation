@@ -63,12 +63,59 @@ SCRIPTS = os.path.join(ROOT, "scripts")
 FIXTURE = os.path.join(ROOT, "examples", "test_draft_review.json")
 sys.path.insert(0, SCRIPTS)
 
+from credit_eligibility_checker import get_credit_params  # noqa: E402
 from estimated_tax_calculator import calculate_se_tax  # noqa: E402
 from tax_calculator import calculate_tax  # noqa: E402
 from utils import load_tax_constants  # noqa: E402
 import qbi_calculator  # noqa: E402
+from draft_reviewer import ReviewContext, Severity, check_excess_sdi  # noqa: E402
 
 _TAX_DATA_2025 = load_tax_constants("2025")
+
+# Capped-2023-shape SDI config (synthetic — CA 2023 constants are not yet in the
+# constants file; see plan C3). Used to exercise the capped-year credit path
+# without depending on data that does not exist yet.
+CAPPED_CFG = {"rate": 0.009, "wage_cap": 153164,
+              "excess_credit_multiple_employers": True}
+
+
+def _review_ctx(year="2023"):
+    """Build a ReviewContext for direct check_* calls.
+
+    Only `year` and `exact_tolerance` are read by check_excess_sdi; the remaining
+    fields are populated from the real 2025 constants so the dataclass is valid.
+    """
+    td = _TAX_DATA_2025
+    return ReviewContext(
+        year=year,
+        tax_brackets=td["tax_brackets_processed"],
+        ltcg_brackets=td["ltcg_brackets_processed"],
+        standard_deductions=td["standard_deductions"],
+        additional_deductions=td["additional_deduction_65_blind"],
+        ctc_params=get_credit_params(td)["child_tax_credit"],
+        salt_constants=td["salt"],
+        capital_loss_limit=td["capital_loss_limit"],
+        capital_loss_limit_mfs=td["capital_loss_limit_mfs"],
+        ss_wage_base=td["se_tax"]["ss_wage_base"],
+        se_tax_factor=td["se_tax"]["se_adjustment_factor"],
+        se_ss_rate=td["se_tax"]["ss_rate"],
+        se_medicare_rate=td["se_tax"]["medicare_rate"],
+        add_medicare_threshold_single=td["se_tax"]["additional_medicare_threshold_single"],
+        add_medicare_threshold_mfj=td["se_tax"]["additional_medicare_threshold_married"],
+        hsa_limit_self=td["retirement_limits"]["hsa"]["single"],
+        hsa_limit_family=td["retirement_limits"]["hsa"]["family"],
+        charitable_cash_limit=td["credits"]["charitable_cash_limit"],
+        charitable_property_limit=td["charitable_property_agi_limit"],
+        educator_limit=td["educator_expense_limit"],
+        student_loan_limit=td["student_loan_interest_limit"],
+        year_constants=td,
+    )
+
+
+@pytest.fixture
+def ca_2023_style_context():
+    """A ReviewContext pinned to tax year 2023 (a capped SDI year)."""
+    return _review_ctx("2023")
 
 # Hand-computed expected values from the worksheet above.
 EXPECTED_SE_TAX = 5651.82
@@ -469,3 +516,64 @@ def test_gate_g4_ca_state_column_qbi_flagged(tmp_path):
     line13_errs = [f for f in errors(findings)
                    if f["category"] == "QBI" and "Line 13" in f["field"]]
     assert line13_errs == []
+
+
+# ---------------------------------------------------------------------------
+# C1 — check_excess_sdi: Form 540 line 74 for multi-employer CA filers
+# ---------------------------------------------------------------------------
+#
+# The credit only exists for a capped SDI year with 2+ employers. CA 2023
+# constants are not in the constants file yet (plan C3), so the capped tests
+# inject CAPPED_CFG directly via the check's injectable `sdi_config` parameter;
+# the uncapped-2025 test exercises the default resolution path against the real
+# CA 2025 sdi block (wage_cap: null).
+
+def test_excess_sdi_missing_from_draft_is_error(ca_2023_style_context):
+    """Two employers over the capped-year max, draft line 74 empty -> ERROR."""
+    computed = {"state": "CA", "sdi_by_employer": [900.0, 900.0]}
+    draft = {"filing_status": "mfj",
+             "form_540": {"line_74_excess_sdi": 0}}
+    findings = check_excess_sdi(draft, computed, ca_2023_style_context,
+                                sdi_config=CAPPED_CFG)
+    assert any(f.severity == Severity.ERROR and "line 74" in f.message.lower()
+               for f in findings), (
+        "expected an ERROR naming line 74; got: "
+        + "; ".join(f"{f.severity.name}: {f.message}" for f in findings))
+
+
+def test_excess_sdi_correct_on_draft_is_ok(ca_2023_style_context):
+    """Draft carries the computed credit -> single OK finding, no errors."""
+    computed = {"state": "CA", "sdi_by_employer": [900.0, 900.0]}
+    # credit = 1800 - 0.009 x 153,164 = 1800 - 1378.48 = 421.52
+    draft = {"filing_status": "mfj",
+             "form_540": {"line_74_excess_sdi": 421.52}}
+    findings = check_excess_sdi(draft, computed, ca_2023_style_context,
+                                sdi_config=CAPPED_CFG)
+    assert not any(f.severity == Severity.ERROR for f in findings)
+    ok = [f for f in findings if f.severity == Severity.OK]
+    assert ok and "line 74" in ok[0].message.lower()
+
+
+def test_uncapped_2025_two_employers_info_only(ca_2023_style_context):
+    """CA 2025 (no cap): no ERROR ever; at most an INFO explaining why.
+
+    Uses the default sdi_config resolution (load_state_constants CA 2025), which
+    returns wage_cap: null — the semantic null must be honored, never raised.
+    """
+    computed = {"state": "CA", "sdi_by_employer": [3000.0, 3000.0]}
+    draft = {"filing_status": "mfj",
+             "form_540": {"line_74_excess_sdi": 0}}
+    ctx = _review_ctx("2025")
+    findings = check_excess_sdi(draft, computed, ctx)
+    assert not any(f.severity == Severity.ERROR for f in findings)
+    assert all(f.severity == Severity.INFO for f in findings)
+    if findings:
+        assert "no wage cap" in findings[0].message.lower()
+
+
+def test_non_ca_returns_no_findings(ca_2023_style_context):
+    """A non-CA return has no excess-SDI check to perform."""
+    computed = {"state": "TX", "sdi_by_employer": [500.0, 500.0]}
+    draft = {"filing_status": "mfj",
+             "form_540": {"line_74_excess_sdi": 0}}
+    assert check_excess_sdi(draft, computed, ca_2023_style_context) == []

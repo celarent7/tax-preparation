@@ -24,7 +24,9 @@ from credit_eligibility_checker import calculate_child_tax_credit, get_credit_pa
 from deduction_analyzer import resolve_salt_cap
 from tax_calculator import calculate_preferential_tax, calculate_tax
 from utils import (
+    excess_sdi_credit,
     get_status_value,
+    load_state_constants,
     load_tax_constants,
     make_year_arg,
     normalize_filing_status,
@@ -520,11 +522,58 @@ def check_qbi(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
     return findings
 
 
+def check_excess_sdi(draft: Dict, computed: Dict, ctx: ReviewContext,
+                     sdi_config: Optional[Dict] = None) -> List[Finding]:
+    """C1: verify the Form 540 line 74 excess-SDI credit for CA multi-W-2 filers.
+
+    The credit exists only for a capped SDI year with two or more employers
+    (SB 951 removed the cap starting 2024, so 2024+ cannot have an excess). See
+    `utils.excess_sdi_credit` for the cap-driven computation.
+
+    `sdi_config` is injectable for tests; by default it is resolved from the
+    state constants for ctx.year. Years where CA data is absent produce no
+    findings (the reviewer must not crash on a federal-only review).
+    """
+    if str(computed.get("state", "")).upper() != "CA":
+        return []
+    sdi_by_employer = computed.get("sdi_by_employer") or []
+    if len([x for x in sdi_by_employer if float(x) > 0]) < 2:
+        return []
+
+    if sdi_config is None:
+        try:
+            sdi_config = load_state_constants("CA", ctx.year)["sdi"]
+        except ValueError:
+            return []  # CA data not available for this year — nothing to check
+
+    result = excess_sdi_credit(sdi_by_employer, sdi_config)
+    draft_credit = float(draft.get("form_540", {}).get("line_74_excess_sdi", 0) or 0)
+
+    if not result["possible"]:
+        if sdi_config.get("wage_cap") is None:
+            return [Finding(Severity.INFO, "california", "line_74_excess_sdi",
+                            result["note"])]
+        return []
+    ok, diff = compare_values(draft_credit, result["credit"], ctx.exact_tolerance)
+    if ok:
+        return [_ok("california", "line_74_excess_sdi",
+                    f"Excess-SDI credit ${result['credit']:,.2f} present on line 74.",
+                    draft_credit, result["credit"])]
+    return [Finding(Severity.ERROR, "california", "line_74_excess_sdi",
+                    (f"Draft misses ${result['credit'] - draft_credit:,.2f} of "
+                     f"excess-SDI credit on Form 540 line 74 "
+                     f"({len(sdi_by_employer)} employers withheld "
+                     f"${result['total_withheld']:,.2f} vs the "
+                     f"${result['max_required']:,.2f} per-year maximum)."),
+                    draft_credit, result["credit"], diff)]
+
+
 def run_review(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
     all_findings = []
     for check in (check_income, check_agi, check_deductions, check_tax,
                   check_se_tax, check_total_tax, check_capital_gains,
-                  check_withholding, check_salt, check_credits, check_qbi):
+                  check_withholding, check_salt, check_credits, check_qbi,
+                  check_excess_sdi):
         all_findings.extend(check(draft, computed, ctx))
     return all_findings
 
