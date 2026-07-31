@@ -477,3 +477,58 @@ def test_A10_year_gated_rules_FIRE_inside_window(rule_id, profile, year):
     """A10 sanity: each rule DOES fire in its in-window position, proving the
     out-of-window [] above is a scoped gate, not a blanket suppression."""
     assert len(_ops(rule_id, profile, year=year)) >= 1
+
+
+# ---------------------------------------------------------------------------
+# A11 — M12: home-office deduction (simplified vs actual-expense method)
+# ---------------------------------------------------------------------------
+
+
+def test_A11_home_office_simplified_vs_actual():
+    """A11: simplified = rate x min(sqft, cap); actual = business% x expenses;
+    the larger wins and the recapture caveat is named in the assumptions.
+
+    simplified: 200 sq ft x $5 = $1,000; actual: 10% x $30,000 = $3,000 ->
+    actual wins; deduction $3,000 (under the $80,000 SE-profit cap, 280A(c)(5)).
+    """
+    profile = _base_profile(filing_status="single", se_net_profit=80000,
+                            taxable_income=60000, home_office_sqft=200,
+                            home_total_sqft=2000, home_office_actual_expenses=30000)
+    from savings_rules.self_employment import rule_home_office
+    opps = rule_home_office(profile, TD[2025])
+    assert len(opps) == 1
+    o = opps[0]
+    # simplified: 200 x $5 = $1,000; actual: 10% x $30,000 = $3,000 -> actual wins
+    assert o.deduction_amount == 3000
+    assert "recapture" in " ".join(o.assumptions).lower()
+
+
+def test_A11b_simplified_wins_and_sqft_capped():
+    """A11b: simplified min(450, 300) x $5 = $1,500 (sq ft capped at 300);
+    actual 15% x $8,000 = $1,200 -> simplified wins."""
+    profile = _base_profile(filing_status="single", se_net_profit=80000,
+                           taxable_income=60000, home_office_sqft=450,
+                           home_total_sqft=3000, home_office_actual_expenses=8000)
+    from savings_rules.self_employment import rule_home_office
+    opps = rule_home_office(profile, TD[2025])
+    assert opps[0].deduction_amount == 1500
+
+
+def test_A11c_no_se_profit_no_rule():
+    """A11c: no SE profit -> no home-office rule fires."""
+    profile = _base_profile(se_net_profit=0, home_office_sqft=200,
+                           home_total_sqft=2000)
+    from savings_rules.self_employment import rule_home_office
+    assert rule_home_office(profile, TD[2025]) == []
+
+
+def test_A11d_deduction_capped_at_se_profit():
+    """A11d: IRC 280A(c)(5) — the deduction cannot exceed Schedule C income.
+    actual 20% x $20,000 = $4,000 would win, but SE profit is only $1,000 ->
+    deduction capped at $1,000."""
+    profile = _base_profile(filing_status="single", se_net_profit=1000,
+                           taxable_income=40000, home_office_sqft=300,
+                           home_total_sqft=1500, home_office_actual_expenses=20000)
+    from savings_rules.self_employment import rule_home_office
+    o = rule_home_office(profile, TD[2025])[0]
+    assert o.deduction_amount == 1000

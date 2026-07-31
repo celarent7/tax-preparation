@@ -195,3 +195,71 @@ def rule_section179_bonus(profile: Dict[str, Any],
         assumptions=assumptions,
         deduction_amount=s179_deduction,
     )]
+
+
+# ---------------------------------------------------------------------------
+# M12 — Home-office deduction (simplified vs actual-expense method)
+# ---------------------------------------------------------------------------
+
+
+def rule_home_office(profile: Dict[str, Any],
+                     tax_data: Dict[str, Any]) -> List[TaxOpportunity]:
+    """M12: compare the simplified method (rate x capped sq ft, Rev. Proc.
+    2013-13) against the actual-expense method (business-use % x actual home
+    expenses, Form 8829) and recommend the larger. Both are limited to
+    Schedule C net income (IRC 280A(c)(5)); the simplified method has no
+    depreciation recapture and no expense carryover, the actual method has both.
+    """
+    se_profit = float(profile.get("se_net_profit", 0) or 0)
+    sqft = float(profile.get("home_office_sqft", 0) or 0)
+    total_sqft = float(profile.get("home_total_sqft", 0) or 0)
+    actual_expenses = float(profile.get("home_office_actual_expenses", 0) or 0)
+    if se_profit <= 0 or sqft <= 0:
+        return []
+
+    rate = constant(tax_data, "home_office_simplified_rate")
+    max_sqft = constant(tax_data, "home_office_max_sqft")
+    simplified = min(sqft, max_sqft) * rate
+
+    business_pct = (sqft / total_sqft) if total_sqft > 0 else 0.0
+    actual = business_pct * actual_expenses
+
+    method = "actual-expense (Form 8829)" if actual > simplified else "simplified"
+    deduction = min(max(simplified, actual), se_profit)  # 280A(c)(5) income limit
+
+    fs = filing_status_of(profile)
+    marginal = federal_ordinary_marginal_rate(tax_data, fs, profile["taxable_income"])
+    # Home-office is a Schedule C deduction: it reduces income AND SE tax.
+    from estimated_tax_calculator import calculate_se_tax
+    se_before = calculate_se_tax(se_profit, tax_data["se_tax"])["total"]
+    se_after = calculate_se_tax(max(0.0, se_profit - deduction), tax_data["se_tax"])["total"]
+    savings_federal = round(deduction * marginal + (se_before - se_after), 2)
+
+    assumptions = [
+        f"Simplified: {min(sqft, max_sqft):,.0f} sq ft x ${rate:.2f} = ${simplified:,.0f} "
+        f"(cap {max_sqft:,.0f} sq ft); actual: {business_pct:.1%} x "
+        f"${actual_expenses:,.0f} = ${actual:,.0f}.",
+        "Both methods are limited to Schedule C net income (IRC 280A(c)(5)).",
+        "Actual-expense method includes depreciation, which is RECAPTURED as "
+        "ordinary income on a later home sale; the simplified method is not.",
+        "Space must be used regularly and EXCLUSIVELY for the business.",
+    ]
+    return [TaxOpportunity(
+        category="Self-Employment",
+        name="Home Office Deduction",
+        description=(f"Deduct ${deduction:,.0f} for the home office using the "
+                    f"{method} method."),
+        potential_savings=f"~${savings_federal:,.0f} federal (income + SE tax)",
+        priority=Priority.MEDIUM,
+        action_required=("Simplified: enter on Schedule C line 30 directly. "
+                         "Actual: file Form 8829."),
+        documentation_needed=["Square-footage measurement", "Form 8829 (actual method)",
+                              "Home expense records (actual method)"],
+        rule_id="home_office",
+        savings_federal=savings_federal,
+        savings_state=None,
+        state_caveat=None,
+        deadline="By the tax filing deadline (claimed on Schedule C).",
+        assumptions=assumptions,
+        deduction_amount=round(deduction, 2),
+    )]

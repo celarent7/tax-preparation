@@ -17,7 +17,7 @@ from .retirement import (
 )
 from .harvesting import rule_tax_loss_harvesting
 from .charitable import rule_appreciated_stock_donation, rule_qcd
-from .self_employment import rule_se_health_insurance, rule_section179_bonus
+from .self_employment import rule_se_health_insurance, rule_section179_bonus, rule_home_office
 from .obbba import rule_senior_bonus, rule_tips_overtime
 
 #: Stable rule_id -> rule function. The finder filters on rule_id via --rules.
@@ -31,6 +31,7 @@ RULES: Dict[str, Callable[[Dict[str, Any], Dict[str, Any]], List[TaxOpportunity]
     "qcd": rule_qcd,
     "se_health_insurance": rule_se_health_insurance,
     "section179_bonus": rule_section179_bonus,
+    "home_office": rule_home_office,
     "senior_bonus": rule_senior_bonus,
     "tips_deduction": rule_tips_overtime,  # M11 rule_id also covers overtime
 }
