@@ -105,6 +105,10 @@ Compare standard deduction against itemized total:
 ```bash
 python ./scripts/deduction_analyzer.py --agi <confirmed_agi> --mortgage-interest <amount> --charitable-cash <amount> --year 2025
 ```
+Add `--student-loan-interest <amount>` when the taxpayer paid qualified student-loan
+interest (1098-E): it surfaces the above-the-line IRC 221 deduction with its MAGI
+phase-out (separate from the itemize-vs-standard decision; MFS filers are
+ineligible).
 
 ### Step 3.5: State Layer
 

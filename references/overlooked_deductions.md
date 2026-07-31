@@ -18,9 +18,20 @@ Comprehensive reference for deductions and credits that taxpayers frequently mis
 
 ### Student Loan Interest
 **Who misses it**: Parents paying for children's loans
-- Up to $2,500 deduction
+- Up to $2,500 above-the-line deduction (Schedule 1, line 21; IRC 221)
 - Must be legally obligated OR paid for dependent
-- Phaseout: $75k-$90k (single), $155k-$185k (MFJ)
+- **Married filing separately is statutorily ineligible** (IRC 221(e)(2)) —
+  $0 regardless of MAGI
+- MAGI phase-out (deduction prorated linearly across the band, then $0 at the
+  top end). Single / HOH / QSS share one band; MFJ has its own:
+
+  | Tax Year | Single / HOH / QSS | MFJ | Source |
+  |---|---|---|---|
+  | 2023 | $75,000 – $90,000 | $155,000 – $185,000 | Rev. Proc. 2022-38 §3.30 |
+  | 2024 | $80,000 – $95,000 | $165,000 – $195,000 | Rev. Proc. 2023-34 §3.30 |
+  | 2025 | $85,000 – $100,000 | $170,000 – $200,000 | Rev. Proc. 2024-40 §3.30 |
+  | 2026 | $85,000 – $100,000 | $175,000 – $205,000 | Rev. Proc. 2025-32 §3.29 |
+
 - **Check**: 1098-E from lender, or reconstruct from statements
 
 ### Educator Expenses

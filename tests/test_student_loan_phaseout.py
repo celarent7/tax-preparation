@@ -90,3 +90,64 @@ def test_null_band_synthetic_raises():
     }
     with pytest.raises(UnverifiedConstantError):
         student_loan_interest_deduction(2500, 90000, "single", data)
+
+
+# ---------------------------------------------------------------------------
+# CLI surfacing (subprocess, same pattern as tests/test_capital_loss.py)
+# ---------------------------------------------------------------------------
+
+import json  # noqa: E402
+import subprocess  # noqa: E402
+
+SCRIPT = os.path.join(os.path.dirname(__file__), "..", "scripts",
+                      "deduction_analyzer.py")
+
+
+def _run_cli(*args):
+    return subprocess.run(
+        [sys.executable, SCRIPT, *args, "--output-format", "json"],
+        capture_output=True, text=True)
+
+
+def test_cli_mid_band_prorated():
+    """B3.3: the CLI emits the student-loan block with the prorated deduction."""
+    p = _run_cli("--agi", "92500", "--filing-status", "single",
+                 "--year", "2025", "--student-loan-interest", "2500")
+    assert p.returncode == 0, p.stdout + p.stderr
+    out = json.loads(p.stdout)
+    assert out["student_loan_interest"]["deduction"] == 1250
+
+
+def test_cli_block_absent_without_flag():
+    """The student-loan block only appears when interest is reported."""
+    p = _run_cli("--agi", "92500", "--filing-status", "single",
+                 "--year", "2025")
+    assert p.returncode == 0, p.stdout + p.stderr
+    out = json.loads(p.stdout)
+    assert "student_loan_interest" not in out
+
+
+def test_cli_total_itemized_unchanged_by_flag():
+    """Acceptance #5: the flag does not alter the itemize-vs-standard comparison.
+
+    `total_itemized`, `standard_deduction`, and `comparison` must be byte-for-byte
+    identical with and without `--student-loan-interest` (the deduction is
+    above-the-line, separate from the itemized tally).
+    """
+    base = _run_cli("--agi", "120000", "--filing-status", "mfj",
+                    "--year", "2025",
+                    "--property-tax", "8000", "--state-income-tax", "9000",
+                    "--mortgage-interest", "6000", "--charitable-cash", "2000")
+    with_flag = _run_cli("--agi", "120000", "--filing-status", "mfj",
+                         "--year", "2025",
+                         "--property-tax", "8000", "--state-income-tax", "9000",
+                         "--mortgage-interest", "6000", "--charitable-cash", "2000",
+                         "--student-loan-interest", "2500")
+    assert base.returncode == 0 and with_flag.returncode == 0
+    b = json.loads(base.stdout)
+    w = json.loads(with_flag.stdout)
+    assert b["itemized_breakdown"]["total_itemized"] == \
+        w["itemized_breakdown"]["total_itemized"]
+    assert b["standard_deduction"] == w["standard_deduction"]
+    assert b["comparison"] == w["comparison"]
+    assert "student_loan_interest" in w and "student_loan_interest" not in b

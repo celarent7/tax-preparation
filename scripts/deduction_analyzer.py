@@ -296,6 +296,9 @@ def main():
                         help="Cash gifts to 30%%-limit organizations (private foundations)")
     parser.add_argument("--charitable-property-30-org", type=float, default=0,
                         help="Appreciated property gifts to 30%%-limit organizations")
+    parser.add_argument("--student-loan-interest", type=float, default=0,
+                        help="Qualified student-loan interest paid (above-the-line "
+                             "Schedule 1 deduction, IRC 221; phases out by MAGI)")
     parser.add_argument("--age-65-plus", type=int, default=0)
     parser.add_argument("--blind", type=int, default=0)
     parser.add_argument("--state", type=str, default=None,
@@ -308,7 +311,7 @@ def main():
     financial_inputs = [
         args.agi, args.property_tax, args.state_income_tax, args.state_sales_tax,
         args.mortgage_interest, args.acquisition_debt, args.charitable_cash,
-        args.charitable_property, args.medical_expenses
+        args.charitable_property, args.medical_expenses, args.student_loan_interest
     ]
     if any(val < 0 for val in financial_inputs):
         print("Error: All financial input values must be non-negative.")
@@ -427,6 +430,14 @@ def main():
                      f"${phaseout_start:,.0f}."),
         }
 
+    # --- Student-loan interest (above-the-line, Schedule 1, IRC 221) — like
+    # the OBBBA senior bonus this is NOT part of the standard-vs-itemized
+    # choice; it is a separate above-the-line deduction, surfaced only when
+    # the user reports interest paid. ---
+    if args.student_loan_interest > 0:
+        result["student_loan_interest"] = student_loan_interest_deduction(
+            args.student_loan_interest, magi, args.filing_status, tax_data)
+
     # --- State comparison: CA itemize-vs-standard is a SEPARATE decision (C4) ---
     if args.state and args.state.upper() == "CA":
         try:
@@ -517,6 +528,21 @@ def main():
                 print(f"  Deduction: ${sb['deduction_amount']:,.0f} "
                       f"({sb['qualifying_persons']} qualifying person(s), MAGI ${sb['magi']:,.0f}; "
                       f"phases out at {sb['phaseout_rate']:.0%}/$ over ${sb['phaseout_start']:,.0f}).")
+            print("  Note: separate from the standard-vs-itemized decision above.")
+
+        if "student_loan_interest" in result:
+            sli = result["student_loan_interest"]
+            print("\n--- Student-Loan Interest (above-the-line, Schedule 1) ---")
+            if not sli["eligible"]:
+                print(f"  $0 — {sli['note']}")
+            elif sli["fully_phased_out"]:
+                print(f"  $0 — fully phased out ({sli['note']})")
+            elif sli["phaseout_applied"]:
+                print(f"  Deduction: ${sli['deduction']:,.2f} of up to ${sli['limit']:,.0f} "
+                      f"interest paid — {sli['note']}")
+            else:
+                print(f"  Deduction: ${sli['deduction']:,.2f} of up to ${sli['limit']:,.0f} "
+                      f"interest paid — {sli['note']}")
             print("  Note: separate from the standard-vs-itemized decision above.")
 
         if "california" in result:
