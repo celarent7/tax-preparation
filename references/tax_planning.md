@@ -2,6 +2,62 @@
 
 Multi-year planning, estimated payments, state tax guidance, and life event tax strategies.
 
+## Savings & Optimization Engine (`tax_savings_finder.py`)
+
+`tax_savings_finder.py` is the proactive optimizer: it reads a single taxpayer
+profile and emits ranked savings opportunities, each with a dollar estimate,
+priority, deadline, and any state nonconformity caveat. Every statutory figure
+comes from `scripts/tax_constants.json` via `utils.get_constant` — no
+hard-coded limits — and every marginal-rate estimate reuses the existing
+`tax_calculator` engines (no duplicated bracket walkers).
+
+### Canonical profile schema
+
+The finder takes a **flat** JSON profile (the legacy nested shape still loads,
+with a `DeprecationWarning`, via an adapter in `savings_profile.py`). Unknown
+keys are **rejected with a nearest-key suggestion** rather than silently
+defaulting to zero — a typo like `"aggi"` raises an error pointing at `"agi"`.
+Required: `filing_status`. All other fields are optional with documented
+defaults. The full field list lives in `scripts/savings_profile.py`
+(`CANONICAL_FIELDS`); a worked example is `examples/sample_tax_scenario.json`.
+
+```bash
+python ./scripts/tax_savings_finder.py --data <profile.json> --year 2025 \
+    --output-format json
+# Optional: run a subset of rules, or override the profile's state
+python ./scripts/tax_savings_finder.py --data <profile.json> --year 2025 \
+    --rules backdoor_roth,tlh --state CA
+```
+
+### Rule families (M1–M11)
+
+Each rule is a pure function in `scripts/savings_rules/`, registered by `rule_id`
+in `savings_rules/__init__.py`. Year-gated rules (OBBBA M10/M11) return
+nothing — and never crash — outside their statutory window.
+
+| ID | Rule | Logic (figures from `tax_constants.json`) |
+|----|------|------------------------------------------|
+| M1 | `k401k_headroom` | 401(k) elective-deferral headroom, per person (MFJ spouse computed independently). Age-banded catch-up: 50+ standard catch-up, 60–63 SECURE 2.0 super catch-up. |
+| M2 | `backdoor_roth` | Nondeductible Trad IRA → Form 8606 → Roth conversion. Fires only at/above the Roth MAGI phase-out **start** (below it, a direct Roth is better). **Mandatory pro-rata warning** (IRC 408(d)(2)/(8)) when a pre-tax Trad IRA balance exists: taxable fraction = pretax / (pretax + contribution). No current-year deduction claimed. |
+| M3 | `mega_backdoor_roth` | After-tax 401(k) contributions up to the §415(c) total-additions cap, less all employee + employer + after-tax additions. Downgraded to LOW when the plan disallows in-service rollover. |
+| M4 | `tlh` | Tax-loss harvesting, quantified against the realized position via the exact §1222 netting ladder (net within class → cross-net → $3,000/$1,500-MFS ordinary offset → carryforward retaining character). Federal savings split by ordinary vs LTCG rate. |
+| M5 | `appreciated_stock_donation` | Donate appreciated long-term stock vs cash: 30%-AGI FMV deduction **plus** the avoided LTCG + NIIT + (CA) gain tax. Short-term holdings are limited to **basis** (warning fires). Profiles that won't itemize get a **bunching** recommendation instead of a false savings claim. |
+| M6 | `qcd` | Qualified Charitable Distribution for those 70½+: up to the indexed cap direct from an IRA to charity, excluded from AGI and counting toward the RMD. |
+| M7 | `se_health_insurance` | Above-the-line SE health insurance deduction = min(premiums, net SE profit − ½ SE tax), reusing `calculate_se_tax` so it matches `estimated_tax_calculator.py`. |
+| M8 | `section179_bonus` | §179 expensing (limit + phase-out from constants) and bonus depreciation. The 2025 OBBBA cutover (40% before / 100% after 2025-01-19) surfaces **both rates** and asks for an in-service date rather than guessing. CA: no bonus-depreciation conformity. |
+| M9 | `hsa` | HSA headroom, split into federal and state savings. **CA does not conform**: contributions are added back on Schedule CA and earnings are CA-taxable → state savings $0 with a mandatory caveat. |
+| M10 | `senior_bonus` | OBBBA senior bonus (2025–2028): $6,000 per qualifying 65+ person, phased out at 6%/dollar over $75,000 (single) / $150,000 (MFJ). The same shared helper backs `deduction_analyzer.py --age-65-plus`, so the two tools agree to the dollar. CA add-back. |
+| M11 | `tips_deduction` / `overtime_deduction` | OBBBA above-the-line tips and overtime deductions (2025–2028), capped and phased down per $1,000 of MAGI over the threshold. CA add-back. |
+
+### California nonconformity
+
+When `state == "CA"`, rules that depend on a federal provision California does
+not conform to attach a `state_caveat` and zero out state savings: HSA
+deductibility (M9), bonus depreciation (M8), preferential capital-gains rates
+(M4/M5), and the OBBBA tips/overtime/senior deductions (M10/M11). The
+nonconformity flags live under `states.CA.<year>.nonconformity` in
+`tax_constants.json`.
+
 ## Year-End Planning Opportunities
 
 ### Deduction Timing Strategies

@@ -14,7 +14,7 @@ description: >
   results than general knowledge alone.
 allowed-tools: Read, Bash, WebSearch, WebFetch, Grep, Glob, Task, Skill, Write, AskUserQuestion
 metadata:
-  version: 3.0.0
+  version: 3.1.0
   last-updated: 2026-07-30
   target-users: individuals, families, self-employed
   tax-year: 2025
@@ -145,6 +145,7 @@ python ./scripts/rsu_calculator.py basis --shares-vested <shares> --fmv <fmv>
 | `./scripts/rsu_calculator.py` | RSU cost basis, withholding, and 8949 adjustments |
 | `./scripts/espp_calculator.py` | ESPP disposition and cost basis analysis |
 | `./scripts/draft_reviewer.py` | Cross-check draft returns against verified data |
+| `./scripts/tax_savings_finder.py` | Proactive savings engine — reads a flat taxpayer profile and emits ranked opportunities (M1–M11: 401(k) headroom, backdoor Roth + pro-rata, mega backdoor, tax-loss harvesting, appreciated-stock donation, QCD, SE health insurance, §179/bonus, HSA, OBBBA senior bonus, tips/overtime) with dollar estimates, deadlines, and CA nonconformity caveats. See `./references/tax_planning.md`. |
 
 ---
 
