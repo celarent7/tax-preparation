@@ -436,3 +436,37 @@ def load_state_constants(state: str, year: str) -> Dict[str, Any]:
     year_block["state"] = code
     year_block["year"] = year
     return year_block
+
+
+def excess_sdi_credit(sdi_by_employer, sdi_config):
+    """California excess-SDI credit (Form 540 line 74).
+
+    The credit exists only when (a) TWO OR MORE employers withheld SDI/VPDI and
+    (b) the year has a taxable wage cap, so a per-year maximum
+    (rate x wage_cap) exists that combined employers can exceed. SB 951 removed
+    the cap starting 2024: `wage_cap: null` is the SEMANTIC "no cap" null, and
+    with no cap there is no per-year maximum and no excess — a single employer
+    over-withholding is recovered from the employer, not the FTB.
+    """
+    total = round(sum(float(x) for x in sdi_by_employer), 2)
+    multiple = len([x for x in sdi_by_employer if float(x) > 0]) >= 2
+    cap = sdi_config.get("wage_cap")
+
+    if cap is None:
+        return {"total_withheld": total, "max_required": None, "credit": 0.0,
+                "possible": False,
+                "note": ("This year has no wage cap on SDI (SB 951), so no "
+                         "per-year maximum exists and the excess-SDI credit "
+                         "cannot arise, regardless of employer count.")}
+    max_required = round(sdi_config["rate"] * cap, 2)
+    if not multiple:
+        return {"total_withheld": total, "max_required": max_required,
+                "credit": 0.0, "possible": False,
+                "note": ("Excess SDI requires SDI withheld by two or more "
+                         "employers; a single employer's over-withholding must "
+                         "be recovered from the employer.")}
+    credit = round(max(0.0, total - max_required), 2)
+    return {"total_withheld": total, "max_required": max_required,
+            "credit": credit, "possible": credit > 0,
+            "note": ("Claim on Form 540 line 74." if credit > 0 else
+                     "Combined SDI does not exceed the per-year maximum.")}
