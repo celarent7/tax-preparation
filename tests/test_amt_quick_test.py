@@ -66,3 +66,72 @@ def test_2023_amt_now_sourced():
     from utils import load_raw_constants
     backs = load_raw_constants()["_sources"]["rev_proc_2022_38_ty2023"]["backs"]
     assert "2023.amt" in backs
+
+# ---------------------------------------------------------------------------
+# Task 2 — amt_quick_test() pure function
+# ---------------------------------------------------------------------------
+
+from tax_calculator import amt_quick_test  # noqa: E402
+from utils import UnverifiedConstantError  # noqa: E402
+
+
+@pytest.fixture(scope="module")
+def amt_2025():
+    return load_tax_constants("2025")["amt"]
+
+
+def test_case_a_no_amt(amt_2025):
+    """Case A: no preferences, moderate income — TMT < regular tax.
+
+    TI 150,000 + SALT 10,000 = AMTI 160,000; exemption 88,100 (no phase-out,
+    160,000 < 626,350); base 71,900; TMT = 71,900 × 0.26 = 18,694.
+    """
+    r = amt_quick_test(150000, 10000, 0, 28762, "single", amt_2025)
+    assert not r["form_6251_required"]
+    assert r["tentative_minimum_tax"] == pytest.approx(18694, abs=1)
+
+
+def test_case_b_iso_triggers(amt_2025):
+    """Case B: big ISO spread — TMT exceeds regular tax.
+
+    AMTI 460,000; exemption 88,100; base 371,900;
+    TMT = 239,100 × 0.26 + (371,900 − 239,100) × 0.28 = 62,166 + 37,184 = 99,350.
+    """
+    r = amt_quick_test(150000, 10000, 300000, 28762, "single", amt_2025)
+    assert r["form_6251_required"]
+    assert r["tentative_minimum_tax"] == pytest.approx(99350, abs=1)
+    assert r["tmt_exceeds_regular_by"] == pytest.approx(99350 - 28762, abs=1)
+
+
+def test_case_c_exemption_phaseout(amt_2025):
+    """Case C: AMTI 700,000 inside the phase-out zone.
+
+    exemption = max(0, 88,100 − 0.25 × (700,000 − 626,350)) = 69,687.50.
+    """
+    r = amt_quick_test(690000, 10000, 0, 200000, "single", amt_2025)
+    assert r["exemption_after_phaseout"] == pytest.approx(69687.50, abs=1)
+
+
+def test_screen_language_present(amt_2025):
+    """The output self-describes as a screen and names Form 6251 + ignored items."""
+    r = amt_quick_test(150000, 0, 0, 30000, "single", amt_2025)
+    assert "screen" in r["note"].lower() and "6251" in r["note"]
+    assert len(r["ignored_items"]) >= 3
+
+
+def test_mfs_uses_half_breakpoint(amt_2025):
+    """MFS picks the MFS breakpoint (119,550), not the all-other one (239,100)."""
+    r = amt_quick_test(150000, 10000, 300000, 28762, "mfs", amt_2025)
+    # base = AMTI 460,000 − exemption 68,500 (mfs) = 391,500
+    # TMT = 119,550 × 0.26 + (391,500 − 119,550) × 0.28 = 31,083 + 76,146 = 107,229
+    assert r["tentative_minimum_tax"] == pytest.approx(107229, abs=1)
+    assert r["form_6251_required"]
+
+
+def test_null_breakpoint_raises():
+    """A null (unverified) 28% breakpoint must raise — the screen never guesses."""
+    amt = dict(load_tax_constants("2025")["amt"])
+    amt["rate_28_threshold"] = None
+    amt["rate_28_threshold_mfs"] = None
+    with pytest.raises(UnverifiedConstantError):
+        amt_quick_test(150000, 0, 50000, 30000, "single", amt)

@@ -14,6 +14,7 @@ from typing import Dict, Tuple, List
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils import (
     get_status_value,
+    get_constant,
     load_tax_constants,
     make_year_arg,
     normalize_filing_status,
@@ -215,6 +216,72 @@ def assess_amt_risk(taxable_income: float, salt_lost_to_cap: float,
         "phaseout_start": phaseout_start,
         "note": ("This is a risk FLAG only — the plugin does not compute Form 6251. "
                  "See docs/limitations.md."),
+    }
+
+
+def amt_quick_test(taxable_income: float, salt_deducted: float,
+                   iso_bargain_element: float, regular_tax: float,
+                   filing_status: str, amt_constants: Dict) -> Dict:
+    """Quantitative AMT SCREEN — not a Form 6251 computation (plan B6).
+
+    AMTI is approximated as taxable income + SALT actually deducted + ISO
+    bargain element. This deliberately ignores other preference items and the
+    preferential-rate carve-out for LTCG/qualified dividends (which Form 6251
+    computes at capital-gain rates); the screen therefore OVERSTATES TMT for
+    filers with large preferential income — a positive result means "run Form
+    6251", never "you owe this much AMT".
+
+    All statutory figures flow from the year's `amt` block via `get_constant`
+    (rates, breakpoint, exemption, phase-out start and rate). A null/TODO
+    breakpoint raises `UnverifiedConstantError` rather than letting the screen
+    guess a threshold (ground rule 1 / 6).
+    """
+    status = normalize_filing_status(filing_status)
+    if status in ("married_jointly", "qualifying_surviving_spouse"):
+        exemption = get_constant(amt_constants, "exemption_mfj")
+        phaseout_start = get_constant(amt_constants, "phaseout_start_mfj")
+        breakpoint_ = get_constant(amt_constants, "rate_28_threshold")
+    elif status == "married_separately":
+        exemption = get_constant(amt_constants, "exemption_mfs")
+        phaseout_start = get_constant(amt_constants, "phaseout_start_mfs")
+        breakpoint_ = get_constant(amt_constants, "rate_28_threshold_mfs")
+    else:  # single, head_of_household — "unmarried individuals" per § 55(d)
+        exemption = get_constant(amt_constants, "exemption_single")
+        phaseout_start = get_constant(amt_constants, "phaseout_start_single")
+        breakpoint_ = get_constant(amt_constants, "rate_28_threshold")
+
+    rates = get_constant(amt_constants, "rates")
+    rate_low = rates[0]["rate"]
+    rate_high = rates[1]["rate"]
+    phaseout_rate = get_constant(amt_constants, "phaseout_rate")
+
+    amti = taxable_income + max(0.0, salt_deducted) + max(0.0, iso_bargain_element)
+    exemption_left = max(
+        0.0, exemption - phaseout_rate * max(0.0, amti - phaseout_start)
+    )
+    base = max(0.0, amti - exemption_left)
+    tmt = (base * rate_low if base <= breakpoint_
+           else breakpoint_ * rate_low + (base - breakpoint_) * rate_high)
+    excess = round(tmt - regular_tax, 2)
+
+    return {
+        "amti_approx": round(amti, 2),
+        "exemption_after_phaseout": round(exemption_left, 2),
+        "amt_base": round(base, 2),
+        "tentative_minimum_tax": round(tmt, 2),
+        "regular_tax": round(regular_tax, 2),
+        "tmt_exceeds_regular_by": max(0.0, excess),
+        "form_6251_required": excess > 0,
+        "ignored_items": [
+            "LTCG/qualified-dividend preferential rates inside AMT (overstates TMT)",
+            "Depreciation adjustments, private-activity-bond interest, NOL differences",
+            "State-tax refunds excluded from AMTI (understates the gap the other way)",
+            "AMT foreign tax credit and prior-year minimum tax credit (Form 8801)",
+        ],
+        "note": ("QUICK SCREEN ONLY — approximates Form 6251. A positive result "
+                 "means Form 6251 must actually be prepared; a negative result "
+                 "with large preferential income is reliable, since this screen "
+                 "overstates TMT."),
     }
 
 
