@@ -362,6 +362,52 @@ def calculate_aotc(data: Dict, params: Dict) -> CreditResult:
     )
 
 
+def calculate_llc(data: Dict, params: Dict) -> CreditResult:
+    """Lifetime Learning Credit (IRC 25A(c)): 20% of up to $10,000 of expenses.
+
+    Nonrefundable; per-RETURN (not per-student); shares the AOTC MAGI band;
+    cannot be claimed for the same student as the AOTC in the same year;
+    MFS is statutorily ineligible.
+    """
+    status = normalize_filing_status(data["filing_status"])
+    magi = float(data.get("magi", data.get("agi", 0)))
+    expenses = float(data.get("education_expenses_llc", 0))
+    notes: List[str] = []
+    req = {"has_expenses": expenses > 0, "not_mfs": status != "married_separately",
+           "not_aotc_same_student": not data.get("aotc_claimed_for_same_student", False)}
+
+    if status == "married_separately":
+        notes.append("Married filing separately cannot claim education credits (IRC 25A(g)(6)).")
+        return CreditResult("Lifetime Learning Credit", False, 0, 0, False, notes, req, [])
+    if data.get("aotc_claimed_for_same_student"):
+        notes.append("AOTC already claimed for the same student this year — "
+                     "the LLC cannot be claimed for that student (IRC 25A(c)(2)(A)).")
+        return CreditResult("Lifetime Learning Credit", False, 0, 0, False, notes, req, [])
+    if expenses <= 0:
+        return CreditResult("Lifetime Learning Credit", False, 0, 0, False,
+                            ["No qualified education expenses provided."], req, [])
+
+    is_joint = status in ("married_jointly", "qualifying_surviving_spouse")
+    lo = params["phaseout_start_mfj" if is_joint else "phaseout_start_single"]
+    hi = params["phaseout_end_mfj" if is_joint else "phaseout_end_single"]
+    base = params["credit_rate"] * min(expenses, params["expense_limit"])
+
+    phaseout = False
+    if magi >= hi:
+        return CreditResult("Lifetime Learning Credit", False, 0, 0, True,
+                            [f"MAGI ${magi:,.0f} is at or above the ${hi:,.0f} phase-out end."],
+                            req, [])
+    if magi > lo:
+        base *= (hi - magi) / (hi - lo)
+        phaseout = True
+        notes.append(f"Credit reduced by the MAGI phase-out (${lo:,.0f}–${hi:,.0f}).")
+
+    notes.append("Nonrefundable; per return, unlimited number of years; "
+                 "no half-time-enrollment or first-4-years requirement (unlike AOTC).")
+    return CreditResult("Lifetime Learning Credit", True, round(base, 2), 0.0,
+                        phaseout, notes, req, ["Form 8863", "Form 1098-T"])
+
+
 def calculate_savers_credit(data: Dict, params: Dict) -> CreditResult:
     """Calculate Retirement Savings Contribution Credit."""
 
@@ -451,6 +497,7 @@ def check_all_credits(data: Dict, tax_data: Dict) -> Dict:
     results.append(calculate_eitc(data, params["eitc"]))
     results.append(calculate_child_dependent_care(data, params["child_dependent_care"]))
     results.append(calculate_aotc(data, params["aotc"]))
+    results.append(calculate_llc(data, params["lifetime_learning"]))
     results.append(calculate_savers_credit(data, params["savers_credit"]))
 
     # Calculate totals
