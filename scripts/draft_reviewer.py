@@ -29,6 +29,7 @@ from utils import (
     make_year_arg,
     normalize_filing_status,
     select_for_status,
+    UnverifiedConstantError,
 )
 
 
@@ -86,6 +87,7 @@ class ReviewContext:
     charitable_property_limit: float
     educator_limit: float
     student_loan_limit: float
+    year_constants: Optional[Dict] = None
     exact_tolerance: float = 1.0
     estimate_tolerance: float = 0.05
 
@@ -201,14 +203,16 @@ def check_deductions(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Fi
         findings.append(_ok("Deductions", "Standard deduction (Line 12)",
                             f"Correct for {status} in {ctx.year}", stated, expected_sd))
 
-    # Taxable income (15) = AGI (11) - deduction (12), floored at zero.
-    expected_ti = max(0.0, _f(draft, "line_11_agi") - stated)
+    # Taxable income (15) = AGI (11) - deduction (12) - QBI deduction (13),
+    # floored at zero. Line 13 is zero when the draft claims no QBI, so this
+    # is backward-compatible; a draft that claims QBI must reflect it here.
+    expected_ti = max(0.0, _f(draft, "line_11_agi") - stated - _f(draft, "line_13_qbi_deduction"))
     stated_ti = _f(draft, "line_15_taxable_income")
     match, diff = compare_values(stated_ti, expected_ti, ctx.exact_tolerance)
     if not match:
         findings.append(Finding(
             Severity.ERROR, "Deductions", "Taxable income (Line 15)",
-            "Taxable income does not equal AGI minus the deduction.",
+            "Taxable income does not equal AGI minus the deduction minus QBI.",
             stated_ti, round(expected_ti, 2), round(diff, 2)))
     else:
         findings.append(_ok("Deductions", "Taxable income (Line 15)",
@@ -423,11 +427,104 @@ def check_credits(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Findi
     return findings
 
 
+def check_qbi(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
+    """Recompute the §199A QBI deduction and compare to 1040 line 13 / Form
+    8995 line 15; flag a draft that claims QBI in the CA state column.
+
+    The check only runs when the draft carries a ``qbi`` block (the QBI inputs:
+    SE profit, wages/UBIA, SSTB flag, REIT dividends, etc.). A draft with no
+    QBI block is left untouched — claiming zero QBI is not an error, only a
+    missed deduction (surfaced by the savings finder, not the reviewer).
+
+    Taxable income BEFORE the QBI deduction = line 15 + line 13, since line 15
+    is computed after subtracting the QBI deduction from AGI-less-deductions.
+    net_capital_gain defaults to qualified dividends + net LTCG (§1(h)).
+    """
+    qbi_block = draft.get("qbi")
+    if not qbi_block:
+        return []
+
+    import qbi_calculator  # lazy: qbi_calculator -> estimated_tax_calculator -> tax_calculator
+    status = _status(draft)
+    stated_line13 = _f(draft, "line_13_qbi_deduction")
+    # taxable income before QBI = line 15 (after QBI) + line 13 (the QBI itself).
+    # The qbi block may carry an explicit taxable_income_before_qbi (the
+    # "computed inputs"); use it when present so a draft with an overstated
+    # line 13 still recomputes against the real inputs.
+    derived_ti = _f(draft, "line_15_taxable_income") + stated_line13
+    ti_before = float(qbi_block.get("taxable_income_before_qbi", derived_ti))
+
+    qd = _f(draft, "line_3a_qualified_dividends")
+    ltcg = max(0.0, float(draft.get("schedule_d", {}).get("long_term_gain_loss", 0) or 0))
+    net_capital_gain = qbi_block.get("net_capital_gain", qd + ltcg)
+
+    se_profit = qbi_block.get(
+        "se_net_profit",
+        float(draft.get("schedule_se", {}).get("net_profit", 0) or 0))
+
+    profile = {
+        "se_net_profit": se_profit,
+        "se_health_insurance": qbi_block.get("se_health_insurance", 0),
+        "se_retirement": qbi_block.get("se_retirement", 0),
+        "w2_wages_paid": qbi_block.get("w2_wages_paid", 0),
+        "ubia": qbi_block.get("ubia", 0),
+        "is_sstb": qbi_block.get("is_sstb", False),
+        "taxable_income_before_qbi": ti_before,
+        "net_capital_gain": net_capital_gain,
+        "reit_dividends": qbi_block.get("reit_dividends", 0),
+        "qbi_loss_carryforward": qbi_block.get("qbi_loss_carryforward", 0),
+        "filing_status": status,
+    }
+
+    try:
+        result = qbi_calculator.compute_qbi_deduction(profile, ctx.year_constants)
+    except (UnverifiedConstantError, ValueError) as e:
+        return [Finding(Severity.WARNING, "QBI", "QBI deduction (1040 Line 13)",
+                        f"Could not recompute the QBI deduction: {e}")]
+
+    expected = result.deduction
+    match, diff = compare_values(stated_line13, expected, ctx.exact_tolerance)
+    if not match:
+        findings = [Finding(
+            Severity.ERROR, "QBI", "QBI deduction (1040 Line 13)",
+            f"Draft QBI deduction differs from recomputation (Form {result.form}; "
+            f"engine ${expected:,.2f}).",
+            stated_line13, round(expected, 2), round(diff, 2))]
+    else:
+        findings = [_ok("QBI", "QBI deduction (Line 13)",
+                        f"Matches recomputation (Form {result.form})",
+                        stated_line13, round(expected, 2))]
+
+    # Form 8995 / 8995-A line 15 (the form's own total) if the draft reports it.
+    f8995 = draft.get("form_8995") or {}
+    if f8995.get("line_15") is not None:
+        stated15 = float(f8995["line_15"])
+        m15, d15 = compare_values(stated15, expected, ctx.exact_tolerance)
+        if not m15:
+            findings.append(Finding(
+                Severity.ERROR, "QBI", "Form 8995 Line 15",
+                "Form 8995/8995-A line 15 differs from recomputation.",
+                stated15, round(expected, 2), round(d15, 2)))
+
+    # California has no IRC 199A deduction: QBI must be ADDED BACK on Schedule CA.
+    # A draft that subtracts QBI in the CA state column (negative adjustment) is
+    # wrong; a positive add-back or no entry is correct.
+    ca = draft.get("schedule_ca") or {}
+    ca_qbi = ca.get("qbi_adjustment")
+    if ca_qbi is not None and float(ca_qbi) < 0:
+        findings.append(Finding(
+            Severity.ERROR, "QBI", "CA state-column QBI (Schedule CA)",
+            "California has no IRC 199A deduction — the QBI deduction must be "
+            "ADDED BACK on Schedule CA (540) (a positive adjustment), not "
+            "subtracted in the state column."))
+    return findings
+
+
 def run_review(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
     all_findings = []
     for check in (check_income, check_agi, check_deductions, check_tax,
                   check_se_tax, check_total_tax, check_capital_gains,
-                  check_withholding, check_salt, check_credits):
+                  check_withholding, check_salt, check_credits, check_qbi):
         all_findings.extend(check(draft, computed, ctx))
     return all_findings
 
@@ -470,7 +567,8 @@ def main():
         charitable_cash_limit=tax_data["credits"]["charitable_cash_limit"],
         charitable_property_limit=tax_data["charitable_property_agi_limit"],
         educator_limit=tax_data["educator_expense_limit"],
-        student_loan_limit=tax_data["student_loan_interest_limit"]
+        student_loan_limit=tax_data["student_loan_interest_limit"],
+        year_constants=tax_data,
     )
 
     # Load Input Files

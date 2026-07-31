@@ -63,6 +63,13 @@ SCRIPTS = os.path.join(ROOT, "scripts")
 FIXTURE = os.path.join(ROOT, "examples", "test_draft_review.json")
 sys.path.insert(0, SCRIPTS)
 
+from estimated_tax_calculator import calculate_se_tax  # noqa: E402
+from tax_calculator import calculate_tax  # noqa: E402
+from utils import load_tax_constants  # noqa: E402
+import qbi_calculator  # noqa: E402
+
+_TAX_DATA_2025 = load_tax_constants("2025")
+
 # Hand-computed expected values from the worksheet above.
 EXPECTED_SE_TAX = 5651.82
 EXPECTED_SE_DEDUCTION = 2825.91
@@ -303,3 +310,162 @@ def test_text_output_renders(draft, tmp_path):
     out = review(draft, tmp_path, output="text")
     assert "Draft Return Review Summary" in out
     assert "0 Errors" in out
+
+
+# ---------------------------------------------------------------------------
+# G4 — check_qbi recomputes the §199A deduction against the draft
+# ---------------------------------------------------------------------------
+#
+# A self-consistent synthetic 2025 MFJ return with a Schedule C business, built
+# FROM the same engine the reviewer calls so the "correct" draft reproduces
+# exactly. W-2 wages ($50k) are deliberately kept under the SE base so the
+# reviewer's check_se_tax (which consumes the SS wage base with W-2 wages first)
+# and the QBI engine's calculate_se_tax (which does not) agree on the SE tax —
+# keeping every line of the return internally consistent.
+#
+#   SE profit 100,000; SE health insurance 10,000; W-2 wages 50,000
+#   SE base 92,350 -> SS 11,451.40 + Medicare 2,678.15 = 14,129.55; half 7,064.77
+#   AGI 150,000 - 7,064.77 = 142,935.23; std (MFJ 2025) 31,500
+#   taxable before QBI = 111,435.23  (below the MFJ §199A threshold -> Form 8995)
+#   adjusted QBI = 100,000 - 7,064.77 - 10,000 = 82,935.23
+#   component = 20% x 82,935.23 = 16,587.05; overall limit 20% x 111,435.23 =
+#   22,287.05 -> deduction 16,587.05 (overall limit does not bind)
+def _qbi_draft(line13_override=None, ca_qbi=None):
+    """Build a self-consistent QBI-claiming draft; return (draft, true_deduction).
+
+    ``line13_override`` lets a test state a WRONG 1040 line 13 while keeping every
+    other line consistent with that stated value (so the ONLY QBI error is the
+    line-13 mismatch, not a downstream taxable-income error). The reviewer
+    recomputes QBI from the qbi block's real inputs, which carry the TRUE
+    taxable_income_before_qbi regardless of the stated line 13.
+    """
+    td = _TAX_DATA_2025
+    se_profit, se_health, wages = 100000.0, 10000.0, 50000.0
+    std = 31500.0
+    se = calculate_se_tax(se_profit, td["se_tax"])
+    half_se, se_total = se["deduction"], se["total"]
+    agi = (wages + se_profit) - half_se
+    ti_before = agi - std
+
+    profile = {
+        "se_net_profit": se_profit,
+        "se_tax_half": half_se,
+        "se_health_insurance": se_health,
+        "w2_wages_paid": 0.0,
+        "ubia": 0.0,
+        "is_sstb": False,
+        "taxable_income_before_qbi": round(ti_before, 2),
+        "net_capital_gain": 0.0,
+        "reit_dividends": 0.0,
+        "filing_status": "married_jointly",
+    }
+    qbi = qbi_calculator.compute_qbi_deduction(profile, td)
+    true_deduction = qbi.deduction
+
+    line13 = true_deduction if line13_override is None else line13_override
+    line15 = round(ti_before - line13, 2)
+    ord_tax, _ = calculate_tax(line15, "married_jointly", td["tax_brackets_processed"])
+    line16 = round(ord_tax, 2)
+    line23 = se_total
+    line24 = round(line16 + line23, 2)
+
+    draft = {
+        "tax_year": 2025,
+        "filing_status": "married_jointly",
+        "taxpayer_info": {"age_65_plus": 0, "blind": 0, "children_under_17": 0},
+        "form_1040": {
+            "line_1a_wages": wages,
+            "line_2b_taxable_interest": 0,
+            "line_3a_qualified_dividends": 0,
+            "line_3b_ordinary_dividends": 0,
+            "line_7_capital_gain_loss": 0,
+            "line_8_other_income": se_profit,
+            "line_9_total_income": wages + se_profit,
+            "line_10_adjustments": half_se,
+            "line_11_agi": round(agi, 2),
+            "line_12_deduction": std,
+            "line_13_qbi_deduction": round(line13, 2),
+            "line_15_taxable_income": line15,
+            "line_16_tax": line16,
+            "line_23_other_taxes": line23,
+            "line_24_total_tax": line24,
+            "line_25a_w2_withholding": 0,
+            "line_25d_total_withholding": 0,
+            "line_26_estimated_payments": 0,
+            "line_33_total_payments": 0,
+        },
+        "schedule_1": {"line_3_business_income": se_profit,
+                       "line_15_deductible_se_tax": half_se},
+        "schedule_2": {"line_4_self_employment_tax": se_total},
+        "schedule_se": {"net_profit": se_profit, "total_se_tax": se_total},
+        "w2_records": [{"employer": "Synthetic", "box_1_wages": wages,
+                       "box_2_federal_withheld": 0}],
+        "qbi": {
+            "se_net_profit": se_profit,
+            "se_health_insurance": se_health,
+            "w2_wages_paid": 0.0,
+            "ubia": 0.0,
+            "is_sstb": False,
+            "reit_dividends": 0.0,
+            "taxable_income_before_qbi": round(ti_before, 2),
+            "net_capital_gain": 0.0,
+        },
+    }
+    if ca_qbi is not None:
+        draft["schedule_ca"] = {"qbi_adjustment": ca_qbi}
+    return draft, true_deduction
+
+
+def test_gate_g4_correct_qbi_draft_passes(tmp_path):
+    """G4: a draft whose 1040 line 13 equals the engine recomputation is OK."""
+    draft, _ = _qbi_draft()
+    findings = review(draft, tmp_path)
+    assert errors(findings) == [], (
+        "self-consistent QBI draft flagged errors: "
+        + "; ".join(f"{f['field']}: {f['message']}" for f in errors(findings)))
+    qbi_ok = [f for f in findings if f["category"] == "QBI"
+              and f["severity"] == "OK"
+              and "Line 13" in f["field"]]
+    assert qbi_ok, "expected an OK finding for the QBI deduction (Line 13)"
+
+
+def test_gate_g4_qbi_line_13_too_high_flagged(tmp_path):
+    """G4: a draft whose 1040 line 13 is $1,000 too high is an ERROR.
+
+    The draft keeps every other line consistent with the OVERSTATED line 13, so
+    no downstream check fires — the only error is the QBI recomputation, which
+    uses the qbi block's true taxable_income_before_qbi.
+    """
+    draft, true_deduction = _qbi_draft()
+    bad, _ = _qbi_draft(line13_override=true_deduction + 1000.0)
+
+    findings = review(bad, tmp_path)
+    qbi_errs = [f for f in errors(findings)
+                if f["category"] == "QBI" and "Line 13" in f["field"]]
+    assert qbi_errs, "an overstated line 13 must be flagged as a QBI error"
+    # The diff should be the $1,000 overstatement (within the $1 tolerance).
+    assert abs(qbi_errs[0]["difference"] - 1000.0) <= 1.0
+
+    # And no OTHER errors — the only defect is the line-13 overstatement.
+    other = [f for f in errors(findings) if f["category"] != "QBI"]
+    assert other == [], (
+        "unexpected non-QBI errors: "
+        + "; ".join(f"{f['field']}: {f['message']}" for f in other))
+
+
+def test_gate_g4_ca_state_column_qbi_flagged(tmp_path):
+    """G4: claiming QBI in the CA state column (a negative Schedule CA
+    adjustment) is an ERROR — California has no IRC 199A deduction; QBI must be
+    ADDED BACK (positive adjustment), not subtracted."""
+    _, true_deduction = _qbi_draft()
+    draft, _ = _qbi_draft(ca_qbi=-true_deduction)
+
+    findings = review(draft, tmp_path)
+    ca_errs = [f for f in errors(findings)
+               if f["category"] == "QBI" and "Schedule CA" in f["field"]]
+    assert ca_errs, "a CA state-column QBI subtraction must be flagged"
+    assert "no IRC 199A" in ca_errs[0]["message"]
+    # The federal line 13 itself is still correct.
+    line13_errs = [f for f in errors(findings)
+                   if f["category"] == "QBI" and "Line 13" in f["field"]]
+    assert line13_errs == []
