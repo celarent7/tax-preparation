@@ -29,7 +29,7 @@ python ./scripts/tax_savings_finder.py --data <profile.json> --year 2025 \
     --rules backdoor_roth,tlh --state CA
 ```
 
-### Rule families (M1–M11)
+### Rule families (M1–M12)
 
 Each rule is a pure function in `scripts/savings_rules/`, registered by `rule_id`
 in `savings_rules/__init__.py`. Year-gated rules (OBBBA M10/M11) return
@@ -48,6 +48,7 @@ nothing — and never crash — outside their statutory window.
 | M9 | `hsa` | HSA headroom, split into federal and state savings. **CA does not conform**: contributions are added back on Schedule CA and earnings are CA-taxable → state savings $0 with a mandatory caveat. |
 | M10 | `senior_bonus` | OBBBA senior bonus (2025–2028): $6,000 per qualifying 65+ person, phased out at 6%/dollar over $75,000 (single) / $150,000 (MFJ). The same shared helper backs `deduction_analyzer.py --age-65-plus`, so the two tools agree to the dollar. CA add-back. |
 | M11 | `tips_deduction` / `overtime_deduction` | OBBBA above-the-line tips and overtime deductions (2025–2028), capped and phased down per $1,000 of MAGI over the threshold. CA add-back. |
+| M12 | `home_office` | Home-office deduction: compares the **simplified** method (`home_office_simplified_rate` × min(`home_office_sqft`, `home_office_max_sqft`)) against the **actual-expense** method (`home_office_sqft` / `home_total_sqft` × `home_office_actual_expenses`) and recommends the larger. Capped at Schedule C net income (IRC 280A(c)(5)). Savings include the SE-tax effect (via `calculate_se_tax`). The actual method carries a depreciation-recapture caveat. |
 
 ### California nonconformity
 

@@ -150,6 +150,30 @@ Total home office deduction: $3,390
 - Document with photos and measurements
 - Keep log of business use
 
+### Tool support (`tax_savings_finder.py`, rule M12)
+
+The savings finder compares both methods and recommends the larger, using the
+constants `home_office_simplified_rate` ($5/sq ft) and `home_office_max_sqft`
+(300 sq ft). Set three profile keys: `home_office_sqft`, `home_total_sqft`,
+and `home_office_actual_expenses`. The deduction is capped at Schedule C net
+income (IRC 280A(c)(5)), and the savings estimate covers both the income-tax
+effect (at the marginal rate) and the SE-tax effect (recomputed via the shared
+`calculate_se_tax`, not approximated).
+
+```bash
+python ./scripts/tax_savings_finder.py --data <profile.json> --year 2025 \
+    --rules home_office --output-format json
+```
+
+**Worked example (acceptance test A11):** 200 sq ft office in a 2,000 sq ft
+home, $30,000 of actual home expenses, $80,000 SE profit.
+
+- Simplified: 200 sq ft × $5 = **$1,000** (under the 300 sq ft cap)
+- Actual: 10% × $30,000 = **$3,000**
+- Recommendation: **actual-expense method (Form 8829)** at $3,000, with a
+  depreciation-recapture caveat. (Simplified wins only when the business-use
+  percentage is low; sq ft is capped at 300 either way.)
+
 ---
 
 ## Vehicle Deduction
