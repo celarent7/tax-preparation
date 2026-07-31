@@ -89,6 +89,40 @@ def calculate_se_tax(net_se_income: float, se_tax_data: Dict) -> Dict:
     }
 
 
+def additional_medicare_8959(wages: float, se_net_profit: float,
+                             filing_status: str, se_tax_data: Dict) -> Dict:
+    """Additional Medicare Tax with the Form 8959 wage/SE coordination.
+
+    Part I taxes wages above the threshold. Part II taxes SE income — at
+    92.35% (the SE base) — above the threshold AS REDUCED by wages already
+    counted in Part I. Charging 0.9% on raw (wages + SE) over the threshold,
+    as the previous projection did, overstates the tax whenever SE income is
+    present (the 7.65% haircut) and misallocates the threshold.
+
+    IRC 3101(b)(2); IRS Form 8959 Parts I & II. With zero SE income this
+    reproduces ``calculate_additional_medicare`` exactly (test-asserted), so
+    the pure-wage path is provably unchanged.
+    """
+    rate = se_tax_data["additional_medicare_rate"]
+    factor = se_tax_data["se_adjustment_factor"]
+    threshold = additional_medicare_threshold(filing_status, se_tax_data)
+
+    wage_part = max(0.0, wages - threshold) * rate
+    se_base = max(0.0, se_net_profit) * factor
+    se_threshold_after_wages = max(0.0, threshold - max(0.0, wages))
+    se_part = max(0.0, se_base - se_threshold_after_wages) * rate
+
+    return {
+        "wage_part": round(wage_part, 2),
+        "se_part": round(se_part, 2),
+        "tax": round(wage_part + se_part, 2),
+        "threshold": threshold,
+        "se_threshold_after_wages": round(se_threshold_after_wages, 2),
+        "se_base": round(se_base, 2),
+        "rate": rate,
+    }
+
+
 #: AGI above which the prior-year safe harbor rises from 100% to 110%.
 #: Source: IRS Form 1040-ES, https://www.irs.gov/pub/irs-pdf/f1040es.pdf —
 #: "If your adjusted gross income (AGI) ... was more than $150,000 ($75,000 if
