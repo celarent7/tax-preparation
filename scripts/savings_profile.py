@@ -79,6 +79,9 @@ CANONICAL_FIELDS: Dict[str, Any] = {
     "se_health_insurance_premiums": 0,
     "business_equipment_purchases": 0,
     "equipment_in_service_date": None,
+    "home_office_sqft": 0,
+    "home_total_sqft": 0,
+    "home_office_actual_expenses": 0,
     # Misc / OBBBA
     "tips_income": 0,
     "overtime_premium_income": 0,

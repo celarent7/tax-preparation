@@ -75,6 +75,28 @@ def test_canonical_load_applies_defaults_and_normalizes(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# B4.1 — home-office profile keys are canonical (M12 rule reads these)
+# ---------------------------------------------------------------------------
+
+
+def test_home_office_keys_are_canonical():
+    from savings_profile import CANONICAL_FIELDS
+    for key in ("home_office_sqft", "home_total_sqft", "home_office_actual_expenses"):
+        assert key in CANONICAL_FIELDS, key
+        assert CANONICAL_FIELDS[key] == 0
+
+
+def test_home_office_typo_suggests_correct_key(tmp_path):
+    """A typo'd home-office key is rejected with the nearest valid key named —
+    no silent $0 result (the G4 failure mode the loader was built to prevent)."""
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"filing_status": "single", "home_ofice_sqft": 200}))
+    with pytest.raises(ProfileError) as exc:
+        load_profile(str(bad))
+    assert "home_office_sqft" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
 # G3 — legacy adapter produces identical opportunities to its canonical twin
 # ---------------------------------------------------------------------------
 
