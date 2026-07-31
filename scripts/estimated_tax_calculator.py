@@ -13,7 +13,7 @@ from typing import Dict, List
 
 # Add the scripts directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from tax_calculator import calculate_additional_medicare, calculate_niit
+from tax_calculator import calculate_niit
 from utils import (
     additional_medicare_threshold,
     get_status_value,
@@ -292,11 +292,15 @@ def main():
     # Additional Medicare + NIIT on the projection (task P3.2). Omitting these
     # understated the projected liability for exactly the high earners who owe
     # estimated tax.
-    add_medicare = calculate_additional_medicare(
-        args.projected_wages if args.projected_wages is not None else args.projected_income,
-        additional_medicare_threshold(args.filing_status, se_tax_config),
-        se_tax_config["additional_medicare_rate"],
-    )
+    # Additional Medicare with Form 8959 wage/SE coordination (B5). When no SE
+    # income is present this equals the plain wage computation (test-asserted).
+    # The wage default is projected_income MINUS projected_se_income: previously
+    # it defaulted to projected_income, which includes SE income and would
+    # double-count it across the SE base in Part II.
+    wages_for_medicare = (args.projected_wages if args.projected_wages is not None
+                          else max(0.0, args.projected_income - args.projected_se_income))
+    add_medicare = additional_medicare_8959(
+        wages_for_medicare, args.projected_se_income, args.filing_status, se_tax_config)
     niit = calculate_niit(
         agi, args.net_investment_income,
         get_status_value(tax_data["niit_thresholds"], args.filing_status, "NIIT threshold"),
@@ -331,6 +335,7 @@ def main():
             "niit": niit["tax"],
             "total": round(total_estimated_tax, 2)
         },
+        "additional_medicare_detail": add_medicare,
         "qbi": (qbi_result.to_dict() if qbi_result is not None else None),
         "safe_harbor": safe_harbor,
         "payment_plan": {

@@ -59,3 +59,28 @@ def test_pure_wages_matches_existing_helper(se_cfg):
         se_cfg["additional_medicare_rate"])
     new = additional_medicare_8959(260000, 0, "single", se_cfg)
     assert new["tax"] == old["tax"]
+
+
+# ---------------------------------------------------------------------------
+# B5.2 — the CLI projection uses the 8959 figure for mixed W-2 + SE filers
+# ---------------------------------------------------------------------------
+import json
+import subprocess
+
+SCRIPT = os.path.join(os.path.dirname(__file__), "..", "scripts",
+                      "estimated_tax_calculator.py")
+
+
+def test_cli_mixed_filer_uses_8959_figure():
+    p = subprocess.run(
+        [sys.executable, SCRIPT, "--projected-income", "250000",
+         "--projected-se-income", "100000", "--projected-wages", "150000",
+         "--prior-year-tax", "40000", "--prior-year-agi", "160000",
+         "--filing-status", "single", "--year", "2025", "--no-qbi",
+         "--output-format", "json"],
+        capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    out = json.loads(p.stdout)
+    # Case B from Task 1: $381.15, not the old $450 approximation.
+    assert out["estimated_liability"]["additional_medicare_tax"] == pytest.approx(381.15, abs=0.01)
+    assert out["additional_medicare_detail"]["se_part"] == pytest.approx(381.15, abs=0.01)
