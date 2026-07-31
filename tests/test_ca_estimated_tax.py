@@ -6,7 +6,9 @@ and the prior-year CA tax (110% when CA AGI exceeds the high-income threshold)
 use the prior-year leg at all (R&TC 19136.3 / FTB 540-ES instructions).
 Installments are NOT even quarters: 30% / 40% / 0% / 30%.
 """
+import json
 import os
+import subprocess
 import sys
 
 import pytest
@@ -64,3 +66,49 @@ def test_withholding_reduces_remaining(est):
     r = calculate_ca_estimated_tax(20000, 30000, 200000, "single", est,
                                    ca_withholding=10000)
     assert r["remaining_after_withholding"] == 8000
+
+
+# ---------------------------------------------------------------------------
+# CLI: --state CA wiring (Task 2)
+# ---------------------------------------------------------------------------
+
+SCRIPT = os.path.join(os.path.dirname(__file__), "..", "scripts",
+                      "estimated_tax_calculator.py")
+
+BASE = ["--projected-income", "200000", "--prior-year-tax", "30000",
+        "--prior-year-agi", "150000", "--filing-status", "single",
+        "--year", "2025", "--output-format", "json"]
+
+
+def test_cli_ca_plan_emitted():
+    p = subprocess.run([sys.executable, SCRIPT, *BASE, "--state", "CA",
+                        "--projected-ca-tax", "20000",
+                        "--prior-year-ca-tax", "30000", "--ca-agi", "200000"],
+                       capture_output=True, text=True)
+    out = json.loads(p.stdout)
+    plan = out["state_payment_plan"]
+    assert plan["state"] == "CA"
+    assert [i["amount"] for i in plan["installments"]] == [5400.0, 7200.0, 0.0, 5400.0]
+
+
+def test_cli_ca_requires_projection():
+    p = subprocess.run([sys.executable, SCRIPT, *BASE, "--state", "CA"],
+                       capture_output=True, text=True)
+    assert p.returncode == 1
+    assert "--projected-ca-tax" in p.stdout
+
+
+def test_cli_no_tax_state_message():
+    p = subprocess.run([sys.executable, SCRIPT, *BASE, "--state", "TX"],
+                       capture_output=True, text=True)
+    out = json.loads(p.stdout)
+    assert out["state_payment_plan"]["notes"][0].startswith("TX has no")
+
+
+def test_cli_ca_unsupported_year_raises_cleanly():
+    args = [a if a != "2025" else "2024" for a in BASE]
+    p = subprocess.run([sys.executable, SCRIPT, *args, "--state", "CA",
+                        "--projected-ca-tax", "20000",
+                        "--prior-year-ca-tax", "30000", "--ca-agi", "200000"],
+                       capture_output=True, text=True)
+    assert p.returncode == 1  # CA 2024 constants absent -> standard error

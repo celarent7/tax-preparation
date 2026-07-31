@@ -17,6 +17,7 @@ from tax_calculator import calculate_niit
 from utils import (
     additional_medicare_threshold,
     get_status_value,
+    load_state_constants,
     load_tax_constants,
     make_year_arg,
     normalize_filing_status,
@@ -260,6 +261,23 @@ def main():
     parser.add_argument("--qbi-loss-carryforward", type=float, default=0,
                         help="Prior-year QBI loss carryforward.")
     make_year_arg(parser)
+    # --- State estimated-tax layer (C2: CA 540-ES) ---
+    parser.add_argument("--state", default=None,
+                        help="Two-letter state code to emit a state estimated-tax "
+                             "payment plan (CA implemented; WA/TX/FL/NV report no "
+                             "state estimated payments).")
+    parser.add_argument("--projected-ca-tax", type=float, default=None,
+                        help="Projected full-year CA tax (get from "
+                             "tax_calculator.py --state CA). Required with --state CA.")
+    parser.add_argument("--prior-year-ca-tax", type=float, default=None,
+                        help="Total CA tax from the prior-year return. Required with "
+                             "--state CA (prior-year safe-harbor leg).")
+    parser.add_argument("--ca-agi", type=float, default=None,
+                        help="Projected CA AGI, drives the 110% and $1M safe-harbor "
+                             "rules. Required with --state CA.")
+    parser.add_argument("--ca-withholding", type=float, default=0,
+                        help="CA income tax withheld to date (reduces the remaining "
+                             "estimated payment).")
     parser.add_argument("--output-format", choices=["json", "text"], default="text")
 
     args = parser.parse_args()
@@ -395,6 +413,44 @@ def main():
         }
     }
 
+    # --- State estimated-tax layer (C2: CA 540-ES) ---
+    # The federal payment_plan above is the federal quarterly schedule. When a
+    # state is requested, a parallel state_payment_plan is attached. CA is the
+    # only implemented state engine; no-income-tax states get an explanatory
+    # note; any other state exits 1 naming CA as the only supported engine.
+    # No state *tax* is computed here — the user supplies the CA projection
+    # (from tax_calculator.py --state CA) so there remains a single CA engine.
+    if args.state:
+        state = args.state.upper()
+        try:
+            state_data = load_state_constants(state, args.year)
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+        if state_data.get("type") == "none":
+            result["state_payment_plan"] = {
+                "state": state,
+                "notes": [f"{state} has no personal income tax — "
+                          "no state estimated payments required."]}
+        elif state == "CA":
+            if (args.projected_ca_tax is None
+                    or args.prior_year_ca_tax is None
+                    or args.ca_agi is None):
+                print("Error: --state CA requires --projected-ca-tax, "
+                      "--prior-year-ca-tax, and --ca-agi (get the projection "
+                      "from tax_calculator.py --state CA).")
+                sys.exit(1)
+            ca_plan = calculate_ca_estimated_tax(
+                args.projected_ca_tax, args.prior_year_ca_tax, args.ca_agi,
+                args.filing_status, state_data["estimated_tax"],
+                args.ca_withholding)
+            ca_plan["state"] = "CA"
+            result["state_payment_plan"] = ca_plan
+        else:
+            print(f"Error: state estimated-tax schedules are implemented for "
+                  f"CA only; {state} carries no installment data.")
+            sys.exit(1)
+
     if args.output_format == "json":
         print(json.dumps(result, indent=2))
     else:
@@ -415,6 +471,28 @@ def main():
         print("\nPayment Schedule:")
         for q, date_str, period in result["payment_plan"]["due_dates"]:
             print(f"  {q}: Due {date_str} (Period: {period})")
+
+        # State estimated-tax layer (C2)
+        spp = result.get("state_payment_plan")
+        if spp is not None:
+            print()
+            if spp.get("state") == "CA":
+                print(f"--- California (FTB Form 540-ES) ---")
+                print(f"Required Annual Payment:    ${spp['required_annual_payment']:,.2f}")
+                print(f"Basis:                      {spp['basis']}")
+                print(f"Prior-Year Safe Harbor:     "
+                      f"{'available' if spp['safe_harbor_available'] else 'UNAVAILABLE (CA AGI >= $1M rule)'}")
+                print(f"CA Withholding:             ${args.ca_withholding:,.2f}")
+                print(f"Remaining After Withholding: ${spp['remaining_after_withholding']:,.2f}")
+                print("Installment Schedule (30% / 40% / 0% / 30%):")
+                for inst in spp["installments"]:
+                    print(f"  {inst['quarter']}: Due {inst['due_date']} — "
+                          f"{int(inst['pct'] * 100)}% = ${inst['amount']:,.2f}")
+                print("  (Q3 is $0 by design — CA front-loads 30/40/0/30, "
+                      "unlike the federal even-quarters schedule.)")
+            else:
+                for note in spp.get("notes", []):
+                    print(note)
 
 
 if __name__ == "__main__":
