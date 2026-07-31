@@ -98,6 +98,9 @@ python ./scripts/tax_calculator.py --gross-income <confirmed_amount> --adjustmen
 >
 > The MFS threshold is half the general one; applying $150,000 to an MFS filer
 > understates the required payment and causes an underpayment penalty.
+>
+> For mixed W-2 + SE filers pass `--projected-wages` explicitly — the 0.9%
+> Additional Medicare projection coordinates wages and SE income per Form 8959.
 > *Source: IRS Form 1040-ES, <https://www.irs.gov/pub/irs-pdf/f1040es.pdf>.*
 
 ### Step 3: Determine Deductions

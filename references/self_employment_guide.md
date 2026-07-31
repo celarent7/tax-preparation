@@ -265,6 +265,26 @@ Avoid penalties by paying the lesser of:
 1. **100% of prior year tax** (110% if AGI > $150,000)
 2. **90% of current year tax**
 
+### Additional Medicare Tax (Form 8959)
+The 0.9% Additional Medicare Tax applies to mixed W-2 + SE filers in **two
+parts**, and `estimated_tax_calculator.py` computes it that way rather than
+as 0.9% on raw total income over one shared threshold:
+
+- **Part I (wages):** 0.9% on W-2 wages above your filing-status threshold
+  ($200,000 single / $250,000 MFJ / $125,000 MFS).
+- **Part II (SE):** 0.9% on your **SE base — 92.35% of net SE profit** — above
+  the threshold **as reduced by the wages already counted in Part I**. The
+  threshold is *reduced*, not shared: every dollar of wages below the threshold
+  lowers the SE threshold dollar-for-dollar.
+
+Charging 0.9% on raw (wages + SE) over the threshold overstates the tax: it
+skips the 7.65% SE haircut and misallocates the threshold. **Worked example
+(single, $150k W-2 + $100k SE):** wage part $0 (under $200k); SE base $92,350;
+SE threshold after wages $50,000; SE part (92,350 − 50,000) × 0.9% = **$381.15**
+— not the $450 the raw-total approximation produces. Pass `--projected-wages`
+explicitly so the projection does not default wages to `--projected-income`
+(which includes SE income).
+
 ### Calculation Methods
 
 #### Annualized Income Method
