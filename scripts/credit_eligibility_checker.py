@@ -481,6 +481,37 @@ def calculate_savers_credit(data: Dict, params: Dict) -> CreditResult:
     )
 
 
+def calculate_ftc_simple(data: Dict, params: Dict) -> CreditResult:
+    """Foreign Tax Credit under the IRC 904(j) no-Form-1116 election.
+
+    Claimable directly on Schedule 3 when ALL foreign tax is passive-category
+    (1099-DIV Box 7 / 1099-INT Box 6) and totals <= $300 ($600 MFJ). Above the
+    limit the credit requires Form 1116, which is out of this tool's scope —
+    flag, do not compute.
+    """
+    status = normalize_filing_status(data["filing_status"])
+    paid = float(data.get("foreign_tax_paid", 0))
+    limit = params["limit_mfj"] if status == "married_jointly" else params["limit"]
+    req = {"has_foreign_tax": paid > 0, "within_election_limit": 0 < paid <= limit}
+
+    if paid <= 0:
+        return CreditResult("Foreign Tax Credit (no-1116 election)", False, 0, 0,
+                            False, ["No foreign tax paid."], req, [])
+    if paid > limit:
+        return CreditResult(
+            "Foreign Tax Credit (no-1116 election)", False, 0, 0, False,
+            [f"Foreign tax ${paid:,.0f} exceeds the ${limit:,.0f} election limit — "
+             "Form 1116 is required and is outside this tool's scope "
+             "(see docs/limitations.md). The credit is still real; compute it "
+             "with a professional or full-form software."],
+            req, ["Form 1116"])
+    return CreditResult(
+        "Foreign Tax Credit (no-1116 election)", True, round(paid, 2), 0.0, False,
+        ["Claim directly on Schedule 3 line 1 — commonly missed on international "
+         "index-fund 1099-DIVs (Box 7)."],
+        req, ["1099-DIV (Box 7)", "1099-INT (Box 6)"])
+
+
 def check_all_credits(data: Dict, tax_data: Dict) -> Dict:
     """Check eligibility for all major credits for a given tax year."""
     params = get_credit_params(tax_data)
@@ -499,6 +530,7 @@ def check_all_credits(data: Dict, tax_data: Dict) -> Dict:
     results.append(calculate_aotc(data, params["aotc"]))
     results.append(calculate_llc(data, params["lifetime_learning"]))
     results.append(calculate_savers_credit(data, params["savers_credit"]))
+    results.append(calculate_ftc_simple(data, tax_data["credits_static"]["ftc_no_1116_limit"]))
 
     # Calculate totals
     total_credits = sum(r.amount for r in results if r.eligible)

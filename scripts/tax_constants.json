@@ -163,6 +163,15 @@
       ],
       "note": "AOTC ($2,500 max, 40% refundable, $80k-$90k / $160k-$180k phase-out) and the Child and Dependent Care Credit ($3,000/$6,000 expense limits, 35% to 20% between $15,000 and $43,000 AGI) are fixed by statute and are NOT inflation-indexed, so one shared block serves every year."
     },
+    "ftc_904j": {
+      "url": "https://www.irs.gov/instructions/i1116",
+      "title": "IRS Instructions for Form 1116 — IRC 904(j) election to claim the FTC without Form 1116",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "credits_static.ftc_no_1116_limit"
+      ],
+      "note": "IRC 904(j) election: a taxpayer may claim the foreign tax credit directly on Schedule 3 (Form 1040), Part I, line 1 without filing Form 1116 when (1) ALL foreign-source gross income is passive-category income, (2) it was reported on a qualified payee statement (1099-DIV Box 7, 1099-INT Box 6, K-1/K-3, etc.), and (3) total creditable foreign taxes are $300 or less ($600 if MFJ). Not available to estates/trusts. The election permanently forfeits FTC carryback/carryforward for that year. $300/$600 limits are statutory and not inflation-indexed, so one shared block serves every year."
+    },
     "irs_niit": {
       "url": "https://www.irs.gov/individuals/net-investment-income-tax",
       "title": "Net Investment Income Tax (IRC 1411)",
@@ -2468,7 +2477,11 @@
       "agi_for_max": 15000,
       "agi_for_min": 43000
     },
-    "savers_credit_max_contribution": 2000
+    "savers_credit_max_contribution": 2000,
+    "ftc_no_1116_limit": {
+      "limit": 300,
+      "limit_mfj": 600
+    }
   },
   "states": {
     "CA": {
