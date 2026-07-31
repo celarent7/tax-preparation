@@ -1,32 +1,49 @@
 {
   "tax_year": 2025,
   "filing_status": "married_jointly",
-  "income": {
-    "w2_wages": 185000,
-    "interest_income": 1250,
-    "dividend_income": 3400,
-    "qualified_dividends": 2800,
-    "capital_gains_short": 0,
-    "capital_gains_long": 5200
-  },
-  "deductions": {
-    "mortgage_interest": 12500,
-    "property_taxes": 8500,
-    "state_income_taxes": 9200,
-    "charitable_cash": 3000,
-    "charitable_goods": 500
-  },
-  "adjustments": {
-    "traditional_ira": 0,
-    "hsa_contributions": 8550,
-    "student_loan_interest": 0
-  },
-  "credits": {
-    "child_tax_credit_children": 2,
-    "dependent_care_expenses": 6000
-  },
-  "withholding": {
-    "federal": 28000,
-    "state": 11000
-  }
+  "state": "CA",
+  "age": 45,
+  "spouse_age": 44,
+  "agi": 250000,
+  "magi": 250000,
+  "wages": 250000,
+  "taxable_income": 218500,
+
+  "employee_401k_contributions": 10000,
+  "spouse_employee_401k_contributions": 8000,
+  "plan_allows_after_tax_401k": false,
+  "plan_allows_in_service_rollover": false,
+  "employer_401k_contributions": 0,
+  "after_tax_401k_contributions": 0,
+  "ira_contributions": 0,
+  "roth_ira_contributions": 0,
+  "traditional_ira_pretax_balance": 93000,
+  "covered_by_workplace_plan": true,
+  "spouse_covered_by_workplace_plan": true,
+
+  "has_hdhp": true,
+  "hsa_coverage": "family",
+  "hsa_contributions": 2000,
+
+  "unrealized_st_losses": 0,
+  "unrealized_lt_losses": 15000,
+  "realized_st_gains": 0,
+  "realized_st_losses": 0,
+  "realized_lt_gains": 5000,
+  "realized_lt_losses": 0,
+  "capital_loss_carryforward": 0,
+  "appreciated_stock_value": 0,
+  "appreciated_stock_basis": 0,
+  "held_over_one_year": true,
+
+  "planned_cash_donations": 5000,
+  "itemized_total": 28000,
+
+  "se_net_profit": 0,
+  "se_health_insurance_premiums": 0,
+  "business_equipment_purchases": 0,
+  "equipment_in_service_date": null,
+
+  "tips_income": 0,
+  "overtime_premium_income": 0
 }

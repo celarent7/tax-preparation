@@ -30,7 +30,8 @@
         "2024.ltcg_brackets",
         "2024.amt",
         "2024.qbi",
-        "2024.credits.eitc"
+        "2024.credits.eitc",
+        "2024.section_179"
       ],
       "note": "Section .03 Maximum Capital Gains Rate: MFJ 94,050/583,750; MFS 47,025/291,850; HoH 63,000/551,350; all other individuals 47,025/518,900. The MFS 15% ceiling had been 259,450 (half of the single ceiling) \u2014 corrected per this source (finding F14). Section .11 AMT: exemptions 133,300 MFJ / 85,700 single / 66,650 MFS; 28% bracket at 232,600 (116,300 MFS); phaseout thresholds 1,218,700 MFJ / 609,350 other (complete 1,751,900 MFJ, confirming the 25% rate). Section .27 QBI thresholds 383,900 MFJ / 191,950 other with phase-in amounts 483,900 / 241,950. Section .06 EITC table + $11,600 investment income limit."
     },
@@ -104,7 +105,9 @@
         "2026.ctc",
         "2026.amt",
         "2026.qbi",
-        "2026.credits.eitc"
+        "2026.credits.eitc",
+        "2025.section_179",
+        "2026.section_179"
       ],
       "note": "sec .03 LTCG; sec .05 CTC 2,200/1,700; sec .06 EITC + 12,200 investment limit; sec .10 AMT (OBBBA phaseout reset to 1,000,000 MFJ / 500,000 other); sec .14 standard deduction 32,200/24,150/16,100 and aged-or-blind 1,650 (2,050 if unmarried and not a surviving spouse); sec .26 QBI."
     },
@@ -115,7 +118,8 @@
       "backs": [
         "2023.tax_brackets",
         "2023.standard_deductions",
-        "2023.ltcg_brackets"
+        "2023.ltcg_brackets",
+        "2023.section_179"
       ],
       "note": "sec .03 LTCG 89,250/553,850 MFJ, 44,625/276,900 MFS, 59,750/523,050 HoH, 44,625/492,300 single; sec .15 standard deduction 27,700/20,800/13,850."
     },
@@ -214,7 +218,9 @@
       "backs": [
         "2023.retirement_limits.401k",
         "2023.retirement_limits.ira",
-        "2023.credits.savers_credit"
+        "2023.credits.savers_credit",
+        "2023.ira.roth_magi_phaseout",
+        "2023.ira.deduction_magi_phaseout_active"
       ],
       "note": "401(k)/403(b)/457 elective deferral limit $22,500; catch-up (50+) $7,500; \u00a7415(c) DC limit $66,000; IRA limit $6,500 (\u00a7219(b)(5)(A)). IRA catch-up remains $1,000 (not COLA-indexed until SECURE 2.0's later change). Saver's Credit MFJ bands 43,500/47,500/73,000; all-other bands 21,750/23,750/36,500."
     },
@@ -245,7 +251,10 @@
         "2026.retirement_limits.ira",
         "2026.credits.savers_credit",
         "2025.retirement_limits.401k.super_catchup_60_63",
-        "2025.retirement_limits.401k.total_415c"
+        "2025.retirement_limits.401k.total_415c",
+        "2026.ira.roth_magi_phaseout",
+        "2026.ira.deduction_magi_phaseout_active",
+        "2026.qcd_limit"
       ],
       "note": "401(k)/403(b)/457/TSP elective deferral limit $24,500 (was $23,500); catch-up (50+) $8,000 (was $7,500); age-60-63 SECURE 2.0 super catch-up REMAINS $11,250 for 2026 (verified directly against statutory text: 'remains $11,250' -- confirms the same figure applies to 2025 and 2026); \u00a7415(c) DC limit $72,000 (was $70,000, confirming the 2025 figure via the same source series, Notice 2024-80). IRA limit $7,500, IRA catch-up $1,100. Saver's Credit MFJ bands 48,500/52,500/80,500; all-other bands 24,250/26,250/40,250."
     },
@@ -255,7 +264,10 @@
       "retrieved": "2026-07-30",
       "backs": [
         "2025.retirement_limits.401k.super_catchup_60_63",
-        "2025.retirement_limits.401k.total_415c"
+        "2025.retirement_limits.401k.total_415c",
+        "2025.ira.roth_magi_phaseout",
+        "2025.ira.deduction_magi_phaseout_active",
+        "2025.qcd_limit"
       ],
       "note": "Age-60-63 super catch-up for 2025 is $11,250 (this is the primary source the audit blueprint referenced but which was never actually fetched during Phase 2 -- now verified directly). \u00a7415(c) DC limit $70,000 for 2025."
     },
@@ -285,6 +297,47 @@
         "2026.se_tax.ss_wage_base"
       ],
       "note": "2026 taxable maximum (wage base) $184,500, up from $176,100 in 2025. DIRECT FETCH OF SSA.GOV WAS BLOCKED (HTTP 403 via WebFetch and curl); this figure is corroborated by multiple independent secondary reports of the same SSA press release (Thomson Reuters Tax & Accounting, Kiplinger, Paycor, HRWatchdog, Mercer) that all agree exactly on $184,500, which is a materially stronger corroboration than a single secondary source."
+    },
+    "notice_2023_75_ty2024": {
+      "url": "https://www.irs.gov/pub/irs-drop/n-23-75.pdf",
+      "title": "Notice 2023-75, 2024 Amounts Relating to Retirement Plans and IRAs",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2024.ira.roth_magi_phaseout",
+        "2024.ira.deduction_magi_phaseout_active",
+        "2024.qcd_limit"
+      ],
+      "note": "Roth IRA phase-out MFJ 230,000-240,000; single/HoH 146,000-161,000; MFS 0-10,000. Trad IRA deduction (active participant) single/HoH 77,000-87,000; MFJ 123,000-143,000; spouse-covered MFJ 230,000-240,000; MFS 0-10,000. QCD limit indexed from $100,000 to $105,000 for 2024 (SECURE 2.0 Act section 112 indexing begins 2024)."
+    },
+    "irc_168k_bonus": {
+      "url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title26-section168",
+      "title": "26 USC 168(k) (bonus depreciation), as amended by Pub. L. 119-21 (OBBBA)",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2023.bonus_depreciation_rate",
+        "2024.bonus_depreciation_rate",
+        "2025.bonus_depreciation_rate",
+        "2026.bonus_depreciation_rate"
+      ],
+      "note": "Pre-OBBBA TCJA phasedown (former 168(k)(6)(A)): 80% (2023), 60% (2024), 40% (2025). OBBBA (Pub. L. 119-21, enacted 2025-07-04) restored 100% as the default in 168(k)(1)(A) for property acquired after Jan 19, 2025 and placed in service after that date; property acquired on/before Jan 19, 2025 keeps the pre-OBBBA schedule (40% for 2025). A 168(k)(10) transition election allows 40% (or 60% for long-production/aircraft) in lieu of 100% for the first year ending after Jan 19, 2025. 2026 default 100%."
+    },
+    "obbba_statute_2026": {
+      "url": "https://www.law.cornell.edu/uscode/text/26/151",
+      "title": "OBBBA personal deductions (Pub. L. 119-21) \u2014 IRC 151(d)(5)(C), 224, 225, 163(h)(4)",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2026.obbba_deductions"
+      ],
+      "note": "2026 amounts are identical to 2025: none of the four OBBBA personal deductions (senior bonus IRC 151(d)(5)(C); tips IRC 224; overtime IRC 225; car-loan interest IRC 163(h)(4)) are indexed for inflation. Senior bonus $6,000 (6% phase-out over $75,000 single / $150,000 MFJ); tips $25,000 ($150,000/$300,000, $100 per $1,000 rounded down); overtime $12,500/$25,000 (same phase-out); car-loan interest $10,000 ($100,000/$200,000, $200 per $1,000 rounded up). Effective 2025-2028. Confirmed non-indexed in statute text."
+    },
+    "irc_408d8_qcd": {
+      "url": "https://www.law.cornell.edu/uscode/text/26/408",
+      "title": "IRC 408(d)(8) \u2014 Qualified Charitable Distribution limit (pre-2024 statutory)",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2023.qcd_limit"
+      ],
+      "note": "$100,000 aggregate annual QCD limit, fixed by statute 2016-2023. SECURE 2.0 Act section 112 (Pub. L. 117-328, Div. T) added inflation indexing beginning 2024 (Notice 2023-75 raised it to $105,000)."
     }
   },
   "2023": {
@@ -705,7 +758,65 @@
         "2024-01-16",
         "Sep 1 - Dec 31"
       ]
-    ]
+    ],
+    "ira": {
+      "roth_magi_phaseout": {
+        "single": {
+          "start": 138000,
+          "end": 153000
+        },
+        "head_of_household": {
+          "start": 138000,
+          "end": 153000
+        },
+        "married_jointly": {
+          "start": 218000,
+          "end": 228000
+        },
+        "qualifying_surviving_spouse": {
+          "start": 218000,
+          "end": 228000
+        },
+        "married_separately": {
+          "start": 0,
+          "end": 10000
+        }
+      },
+      "deduction_magi_phaseout_active": {
+        "single": {
+          "start": 73000,
+          "end": 83000
+        },
+        "head_of_household": {
+          "start": 73000,
+          "end": 83000
+        },
+        "married_jointly": {
+          "start": 116000,
+          "end": 136000
+        },
+        "qualifying_surviving_spouse": {
+          "start": 116000,
+          "end": 136000
+        },
+        "married_separately": {
+          "start": 0,
+          "end": 10000
+        },
+        "spouse_covered_mfj": {
+          "start": 218000,
+          "end": 228000
+        }
+      }
+    },
+    "qcd_limit": 100000,
+    "section_179": {
+      "limit": 1160000,
+      "phaseout_start": 2890000
+    },
+    "bonus_depreciation_rate": {
+      "rate": 0.8
+    }
   },
   "2024": {
     "tax_year": 2024,
@@ -1123,6 +1234,64 @@
       "threshold_mfj": 383900,
       "phase_in_range_single": 50000,
       "phase_in_range_mfj": 100000
+    },
+    "ira": {
+      "roth_magi_phaseout": {
+        "single": {
+          "start": 146000,
+          "end": 161000
+        },
+        "head_of_household": {
+          "start": 146000,
+          "end": 161000
+        },
+        "married_jointly": {
+          "start": 230000,
+          "end": 240000
+        },
+        "qualifying_surviving_spouse": {
+          "start": 230000,
+          "end": 240000
+        },
+        "married_separately": {
+          "start": 0,
+          "end": 10000
+        }
+      },
+      "deduction_magi_phaseout_active": {
+        "single": {
+          "start": 77000,
+          "end": 87000
+        },
+        "head_of_household": {
+          "start": 77000,
+          "end": 87000
+        },
+        "married_jointly": {
+          "start": 123000,
+          "end": 143000
+        },
+        "qualifying_surviving_spouse": {
+          "start": 123000,
+          "end": 143000
+        },
+        "married_separately": {
+          "start": 0,
+          "end": 10000
+        },
+        "spouse_covered_mfj": {
+          "start": 230000,
+          "end": 240000
+        }
+      }
+    },
+    "qcd_limit": 105000,
+    "section_179": {
+      "limit": 1220000,
+      "phaseout_start": 3050000
+    },
+    "bonus_depreciation_rate": {
+      "rate": 0.6
     }
   },
   "2025": {
@@ -1517,7 +1686,13 @@
         "magi_phaseout_start_single": 150000,
         "magi_phaseout_start_mfj": 300000,
         "phaseout_per_1000": 100,
-        "phaseout_rounding": "down"
+        "phaseout_rounding": "down",
+        "effective_years": [
+          "2025",
+          "2026",
+          "2027",
+          "2028"
+        ]
       },
       "overtime": {
         "max_single": 12500,
@@ -1525,7 +1700,13 @@
         "magi_phaseout_start_single": 150000,
         "magi_phaseout_start_mfj": 300000,
         "phaseout_per_1000": 100,
-        "phaseout_rounding": "down"
+        "phaseout_rounding": "down",
+        "effective_years": [
+          "2025",
+          "2026",
+          "2027",
+          "2028"
+        ]
       },
       "car_loan_interest": {
         "max": 10000,
@@ -1584,7 +1765,67 @@
         "2026-01-15",
         "Sep 1 - Dec 31"
       ]
-    ]
+    ],
+    "ira": {
+      "roth_magi_phaseout": {
+        "single": {
+          "start": 150000,
+          "end": 165000
+        },
+        "head_of_household": {
+          "start": 150000,
+          "end": 165000
+        },
+        "married_jointly": {
+          "start": 236000,
+          "end": 246000
+        },
+        "qualifying_surviving_spouse": {
+          "start": 236000,
+          "end": 246000
+        },
+        "married_separately": {
+          "start": 0,
+          "end": 10000
+        }
+      },
+      "deduction_magi_phaseout_active": {
+        "single": {
+          "start": 79000,
+          "end": 89000
+        },
+        "head_of_household": {
+          "start": 79000,
+          "end": 89000
+        },
+        "married_jointly": {
+          "start": 126000,
+          "end": 146000
+        },
+        "qualifying_surviving_spouse": {
+          "start": 126000,
+          "end": 146000
+        },
+        "married_separately": {
+          "start": 0,
+          "end": 10000
+        },
+        "spouse_covered_mfj": {
+          "start": 236000,
+          "end": 246000
+        }
+      }
+    },
+    "qcd_limit": 108000,
+    "section_179": {
+      "limit": 2500000,
+      "phaseout_start": 4000000
+    },
+    "bonus_depreciation_rate": {
+      "rate_pre_cutoff": 0.4,
+      "rate_post_cutoff": 1.0,
+      "cutoff_acquired_after": "2025-01-19"
+    }
   },
   "2026": {
     "tax_year": 2026,
@@ -2009,7 +2250,113 @@
         "2027-01-15",
         "Sep 1 - Dec 31"
       ]
-    ]
+    ],
+    "ira": {
+      "roth_magi_phaseout": {
+        "single": {
+          "start": 153000,
+          "end": 168000
+        },
+        "head_of_household": {
+          "start": 153000,
+          "end": 168000
+        },
+        "married_jointly": {
+          "start": 242000,
+          "end": 252000
+        },
+        "qualifying_surviving_spouse": {
+          "start": 242000,
+          "end": 252000
+        },
+        "married_separately": {
+          "start": 0,
+          "end": 10000
+        }
+      },
+      "deduction_magi_phaseout_active": {
+        "single": {
+          "start": 81000,
+          "end": 91000
+        },
+        "head_of_household": {
+          "start": 81000,
+          "end": 91000
+        },
+        "married_jointly": {
+          "start": 129000,
+          "end": 149000
+        },
+        "qualifying_surviving_spouse": {
+          "start": 129000,
+          "end": 149000
+        },
+        "married_separately": {
+          "start": 0,
+          "end": 10000
+        },
+        "spouse_covered_mfj": {
+          "start": 242000,
+          "end": 252000
+        }
+      }
+    },
+    "qcd_limit": 111000,
+    "section_179": {
+      "limit": 2560000,
+      "phaseout_start": 4090000
+    },
+    "bonus_depreciation_rate": {
+      "rate": 1.0
+    },
+    "obbba_deductions": {
+      "senior_bonus": {
+        "amount": 6000,
+        "magi_phaseout_start_single": 75000,
+        "magi_phaseout_start_mfj": 150000,
+        "phaseout_rate": 0.06,
+        "effective_years": [
+          "2025",
+          "2026",
+          "2027",
+          "2028"
+        ]
+      },
+      "tips": {
+        "max": 25000,
+        "magi_phaseout_start_single": 150000,
+        "magi_phaseout_start_mfj": 300000,
+        "phaseout_per_1000": 100,
+        "phaseout_rounding": "down",
+        "effective_years": [
+          "2025",
+          "2026",
+          "2027",
+          "2028"
+        ]
+      },
+      "overtime": {
+        "max_single": 12500,
+        "max_mfj": 25000,
+        "magi_phaseout_start_single": 150000,
+        "magi_phaseout_start_mfj": 300000,
+        "phaseout_per_1000": 100,
+        "phaseout_rounding": "down",
+        "effective_years": [
+          "2025",
+          "2026",
+          "2027",
+          "2028"
+        ]
+      },
+      "car_loan_interest": {
+        "max": 10000,
+        "magi_phaseout_start_single": 100000,
+        "magi_phaseout_start_mfj": 200000,
+        "phaseout_per_1000": 200,
+        "phaseout_rounding": "up"
+      }
+    }
   },
   "filing_status_map": {
     "mfj": "married_jointly",
