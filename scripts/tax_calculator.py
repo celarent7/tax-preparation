@@ -125,6 +125,28 @@ def calculate_niit(magi: float, net_investment_income: float, threshold: float,
     }
 
 
+def apply_capital_loss(net_capital_loss: float, filing_status: str,
+                       capital_loss_limit: float,
+                       capital_loss_limit_mfs: float) -> Dict:
+    """Apply the IRC 1211(b) net-capital-loss offset against ordinary income.
+
+    A net capital loss offsets ordinary income only up to $3,000 ($1,500 MFS);
+    the remainder carries forward indefinitely (IRC 1212(b)). Limits are read
+    from the year constants — never hard-coded here.
+    """
+    status = normalize_filing_status(filing_status)
+    limit = (capital_loss_limit_mfs if status == "married_separately"
+             else capital_loss_limit)
+    loss = max(0.0, float(net_capital_loss))
+    allowed = min(loss, limit)
+    return {
+        "net_capital_loss": round(loss, 2),
+        "allowed_offset": round(allowed, 2),
+        "carryforward": round(loss - allowed, 2),
+        "limit_used": limit,
+    }
+
+
 def calculate_additional_medicare(wages: float, threshold: float,
                                   rate: float = 0.009) -> Dict:
     """Additional Medicare Tax: 0.9% on wages/SE income above the threshold.
