@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from credit_eligibility_checker import (
     calculate_llc,
     calculate_ftc_simple,
+    check_energy_credits,
     get_credit_params,
 )
 from utils import load_tax_constants
@@ -96,3 +97,53 @@ def test_energy_termination_dates_only_in_2025():
     ec25 = load_tax_constants("2025")["energy_credits"]
     assert ec25["new_clean_vehicle_30d"]["terminated_after"] == "2025-09-30"
     assert ec25["home_improvement_25c"]["terminated_after"] == "2025-12-31"
+
+
+def test_30d_eligible_within_magi_and_msrp(data_2025):
+    rs = check_energy_credits({"filing_status": "mfj", "magi": 250000,
+                               "ev_purchase_price": 52000, "ev_msrp": 52000,
+                               "ev_purchase_date": "2025-06-01"}, data_2025)
+    r = next(x for x in rs if "New Clean Vehicle" in x.name)
+    assert r.eligible and r.amount == 7500
+
+
+def test_30d_lesser_of_current_or_prior_magi(data_2025):
+    # Current MAGI over the limit, prior year under -> still eligible (IRC 30D(f)(10)(B)).
+    rs = check_energy_credits({"filing_status": "mfj", "magi": 400000,
+                               "magi_prior_year": 250000,
+                               "ev_purchase_price": 52000, "ev_msrp": 52000,
+                               "ev_purchase_date": "2025-06-01"}, data_2025)
+    r = next(x for x in rs if "New Clean Vehicle" in x.name)
+    assert r.eligible
+
+
+def test_30d_purchase_after_termination_ineligible(data_2025):
+    rs = check_energy_credits({"filing_status": "mfj", "magi": 100000,
+                               "ev_purchase_price": 52000, "ev_msrp": 52000,
+                               "ev_purchase_date": "2025-10-15"}, data_2025)
+    r = next(x for x in rs if "New Clean Vehicle" in x.name)
+    assert not r.eligible
+    assert any("2025-09-30" in n for n in r.notes)
+
+
+def test_25e_used_vehicle_30pct_capped(data_2025):
+    rs = check_energy_credits({"filing_status": "single", "magi": 60000,
+                               "ev_purchase_price": 12000, "ev_is_used": True,
+                               "ev_purchase_date": "2025-03-01"}, data_2025)
+    r = next(x for x in rs if "Used" in x.name)
+    assert r.eligible and r.amount == 3600  # 30% x 12,000, under the $4,000 cap
+
+
+def test_25c_annual_and_heat_pump_limits(data_2025):
+    rs = check_energy_credits({"filing_status": "single", "magi": 90000,
+                               "home_improvement_costs": 6000,
+                               "heat_pump_costs": 8000}, data_2025)
+    r = next(x for x in rs if "Home Improvement" in x.name)
+    # 30% x 6000 = 1800 -> capped 1200; heat pump 30% x 8000 = 2400 -> capped 2000
+    assert r.eligible and r.amount == 3200
+
+
+def test_energy_credits_2026_not_available():
+    rs = check_energy_credits({"filing_status": "single", "magi": 90000,
+                               "solar_costs": 20000}, load_tax_constants("2026"))
+    assert rs == [] or all(not r.eligible for r in rs)

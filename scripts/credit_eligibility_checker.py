@@ -512,6 +512,126 @@ def calculate_ftc_simple(data: Dict, params: Dict) -> CreditResult:
         req, ["1099-DIV (Box 7)", "1099-INT (Box 6)"])
 
 
+def check_energy_credits(data: Dict, tax_data: Dict) -> List[CreditResult]:
+    """IRA-2022 clean-energy credits (IRC 30D/25E/25C/25D), 2023-2025 only.
+
+    Year gating is by KEY ABSENCE: a year block without `energy_credits`
+    (2026+) means the credits do not exist for that year — return no results
+    rather than raising. OBBBA termination dates inside 2025 are compared
+    against the purchase/in-service date.
+    """
+    ec = tax_data.get("energy_credits")
+    if not ec:
+        return []
+    status = normalize_filing_status(data["filing_status"])
+    magi = float(data.get("magi", data.get("agi", 0)))
+    magi_prior = data.get("magi_prior_year")
+    # IRC 30D(f)(10)(B) / 25E(b)(2)(B): use the LESSER of current or prior MAGI.
+    magi_for_test = min(magi, float(magi_prior)) if magi_prior is not None else magi
+    results: List[CreditResult] = []
+
+    def _terminated(block: Dict, when: str) -> bool:
+        cutoff = block.get("terminated_after")
+        return bool(cutoff and when and when > cutoff)
+
+    # --- §30D new clean vehicle ---
+    if data.get("ev_purchase_price") and not data.get("ev_is_used"):
+        b = ec["new_clean_vehicle_30d"]
+        when = data.get("ev_purchase_date", "")
+        msrp_cap = (b["msrp_limit_suv_truck_van"] if data.get("ev_is_suv_truck_van")
+                    else b["msrp_limit_other"])
+        notes: List[str] = []
+        ok = True
+        if _terminated(b, when):
+            ok = False
+            notes.append(f"Vehicles acquired after {b['terminated_after']} do not "
+                         "qualify (OBBBA termination).")
+        if magi_for_test > b["magi_limit"][status]:
+            ok = False
+            notes.append(f"MAGI (lesser of current/prior year) exceeds "
+                         f"${b['magi_limit'][status]:,.0f}.")
+        if float(data.get("ev_msrp", 0)) > msrp_cap:
+            ok = False
+            notes.append(f"MSRP exceeds the ${msrp_cap:,.0f} limit.")
+        results.append(CreditResult(
+            "New Clean Vehicle Credit (30D)", ok, b["max"] if ok else 0, 0.0, False,
+            notes or ["Battery/assembly sourcing rules apply — confirm the VIN on "
+                      "fueleconomy.gov; dealers can transfer the credit at sale."],
+            {"within_magi": magi_for_test <= b["magi_limit"][status],
+             "within_msrp": float(data.get("ev_msrp", 0)) <= msrp_cap,
+             "not_terminated": not _terminated(b, when)},
+            ["Seller report / IRS ECO portal confirmation", "Purchase agreement"]))
+
+    # --- §25E used clean vehicle ---
+    if data.get("ev_is_used") and data.get("ev_purchase_price"):
+        b = ec["used_clean_vehicle_25e"]
+        when = data.get("ev_purchase_date", "")
+        price = float(data.get("ev_purchase_price", 0))
+        notes: List[str] = []
+        ok = True
+        if _terminated(b, when):
+            ok = False
+            notes.append(f"Vehicles acquired after {b['terminated_after']} do not "
+                         "qualify (OBBBA termination).")
+        if price > b["price_limit"]:
+            ok = False
+            notes.append(f"Sale price ${price:,.0f} exceeds the "
+                         f"${b['price_limit']:,.0f} limit.")
+        if magi_for_test > b["magi_limit"][status]:
+            ok = False
+            notes.append(f"MAGI (lesser of current/prior year) exceeds "
+                         f"${b['magi_limit'][status]:,.0f}.")
+        amount = min(b["max"], b["pct_of_price"] * price) if ok else 0
+        results.append(CreditResult(
+            "Used Clean Vehicle Credit (25E)", ok and amount > 0, round(amount, 2),
+            0.0, False,
+            notes or ["Lesser of the statutory max or 30% of the sale price; "
+                     "nonrefundable. Confirm the dealer time-of-sale report."],
+            {"within_magi": magi_for_test <= b["magi_limit"][status],
+             "within_price_limit": price <= b["price_limit"],
+             "not_terminated": not _terminated(b, when)},
+            ["Seller time-of-sale report (IRS ECO)", "Purchase agreement"]))
+
+    # --- §25C energy-efficient home improvement ---
+    home_costs = float(data.get("home_improvement_costs", 0))
+    heat_costs = float(data.get("heat_pump_costs", 0))
+    if home_costs > 0 or heat_costs > 0:
+        b = ec["home_improvement_25c"]
+        pct = b["pct"]
+        general = min(b["annual_limit"], pct * home_costs) if home_costs > 0 else 0
+        heat = min(b["heat_pump_limit"], pct * heat_costs) if heat_costs > 0 else 0
+        amount = general + heat
+        notes = []
+        if not data.get("home_improvement_costs"):
+            notes.append("Sub-caps not itemized by this tool: "
+                         f"windows/skylights ${b['windows_limit']:,.0f}, "
+                         f"exterior doors ${b['doors_limit']:,.0f} total, "
+                         f"home energy audit ${b['audit_limit']:,.0f}.")
+        notes.append("Nonrefundable; no carryforward (unused amount is lost).")
+        results.append(CreditResult(
+            "Energy Efficient Home Improvement Credit (25C)", amount > 0,
+            round(amount, 2), 0.0, False, notes,
+            {"has_costs": home_costs > 0 or heat_costs > 0},
+            ["Form 5695", "Manufacturer certification", "Receipts"]))
+
+    # --- §25D residential clean energy ---
+    solar_costs = float(data.get("solar_costs", 0))
+    if solar_costs > 0:
+        b = ec["residential_clean_energy_25d"]
+        amount = b["pct"] * solar_costs
+        results.append(CreditResult(
+            "Residential Clean Energy Credit (25D)", True, round(amount, 2), 0.0,
+            False,
+            ["30% of qualified residential clean-energy expenditures (solar, "
+             "geothermal, fuel cells, battery storage); no annual dollar cap "
+             "(fuel cells excepted). Nonrefundable; unused credit carries "
+             "forward to succeeding years (IRC 25D(c))."],
+            {"has_expenditures": solar_costs > 0},
+            ["Form 5695", "Manufacturer certification", "Installation invoices"]))
+
+    return results
+
+
 def check_all_credits(data: Dict, tax_data: Dict) -> Dict:
     """Check eligibility for all major credits for a given tax year."""
     params = get_credit_params(tax_data)
@@ -531,6 +651,7 @@ def check_all_credits(data: Dict, tax_data: Dict) -> Dict:
     results.append(calculate_llc(data, params["lifetime_learning"]))
     results.append(calculate_savers_credit(data, params["savers_credit"]))
     results.append(calculate_ftc_simple(data, tax_data["credits_static"]["ftc_no_1116_limit"]))
+    results.extend(check_energy_credits(data, tax_data))
 
     # Calculate totals
     total_credits = sum(r.amount for r in results if r.eligible)
@@ -577,6 +698,26 @@ def main():
     parser.add_argument("--retirement-contributions", type=float, default=0)
     parser.add_argument("--age", type=int, default=35)
 
+    # Clean-energy credit inputs (IRC 30D/25E/25C/25D), 2023-2025 only.
+    parser.add_argument("--ev-purchase-price", type=float, default=None,
+                        help="Clean-vehicle purchase price (new §30D or used §25E)")
+    parser.add_argument("--ev-purchase-date", type=str, default=None,
+                        help="Acquisition date YYYY-MM-DD (binding contract + payment)")
+    parser.add_argument("--ev-used", action="store_true",
+                        help="Vehicle is previously owned (selects §25E over §30D)")
+    parser.add_argument("--ev-msrp", type=float, default=None,
+                        help="Manufacturer's suggested retail price (§30D MSRP test)")
+    parser.add_argument("--ev-suv-truck-van", action="store_true",
+                        help="Vehicle is an SUV, pickup truck, or van (§30D higher MSRP cap)")
+    parser.add_argument("--magi-prior-year", type=float, default=None,
+                        help="Prior-year MAGI (§§30D/25E use the lesser of current/prior)")
+    parser.add_argument("--home-improvement-costs", type=float, default=0,
+                        help="Energy-efficient home improvement costs (§25C general bucket)")
+    parser.add_argument("--heat-pump-costs", type=float, default=0,
+                        help="Heat pump / heat-pump water heater / biomass costs (§25C)")
+    parser.add_argument("--solar-costs", type=float, default=0,
+                        help="Residential clean-energy expenditures, e.g. solar (§25D)")
+
     args = parser.parse_args()
 
     if args.data_file:
@@ -594,7 +735,16 @@ def main():
             "education_expenses": args.education_expenses,
             "is_eligible_student": args.education_expenses > 0,
             "retirement_contributions": args.retirement_contributions,
-            "age": args.age
+            "age": args.age,
+            "ev_purchase_price": args.ev_purchase_price,
+            "ev_purchase_date": args.ev_purchase_date or "",
+            "ev_is_used": args.ev_used,
+            "ev_msrp": args.ev_msrp if args.ev_msrp is not None else 0,
+            "ev_is_suv_truck_van": args.ev_suv_truck_van,
+            "magi_prior_year": args.magi_prior_year,
+            "home_improvement_costs": args.home_improvement_costs,
+            "heat_pump_costs": args.heat_pump_costs,
+            "solar_costs": args.solar_costs,
         }
 
     try:
