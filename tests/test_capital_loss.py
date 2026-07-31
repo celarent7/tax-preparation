@@ -49,3 +49,47 @@ def test_unknown_status_raises(limits_2025):
     limit, limit_mfs = limits_2025
     with pytest.raises(ValueError):
         apply_capital_loss(5000, "widowed_maybe", limit, limit_mfs)
+
+
+# --- CLI integration (B1.2) ---
+import json
+import subprocess
+
+SCRIPT = os.path.join(os.path.dirname(__file__), "..", "scripts", "tax_calculator.py")
+
+
+def run_calc(*args):
+    return subprocess.run(
+        [sys.executable, SCRIPT, *args, "--output-format", "json"],
+        capture_output=True, text=True)
+
+
+def test_cli_capital_loss_reduces_agi_and_reports_carryforward():
+    p = run_calc("--gross-income", "100000", "--filing-status", "mfj",
+                 "--year", "2025", "--net-capital-loss", "8000")
+    assert p.returncode == 0, p.stdout + p.stderr
+    out = json.loads(p.stdout)
+    assert out["calculations"]["adjusted_gross_income"] == 97000.0
+    assert out["capital_loss"]["allowed_offset"] == 3000
+    assert out["capital_loss"]["carryforward"] == 5000
+
+
+def test_cli_capital_loss_mutually_exclusive_with_ltcg():
+    p = run_calc("--gross-income", "100000", "--year", "2025",
+                 "--net-capital-loss", "5000", "--ltcg", "10000")
+    assert p.returncode == 1
+    assert "mutually exclusive" in p.stdout
+
+
+def test_cli_negative_capital_loss_rejected():
+    p = run_calc("--gross-income", "100000", "--year", "2025",
+                 "--net-capital-loss", "-5000")
+    assert p.returncode == 1
+
+
+def test_cli_niit_clamped_in_loss_year():
+    # High MAGI, net loss: NIIT base must be 0, never negative.
+    p = run_calc("--gross-income", "400000", "--filing-status", "single",
+                 "--year", "2025", "--net-capital-loss", "8000")
+    out = json.loads(p.stdout)
+    assert out["tax"]["niit"] == 0

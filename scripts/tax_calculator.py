@@ -419,6 +419,11 @@ def main():
                         help="Net long-term capital gain (taxed at preferential rates)")
     parser.add_argument("--qualified-dividends", type=float, default=0,
                         help="Qualified dividends (taxed at preferential rates)")
+    parser.add_argument("--net-capital-loss", type=float, default=0,
+                        help="Net capital LOSS for the year as a positive number "
+                             "(Schedule D line 16 negative). Applies the ordinary-income "
+                             "offset up to the annual limit; the rest carries forward. "
+                             "Mutually exclusive with --ltcg / --qualified-dividends.")
     parser.add_argument("--wages", type=float, default=None,
                         help="W-2 wages, for the Additional Medicare Tax (defaults to gross income)")
     parser.add_argument("--net-investment-income", type=float, default=None,
@@ -497,6 +502,13 @@ def main():
         print("Error: --compute-qbi requires --se-net-profit (Schedule C) and/or "
               "--reit-dividends (1099-DIV Box 5) to compute a §199A deduction.")
         sys.exit(1)
+    if args.net_capital_loss < 0:
+        print("Error: --net-capital-loss must be a non-negative number (enter the loss as a positive value).")
+        sys.exit(1)
+    if args.net_capital_loss > 0 and (args.ltcg > 0 or args.qualified_dividends > 0):
+        print("Error: --net-capital-loss and --ltcg/--qualified-dividends are mutually "
+              "exclusive — a year has either a net gain or a net loss after Schedule D netting.")
+        sys.exit(1)
 
     # Load Tax Data for specified year
     try:
@@ -522,7 +534,13 @@ def main():
         sys.exit(1)
 
     # Calculate AGI
+    capital_loss = None
     agi = args.gross_income - args.adjustments
+    if args.net_capital_loss > 0:
+        capital_loss = apply_capital_loss(
+            args.net_capital_loss, args.filing_status,
+            tax_data["capital_loss_limit"], tax_data["capital_loss_limit_mfs"])
+        agi -= capital_loss["allowed_offset"]
 
     # Determine deduction to use
     standard_deduction = calculate_standard_deduction(
@@ -703,6 +721,8 @@ def main():
         result["state"] = state_result
     if qbi_result is not None:
         result["qbi"] = qbi_result.to_dict()
+    if capital_loss is not None:
+        result["capital_loss"] = capital_loss
 
     if args.output_format == "json":
         print(json.dumps(result, indent=2))
@@ -717,6 +737,9 @@ def main():
         if qbi_result is not None:
             print(f"  QBI deduction:        ${qbi_deduction:,.2f} "
                   f"(Form {qbi_result.form}; reduces taxable income, not AGI)")
+        if capital_loss is not None:
+            print(f"  Capital loss offset:  −${capital_loss['allowed_offset']:,.2f} "
+                  f"(carryforward to next year: ${capital_loss['carryforward']:,.2f})")
         if preferential_income > 0:
             print(f"  Ordinary portion:     ${ordinary_income:,.2f}")
             print(f"  Preferential portion: ${preferential_income:,.2f} (LTCG + qualified dividends)")
