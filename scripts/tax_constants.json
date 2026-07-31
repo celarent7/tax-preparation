@@ -7,6 +7,20 @@
   ],
   "_sources": {
     "_note": "Every statutory figure must trace to a primary source: IRS Rev. Proc. / newsroom / form instructions for federal, FTB for California. URL + retrieval date + the keys each source backs.",
+    "amt_statutory_rates": {
+      "url": "https://www.law.cornell.edu/uscode/text/26/55",
+      "title": "IRC § 55 — Alternative Minimum Tax (26%/28% rates; 25% exemption phase-out, pre-OBBBA)",
+      "retrieved": "2026-07-31",
+      "backs": [
+        "2023.amt.rates",
+        "2023.amt.phaseout_rate",
+        "2024.amt.rates",
+        "2024.amt.phaseout_rate",
+        "2025.amt.rates",
+        "2025.amt.phaseout_rate"
+      ],
+      "note": "§ 55(b)(1)(A): tentative minimum tax is 26% of the taxable excess up to the inflation-indexed 28% breakpoint plus 28% above it (MFS breakpoint is half). § 55(d)(2): the exemption is reduced by 25% of AMTI over the phase-out threshold — in effect for 2023-2025. § 55(d)(3) is the inflation-adjustment mechanism for the breakpoint, exemption and phase-out threshold (rounded to $100). The 26%/28% rates themselves are statutory and not indexed. The 50% phase-out rate for 2026 is OBBBA §70107 (see obbba_amt_2026)."
+    },
     "irs_sch_a_2025_instructions": {
       "url": "https://www.irs.gov/instructions/i1040sca",
       "title": "Instructions for Schedule A (Form 1040) (2025)",
@@ -112,7 +126,7 @@
         "2026.section_179",
         "2026.student_loan_interest_phaseout"
       ],
-      "note": "sec .03 LTCG; sec .05 CTC 2,200/1,700; sec .06 EITC + 12,200 investment limit; sec .10 AMT (OBBBA phaseout reset to 1,000,000 MFJ / 500,000 other); sec .14 standard deduction 32,200/24,150/16,100 and aged-or-blind 1,650 (2,050 if unmarried and not a surviving spouse); sec .26 QBI thresholds 403,500 MFJ / 201,775 MFS / 201,750 all-other (single/HoH), phase-in 553,500 / 276,775 / 276,750 \u2014 OBBBA \u00a770105 widened the ranges to 150,000 MFJ / 75,000 other; sec .12 \u00a7199A(i) $400 minimum deduction + $1,000 active-QBI floor (OBBBA \u00a770105), effective TY beginning after 12/31/2025. sec .29 Interest on Education Loans (\u00a7 221): phaseout begins at MAGI $85,000 ($175,000 MFJ) and is fully phased out at $100,000 ($205,000 MFJ); the single/HoH/QSS band is unchanged from 2025 while the MFJ band rose $5,000; MFS ineligible under \u00a7 221(e)(2)."
+      "note": "sec .03 LTCG; sec .05 CTC 2,200/1,700; sec .06 EITC + 12,200 investment limit; sec .10 AMT exemptions 140,200 MFJ / 90,100 single / 70,100 MFS, 28% bracket at 244,500 (122,250 MFS); OBBBA phaseout reset to 1,000,000 MFJ / 500,000 other (see obbba_amt_2026); sec .14 standard deduction 32,200/24,150/16,100 and aged-or-blind 1,650 (2,050 if unmarried and not a surviving spouse); sec .26 QBI thresholds 403,500 MFJ / 201,775 MFS / 201,750 all-other (single/HoH), phase-in 553,500 / 276,775 / 276,750 \u2014 OBBBA \u00a770105 widened the ranges to 150,000 MFJ / 75,000 other; sec .12 \u00a7199A(i) $400 minimum deduction + $1,000 active-QBI floor (OBBBA \u00a770105), effective TY beginning after 12/31/2025. sec .29 Interest on Education Loans (\u00a7 221): phaseout begins at MAGI $85,000 ($175,000 MFJ) and is fully phased out at $100,000 ($205,000 MFJ); the single/HoH/QSS band is unchanged from 2025 while the MFJ band rose $5,000; MFS ineligible under \u00a7 221(e)(2)."
     },
     "rev_proc_2022_38_ty2023": {
       "url": "https://www.irs.gov/pub/irs-drop/rp-22-38.pdf",
@@ -122,11 +136,12 @@
         "2023.tax_brackets",
         "2023.standard_deductions",
         "2023.ltcg_brackets",
+        "2023.amt",
         "2023.section_179",
         "2023.qbi",
         "2023.student_loan_interest_phaseout"
       ],
-      "note": "sec .03 LTCG 89,250/553,850 MFJ, 44,625/276,900 MFS, 59,750/523,050 HoH, 44,625/492,300 single; sec .15 standard deduction 27,700/20,800/13,850; sec .27 QBI thresholds 364,200 MFJ / 182,100 MFS & all-other, phase-in amounts 464,200 / 232,100 (50,000 single / 100,000 MFJ ranges). MFS = all-other (pre-OBBBA the single threshold applied to MFS). sec .30 Interest on Education Loans (§ 221): phaseout begins at MAGI $75,000 ($155,000 MFJ) and is fully phased out at $90,000 ($185,000 MFJ); MFS ineligible under § 221(e)(2)."
+      "note": "sec .03 LTCG 89,250/553,850 MFJ, 44,625/276,900 MFS, 59,750/523,050 HoH, 44,625/492,300 single; sec .11 AMT exemptions 126,500 MFJ / 81,300 single / 63,250 MFS, 28% bracket at 220,700 (110,350 MFS), phaseout thresholds 1,156,300 MFJ / 578,150 other (complete 1,662,300 MFJ / 903,350 other, confirming the 25% rate); sec .15 standard deduction 27,700/20,800/13,850; sec .27 QBI thresholds 364,200 MFJ / 182,100 MFS & all-other, phase-in amounts 464,200 / 232,100 (50,000 single / 100,000 MFJ ranges). MFS = all-other (pre-OBBBA the single threshold applied to MFS). sec .30 Interest on Education Loans (§ 221): phaseout begins at MAGI $75,000 ($155,000 MFJ) and is fully phased out at $90,000 ($185,000 MFJ); MFS ineligible under § 221(e)(2)."
     },
     "schedule_1a_2025": {
       "url": "https://www.irs.gov/pub/irs-pdf/f1040s1a.pdf",
@@ -368,6 +383,18 @@
         "2026.qbi.min_deduction_qbi_floor"
       ],
       "note": "2026 amounts are identical to 2025: none of the four OBBBA personal deductions (senior bonus IRC 151(d)(5)(C); tips IRC 224; overtime IRC 225; car-loan interest IRC 163(h)(4)) are indexed for inflation. Senior bonus $6,000 (6% phase-out over $75,000 single / $150,000 MFJ); tips $25,000 ($150,000/$300,000, $100 per $1,000 rounded down); overtime $12,500/$25,000 (same phase-out); car-loan interest $10,000 ($100,000/$200,000, $200 per $1,000 rounded up). Effective 2025-2028. Confirmed non-indexed in statute text. OBBBA \u00a770105 also widened the \u00a7199A(b)(3)(B) phase-in range to $75,000 (single/HoH/MFS) / $150,000 (MFJ) for TY after 12/31/2025 and added \u00a7199A(i): a $400 minimum deduction for an 'applicable taxpayer' with \u2265$1,000 aggregate QBI from active (material-participation) trades/businesses; the $400 is the GREATER of the normal deduction or $400 and overrides the \u00a7199A(a)(2) overall taxable-income limit."
+    },
+    "obbba_amt_2026": {
+      "url": "https://www.law.cornell.edu/uscode/text/26/55",
+      "title": "OBBBA AMT (Pub. L. 119-21 \u00a770107) \u2014 IRC 55(d) phase-out reset for TY after 12/31/2025",
+      "retrieved": "2026-07-31",
+      "backs": [
+        "2026.amt.phaseout_rate",
+        "2026.amt.phaseout_start_single",
+        "2026.amt.phaseout_start_mfj",
+        "2026.amt.phaseout_start_mfs"
+      ],
+      "note": "OBBBA \u00a770107 (Pub. L. 119-21, July 4 2025) made the TCJA AMT exemption/threshold increases permanent AND, for taxable years beginning after 12/31/2025: (a) reset the exemption phase-out threshold to $1,000,000 MFJ / $500,000 other (non-indexed through 2026 per \u00a755(d)(4)(A)(ii)(I)); (b) doubled the phase-out rate from 25% to 50%, creating a steeper 'bump zone' (effective ~39%/42% within the phase-out range). The 28% breakpoint remains inflation-indexed via Rev. Proc. 2025-32 ($244,500 / $122,250 MFS \u2014 see rev_proc_2025_32_ty2026). 2026 exemptions 140,200 MFJ / 90,100 single / 70,100 MFS."
     },
     "irc_408d8_qcd": {
       "url": "https://www.law.cornell.edu/uscode/text/26/408",
