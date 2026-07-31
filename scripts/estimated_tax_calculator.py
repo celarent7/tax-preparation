@@ -21,7 +21,10 @@ from utils import (
     make_year_arg,
     normalize_filing_status,
     select_for_status,
+    UnverifiedConstantError,
 )
+# qbi_calculator is imported lazily inside main() to avoid a circular import:
+# qbi_calculator imports THIS module (for calculate_se_tax).
 
 
 def get_due_dates(tax_data: Dict) -> List:
@@ -150,6 +153,30 @@ def main():
     parser.add_argument("--net-investment-income", type=float, default=0,
                         help="Projected net investment income, for NIIT")
     parser.add_argument("--withholding-to-date", type=float, default=0, help="Federal withholding to date")
+    # --- QBI (§199A) subtraction (blueprint P3.2 / plan G3) ---
+    # When projected SE income is present, the §199A QBI deduction is subtracted
+    # from taxable income by DEFAULT (closing P3.2). --no-qbi disables it for a
+    # control run. The engine is reused (no §199A math duplicated here).
+    parser.add_argument("--no-qbi", action="store_true",
+                        help="Do NOT subtract the §199A QBI deduction (control run). "
+                             "By default the deduction is computed and subtracted when "
+                             "projected SE income is present.")
+    parser.add_argument("--se-health-insurance", type=float, default=0,
+                        help="SE health insurance deduction (reduces QBI).")
+    parser.add_argument("--se-retirement", type=float, default=0,
+                        help="SE retirement (SEP/Solo-401k) deduction (reduces QBI).")
+    parser.add_argument("--w2-wages-paid", type=float, default=0,
+                        help="W-2 wages paid by the BUSINESS (the §199A wage limit).")
+    parser.add_argument("--ubia", type=float, default=0,
+                        help="Unadjusted basis of qualified business property.")
+    parser.add_argument("--sstb", action="store_true",
+                        help="Business is a Specified Service Trade or Business.")
+    parser.add_argument("--reit-dividends", type=float, default=0,
+                        help="1099-DIV Box 5 section 199A dividends.")
+    parser.add_argument("--net-capital-gain", type=float, default=0,
+                        help="Net LTCG + qualified dividends for the QBI overall limit.")
+    parser.add_argument("--qbi-loss-carryforward", type=float, default=0,
+                        help="Prior-year QBI loss carryforward.")
     make_year_arg(parser)
     parser.add_argument("--output-format", choices=["json", "text"], default="text")
 
@@ -186,7 +213,46 @@ def main():
     )
     taxable_income = max(0, agi - std_deduction)
 
-    # Calculate Federal Income Tax
+    # --- QBI (§199A) deduction (blueprint P3.2 / plan G3) ---
+    # When projected SE income is present, compute the §199A QBI deduction and
+    # subtract it from taxable income (it is a from-AGI, non-itemized deduction,
+    # taken AFTER the standard deduction). The §199A threshold test and overall
+    # limit use taxable income BEFORE the QBI deduction, so the engine consumes
+    # `taxable_income` as-is and the result is subtracted here. This is a single
+    # fixed-point pass with the pre-QBI taxable income — the documented Form
+    # 8995 approach: QBI does not depend on itself, so no iteration is needed.
+    # The ½ SE tax is passed in byte-identical from se_results (already computed
+    # above) rather than recomputed, guaranteeing AGI and adjusted-QBI agree.
+    qbi_result = None
+    qbi_deduction = 0.0
+    if args.projected_se_income > 0 and not args.no_qbi:
+        import qbi_calculator  # lazy: breaks the circular import (see top of file)
+        qbi_profile = {
+            "se_net_profit": args.projected_se_income,
+            "se_tax_half": se_results["deduction"],
+            "se_health_insurance": args.se_health_insurance,
+            "se_retirement": args.se_retirement,
+            "w2_wages_paid": args.w2_wages_paid,
+            "ubia": args.ubia,
+            "is_sstb": args.sstb,
+            "taxable_income_before_qbi": taxable_income,
+            "net_capital_gain": args.net_capital_gain,
+            "reit_dividends": args.reit_dividends,
+            "qbi_loss_carryforward": args.qbi_loss_carryforward,
+            "filing_status": args.filing_status,
+        }
+        try:
+            qbi_result = qbi_calculator.compute_qbi_deduction(qbi_profile, tax_data)
+            qbi_deduction = qbi_result.deduction
+        except UnverifiedConstantError as e:
+            print(f"Error computing QBI: {e}")
+            sys.exit(1)
+        except ValueError as e:
+            print(f"Error computing QBI: {e}")
+            sys.exit(1)
+        taxable_income = max(0, taxable_income - qbi_deduction)
+
+    # Calculate Federal Income Tax (on taxable income AFTER the QBI deduction)
     income_tax = calculate_income_tax(taxable_income, args.filing_status, tax_brackets)
 
     # Additional Medicare + NIIT on the projection (task P3.2). Omitting these
@@ -231,6 +297,7 @@ def main():
             "niit": niit["tax"],
             "total": round(total_estimated_tax, 2)
         },
+        "qbi": (qbi_result.to_dict() if qbi_result is not None else None),
         "safe_harbor": safe_harbor,
         "payment_plan": {
             "total_target_payment": round(total_target, 2),
@@ -248,6 +315,9 @@ def main():
         print(f"Projected Total Liability:  ${total_estimated_tax:,.2f}")
         print(f"  (Income Tax: ${income_tax:,.2f}, SE Tax: ${se_results['total']:,.2f}"
               f", Add'l Medicare: ${add_medicare['tax']:,.2f}, NIIT: ${niit['tax']:,.2f})")
+        if qbi_result is not None:
+            print(f"  (QBI §199A deduction: ${qbi_deduction:,.2f} subtracted from "
+                  f"taxable income — Form {qbi_result.form})")
         print("-" * 45)
         print(f"Safe Harbor Requirement:    ${safe_harbor['minimum_required']:,.2f}")
         print(f"Target Total Payment:       ${total_target:,.2f} (90% of current or safe harbor)")

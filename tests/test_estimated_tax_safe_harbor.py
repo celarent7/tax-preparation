@@ -138,3 +138,57 @@ def test_required_payment_is_lesser_of_90_percent_current_and_safe_harbor():
 
     ninety_percent = round(payload["estimated_liability"]["total"] * 0.90, 2)
     assert payload["payment_plan"]["total_target_payment"] == min(ninety_percent, 44000)
+
+
+# ---------------------------------------------------------------------------
+# G3 — QBI subtraction (blueprint P3.2 / plan §3.2)
+# ---------------------------------------------------------------------------
+def _et_cli(extra):
+    return subprocess.run(
+        [sys.executable, os.path.join(SCRIPTS, "estimated_tax_calculator.py"),
+         "--projected-income", "190000", "--projected-se-income", "60000",
+         "--prior-year-tax", "30000", "--prior-year-agi", "120000",
+         "--filing-status", "single", "--year", "2025",
+         "--output-format", "json"] + extra,
+        capture_output=True, text=True,
+    )
+
+
+def test_gate_g3_qbi_subtracts_from_liability():
+    """G3: with SE income, the §199A deduction is subtracted by default and the
+    projected liability falls by ~computed_QBI × marginal rate vs a --no-qbi run.
+
+    Single 2025, $60k SE + $130k W-2 job. Std $15,750; ½ SE tax $4,238.86 →
+    taxable before QBI $170,011.14 (24% bracket, below the §199A threshold). The
+    deduction $11,152.23 (20% × adjusted QBI $55,761.14) keeps taxable income in
+    the 24% bracket, so the liability drops by QBI × 24% (within rounding of the
+    two separately-rounded income taxes). Single-pass fixed point — QBI does
+    not depend on itself, so no iteration (documented in the code).
+    """
+    with_qbi = json.loads(_et_cli([]).stdout)
+    no_qbi = json.loads(_et_cli(["--no-qbi"]).stdout)
+
+    assert with_qbi["qbi"] is not None
+    assert with_qbi["qbi"]["form"] == "8995"
+    assert no_qbi["qbi"] is None
+    qbi = with_qbi["qbi"]["deduction"]
+    assert qbi == 11152.23
+
+    drop = (no_qbi["estimated_liability"]["total"]
+            - with_qbi["estimated_liability"]["total"])
+    # SE tax / Additional Medicare / NIIT are unchanged between the runs; only
+    # income tax moves, and the deduction sits entirely in the 24% bracket.
+    assert drop == pytest.approx(qbi * 0.24, abs=0.01)
+    assert drop > 0
+
+
+def test_gate_g3_qbi_not_subtracted_without_se_income():
+    """No SE income → no QBI computation (the deduction only applies to a trade/business)."""
+    result = subprocess.run(
+        [sys.executable, os.path.join(SCRIPTS, "estimated_tax_calculator.py"),
+         "--projected-income", "120000", "--prior-year-tax", "30000",
+         "--filing-status", "single", "--year", "2025", "--output-format", "json"],
+        capture_output=True, text=True,
+    )
+    payload = json.loads(result.stdout)
+    assert payload["qbi"] is None
