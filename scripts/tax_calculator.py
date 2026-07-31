@@ -20,7 +20,10 @@ from utils import (
     select_for_status,
     additional_medicare_threshold,
     load_state_constants,
+    UnverifiedConstantError,
 )
+# qbi_calculator is imported lazily inside main() to avoid a circular import:
+# qbi_calculator -> estimated_tax_calculator -> tax_calculator.
 
 
 def calculate_tax(taxable_income: float, filing_status: str, tax_brackets: Dict) -> Tuple[float, List[Dict]]:
@@ -414,6 +417,30 @@ def main():
                         help="HSA contributions (added back for CA — CA does not conform)")
     parser.add_argument("--qbi-deduction", type=float, default=0,
                         help="Federal QBI deduction (added back for CA)")
+    # --- QBI engine integration (plan G2): compute §199A instead of passing it in ---
+    # The manual --qbi-deduction passthrough above stays for pre-computed values;
+    # --compute-qbi calls scripts/qbi_calculator.py and feeds the result into the
+    # federal taxable-income reduction AND the CA add-back automatically (one flow,
+    # no double entry). Mutually exclusive with --qbi-deduction.
+    parser.add_argument("--compute-qbi", action="store_true",
+                        help="Compute the §199A QBI deduction via the engine "
+                             "(mutually exclusive with --qbi-deduction).")
+    parser.add_argument("--se-net-profit", type=float, default=0,
+                        help="[--compute-qbi] Schedule C net profit before ½ SE tax.")
+    parser.add_argument("--se-health-insurance", type=float, default=0,
+                        help="[--compute-qbi] SE health insurance deduction.")
+    parser.add_argument("--se-retirement", type=float, default=0,
+                        help="[--compute-qbi] SE retirement (SEP/Solo-401k) deduction.")
+    parser.add_argument("--w2-wages-paid", type=float, default=0,
+                        help="[--compute-qbi] W-2 wages paid by the business.")
+    parser.add_argument("--ubia", type=float, default=0,
+                        help="[--compute-qbi] Unadjusted basis of qualified property.")
+    parser.add_argument("--sstb", action="store_true",
+                        help="[--compute-qbi] Business is a Specified Service Trade or Business.")
+    parser.add_argument("--reit-dividends", type=float, default=0,
+                        help="[--compute-qbi] 1099-DIV Box 5 section 199A dividends.")
+    parser.add_argument("--qbi-loss-carryforward", type=float, default=0,
+                        help="[--compute-qbi] Prior-year QBI loss carryforward.")
     parser.add_argument("--obbba-deductions", type=float, default=0,
                         help="Federal tips/overtime/senior/car-loan deductions (added back for CA)")
     parser.add_argument("--state-income-tax-paid", type=float, default=0,
@@ -439,6 +466,14 @@ def main():
         sys.exit(1)
     if not (0 <= args.age_65_plus <= 2) or not (0 <= args.blind <= 2):
         print("Error: Age 65+ and blind counts must be between 0 and 2.")
+        sys.exit(1)
+    if args.compute_qbi and args.qbi_deduction:
+        print("Error: --compute-qbi and --qbi-deduction are mutually exclusive "
+              "(compute the deduction, or supply it pre-computed — not both).")
+        sys.exit(1)
+    if args.compute_qbi and args.se_net_profit <= 0 and args.reit_dividends <= 0:
+        print("Error: --compute-qbi requires --se-net-profit (Schedule C) and/or "
+              "--reit-dividends (1099-DIV Box 5) to compute a §199A deduction.")
         sys.exit(1)
 
     # Load Tax Data for specified year
@@ -480,6 +515,49 @@ def main():
 
     # Calculate taxable income
     taxable_income = max(0, agi - deduction_used)
+
+    # --- QBI (§199A) deduction (plan G2) ---
+    # QBI is a from-AGI, non-itemized deduction: it reduces taxable income but
+    # NOT AGI, and it is taken AFTER the standard/itemized deduction. The
+    # §199A threshold test and overall limit use taxable income BEFORE the QBI
+    # deduction, so the engine consumes `taxable_income` as-is and the result
+    # is subtracted here. The same computed figure is fed into the CA add-back
+    # path below — one flow, no double entry.
+    qbi_result = None
+    qbi_deduction = 0.0
+    if args.compute_qbi:
+        import qbi_calculator  # lazy: breaks the circular import (see top of file)
+        qbi_profile = {
+            "se_net_profit": args.se_net_profit,
+            "se_health_insurance": args.se_health_insurance,
+            "se_retirement": args.se_retirement,
+            "w2_wages_paid": args.w2_wages_paid,
+            "ubia": args.ubia,
+            "is_sstb": args.sstb,
+            "taxable_income_before_qbi": taxable_income,
+            # net capital gain for the overall limit = §1(h) LTCG + qualified
+            # dividends, which the engine treats as inclusive of qualified
+            # dividends per §199A(e)(3).
+            "net_capital_gain": args.ltcg + args.qualified_dividends,
+            "reit_dividends": args.reit_dividends,
+            "qbi_loss_carryforward": args.qbi_loss_carryforward,
+            "filing_status": args.filing_status,
+        }
+        try:
+            qbi_result = qbi_calculator.compute_qbi_deduction(qbi_profile, tax_data)
+            qbi_deduction = qbi_result.deduction
+        except UnverifiedConstantError as e:
+            print(f"Error computing QBI: {e}")
+            sys.exit(1)
+        except ValueError as e:
+            print(f"Error computing QBI: {e}")
+            sys.exit(1)
+        taxable_income = max(0, taxable_income - qbi_deduction)
+    elif args.qbi_deduction:
+        # Manual passthrough: a pre-computed QBI deduction reduces taxable
+        # income the same way (and is added back for CA via the path below).
+        qbi_deduction = args.qbi_deduction
+        taxable_income = max(0, taxable_income - qbi_deduction)
 
     # --- Split taxable income into ordinary and preferential slices (F3) ---
     # Preferential income cannot exceed taxable income; deductions are applied
@@ -544,7 +622,7 @@ def main():
             state_result = calculate_california_tax(
                 federal_agi=agi, filing_status=args.filing_status, state_data=state_data,
                 hsa_contributions=args.hsa_contributions,
-                qbi_deduction=args.qbi_deduction,
+                qbi_deduction=qbi_deduction,
                 obbba_deductions=args.obbba_deductions,
                 itemized_deductions=args.deductions,
                 state_income_tax_in_itemized=args.state_income_tax_paid,
@@ -601,6 +679,8 @@ def main():
     }
     if state_result is not None:
         result["state"] = state_result
+    if qbi_result is not None:
+        result["qbi"] = qbi_result.to_dict()
 
     if args.output_format == "json":
         print(json.dumps(result, indent=2))
@@ -612,6 +692,9 @@ def main():
         print(f"AGI:                    ${agi:,.2f}")
         print(f"Deduction Used:         ${deduction_used:,.2f} ({'Itemized' if using_itemized else 'Standard'})")
         print(f"Taxable Income:         ${taxable_income:,.2f}")
+        if qbi_result is not None:
+            print(f"  QBI deduction:        ${qbi_deduction:,.2f} "
+                  f"(Form {qbi_result.form}; reduces taxable income, not AGI)")
         if preferential_income > 0:
             print(f"  Ordinary portion:     ${ordinary_income:,.2f}")
             print(f"  Preferential portion: ${preferential_income:,.2f} (LTCG + qualified dividends)")

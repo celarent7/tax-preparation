@@ -206,6 +206,54 @@ def test_qbi_deduction_added_back_for_ca():
     assert any("business income" in a["item"] for a in r["adjustments"])
 
 
+def test_gate_g2_compute_qbi_one_flow_federal_and_ca():
+    """G2: --compute-qbi computes §199A once, reduces federal taxable income
+    (NOT AGI), and feeds the SAME figure into the CA add-back automatically.
+
+    MFJ 2025, gross $300,000. Standard deduction $31,500 → taxable income
+    before QBI = $268,500. Schedule C $100,000 with $10,000 SE health → adjusted
+    QBI $82,935.23; below the MFJ threshold → Form 8995 → component 20% =
+    $16,587.05. Federal taxable income becomes $268,500 − $16,587.05; AGI stays
+    $300,000. CA adds back exactly $16,587.05 → CA AGI $316,587.05. One flow,
+    no double entry.
+    """
+    result = subprocess.run(
+        [sys.executable, os.path.join(SCRIPTS, "tax_calculator.py"),
+         "--gross-income", "300000", "--filing-status", "mfj", "--year", "2025",
+         "--compute-qbi", "--se-net-profit", "100000",
+         "--se-health-insurance", "10000", "--state", "CA",
+         "--output-format", "json"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    d = json.loads(result.stdout)
+    qbi = d["qbi"]["deduction"]
+    assert qbi == 16587.05
+    assert d["qbi"]["form"] == "8995"
+    # QBI reduces taxable income, NOT AGI.
+    assert d["calculations"]["adjusted_gross_income"] == 300000.0
+    assert d["calculations"]["taxable_income"] == round(268500 - 16587.05, 2)
+    # The same figure is added back for CA automatically (one flow).
+    assert d["state"]["ca_agi"] == round(300000 + 16587.05, 2)
+    qbi_adj = next(a for a in d["state"]["adjustments"]
+                   if "business income" in a["item"])
+    assert qbi_adj["amount"] == 16587.05
+    assert qbi_adj["direction"] == "add-back"
+
+
+def test_gate_g2_compute_qbi_mutually_exclusive_with_manual():
+    """Supplying both --compute-qbi and --qbi-deduction is rejected (nonzero exit)."""
+    result = subprocess.run(
+        [sys.executable, os.path.join(SCRIPTS, "tax_calculator.py"),
+         "--gross-income", "300000", "--filing-status", "mfj", "--year", "2025",
+         "--compute-qbi", "--se-net-profit", "100000", "--qbi-deduction", "5000",
+         "--output-format", "json"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode != 0
+    assert "mutually exclusive" in (result.stdout + result.stderr)
+
+
 def test_obbba_deductions_added_back_for_ca():
     """C3: CA conformity date is 2015-01-01, so OBBBA deductions do not exist."""
     r = ca(obbba_deductions=12000)
