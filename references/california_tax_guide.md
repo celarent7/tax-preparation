@@ -202,6 +202,57 @@ Note there is **no third-quarter California installment**. A filer who mirrors
 the federal 25/25/25/25 schedule will be underpaid in Q1 and Q2 and will owe a
 penalty even if the annual total is right.
 
+### 8a. Computing the schedule with the plugin
+
+CA estimated tax is a **two-command** flow. The CA *tax* projection comes from
+the tax calculator's CA engine (the single CA engine — F13 rule); the
+estimated-tax calculator then turns that projection into the 30/40/0/30
+installment schedule. Do not hand-enter the projection — run the first command.
+
+```bash
+# 1. Project the full-year CA tax (the single CA engine):
+python ./scripts/tax_calculator.py --gross-income <amt> --filing-status <status> \
+    --year 2025 --state CA --hsa-contributions <amt> --qbi-deduction <amt> \
+    --obbba-deductions <amt>
+#   -> read "CA tax" from the output.
+
+# 2. Build the FTB 540-ES installment schedule from that projection:
+python ./scripts/estimated_tax_calculator.py --projected-income <amt> \
+    --prior-year-tax <federal-prior> --prior-year-agi <federal-prior-agi> \
+    --filing-status <status> --year 2025 --output-format json \
+    --state CA --projected-ca-tax <CA tax from step 1> \
+    --prior-year-ca-tax <prior-year CA tax> --ca-agi <projected CA AGI> \
+    --ca-withholding <CA withholding to date>
+```
+
+The JSON result gains a `state_payment_plan` section (the federal
+`payment_plan` is unchanged). For no-income-tax states
+(`--state WA|TX|FL|NV`) it carries a "no state estimated payments required"
+note; any other state exits 1 (CA is the only implemented state engine).
+
+### 8b. Worked example — 30/40/0/30 split
+
+From `tests/test_ca_estimated_tax.py::test_installments_split_30_40_0_30`:
+projected CA tax **$20,000**, prior-year CA tax **$30,000**, CA AGI **$200,000**,
+single filer.
+
+- Current-year leg: 90% × $20,000 = **$18,000**
+- Prior-year leg: AGI > $150,000 → 110% × $30,000 = **$33,000**
+- Required annual payment = lesser = **$18,000** (90% current-year basis)
+
+| Quarter | Due date   | %  | Amount    |
+|---------|------------|----|-----------|
+| Q1      | 2025-04-15 | 30 | $5,400.00 |
+| Q2      | 2025-06-16 | 40 | $7,200.00 |
+| Q3      | 2025-09-15 |  0 | $0.00     |
+| Q4      | 2026-01-15 | 30 | $5,400.00 |
+| **Sum** |            |    | **$18,000.00** |
+
+The four installments sum to the required payment to the cent. CA AGI at or
+above **$1,000,000** ($500,000 MFS) forces the 90%-current-year basis
+(`safe_harbor_available: false`) — the prior-year leg is never used there,
+even when it is smaller.
+
 ---
 
 ## 9. Worked example — MFJ, W-2 + RSU + HSA

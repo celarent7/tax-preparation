@@ -142,6 +142,8 @@ Full detail, including the worked example, is in `./references/california_tax_gu
 
 For states with no income tax (WA, TX, FL, NV) say so explicitly. For other states the constants carry only a **top marginal rate flagged `estimate_only`** — never present it as an effective rate.
 
+**CA freelancers / uneven-income filers:** also run `estimated_tax_calculator.py --state CA --projected-ca-tax … --prior-year-ca-tax … --ca-agi …` — the federal quarterly schedule alone is incomplete; CA uses **30/40/0/30** installments (no Q3 payment) and **bars the prior-year safe harbor at $1M+ CA AGI** ($500k MFS), forcing 90% of the current year. See `./references/california_tax_guide.md` §8.
+
 ### Step 4: Handle Complex Compensation (RSU/ESPP)
 **Prerequisite**: Vesting dates and FMVs must be verified against statements.
 ```bash
