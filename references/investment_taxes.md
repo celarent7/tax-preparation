@@ -200,6 +200,29 @@ bracket. See `references/california_tax_guide.md`.
 | No gains | Harvest $3,000+ to offset income and carry forward |
 | In 0% LTCG bracket | Consider realizing gains tax-free instead |
 
+### Computing the Offset with `tax_calculator.py`
+
+When a year ends with a **net capital loss** (Schedule D line 16 negative), pass it to
+the calculator as a positive number via `--net-capital-loss` instead of `--ltcg`:
+
+```bash
+python ./scripts/tax_calculator.py --gross-income 100000 --filing-status mfj \
+    --year 2025 --net-capital-loss 8000
+```
+
+The tool applies the IRC §1211(b) annual offset against ordinary income and reports
+the §1212(b) carryforward. The offset limit is **not** hard-coded: it is read from the
+year constants in `scripts/tax_constants.json` (`capital_loss_limit`, and
+`capital_loss_limit_mfs` for married filing separately), so a future year whose limit
+is indexed flows through automatically. `--net-capital-loss` is mutually exclusive
+with `--ltcg` / `--qualified-dividends` — a year has either a net gain or a net loss
+after Schedule D netting, never both.
+
+**Worked example** (matches `test_mfj_8k_loss_offsets_3k_carries_5k`): an $8,000 MFJ
+net capital loss offsets $3,000 of ordinary income (lowering AGI by $3,000), and the
+remaining $5,000 carries forward to the next tax year. Married-filing-separately
+filers use the $1,500 limit.
+
 ### Tax-Loss Harvesting Steps
 1. Identify positions with losses
 2. Determine if loss is short-term or long-term

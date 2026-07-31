@@ -90,6 +90,10 @@ python ./scripts/tax_calculator.py --gross-income <confirmed_amount> --adjustmen
 > the deduction is then capped by a wage/UBIA limit and an overall
 > taxable-income limit. See `./references/self_employment_guide.md`.
 
+> **Net capital loss year:** For a net-capital-loss year, pass `--net-capital-loss`
+> (positive number) instead of `--ltcg`; the tool applies the annual offset limit and
+> reports the carryforward.
+
 > **Estimated payment safe harbor**: Use `estimated_tax_calculator.py` for quarterly payment amounts. The IRS safe harbor is the **lesser of** (a) 90% of current-year projected tax or (b) 100% of prior-year tax — **110% if prior-year AGI exceeded $150,000, or $75,000 for married filing separately**. Always compute both and present the lower figure to minimize required payments.
 >
 > The MFS threshold is half the general one; applying $150,000 to an MFS filer
