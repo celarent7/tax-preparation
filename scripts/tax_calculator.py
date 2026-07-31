@@ -500,9 +500,16 @@ def main():
 
     # AMT trigger inputs (flag only — no Form 6251 computation)
     parser.add_argument("--iso-bargain-element", type=float, default=0,
-                        help="ISO exercise spread, for the AMT risk flag")
+                        help="ISO exercise spread, for the AMT risk flag and the quick screen")
     parser.add_argument("--salt-lost-to-cap", type=float, default=0,
                         help="SALT disallowed by the cap, for the AMT risk flag")
+    parser.add_argument("--salt-deducted", type=float, default=0,
+                        help="SALT amount inside your itemized deduction — added back for "
+                             "the AMT quick screen (the add-back is the SALT actually "
+                             "deducted, i.e. min(salt_paid, cap))")
+    parser.add_argument("--amt-quick-test", action="store_true",
+                        help="Run the quantitative AMT screen (approximate TMT vs regular "
+                             "tax); the amt_risk flag always runs regardless")
 
     # State layer (task P2.5)
     parser.add_argument("--state", type=str, default=None,
@@ -714,6 +721,21 @@ def main():
         tax_data.get("amt", {}), args.filing_status,
     )
 
+    # Optional quantitative AMT screen (plan B6) — runs only when requested.
+    # The flag above still fires with or without this option. The screen needs
+    # the SALT actually deducted (the AMT add-back), supplied via --salt-deducted
+    # since the calculator does not otherwise track it.
+    amt_screen = None
+    if args.amt_quick_test:
+        try:
+            amt_screen = amt_quick_test(
+                taxable_income, args.salt_deducted, args.iso_bargain_element,
+                income_tax, args.filing_status, tax_data["amt"],
+            )
+        except UnverifiedConstantError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+
     # Calculate rates
     effective_rate = calculate_effective_rate(max(0.0, tax_after_credits), args.gross_income)
     marginal_rate = calculate_marginal_rate(ordinary_income, args.filing_status, tax_brackets)
@@ -790,6 +812,8 @@ def main():
         result["qbi"] = qbi_result.to_dict()
     if capital_loss is not None:
         result["capital_loss"] = capital_loss
+    if amt_screen is not None:
+        result["amt_screen"] = amt_screen
 
     if args.output_format == "json":
         print(json.dumps(result, indent=2))
@@ -864,6 +888,25 @@ def main():
             print("\n⚠️  AMT RISK FLAGGED (this tool does not compute Form 6251):")
             for reason in amt_risk["reasons"]:
                 print(f"  - {reason}")
+
+        if amt_screen is not None:
+            print("\n--- AMT QUICK SCREEN (approximation — not Form 6251) ---")
+            print(f"AMTI (approx):          ${amt_screen['amti_approx']:,.2f}  "
+                  f"(taxable income + SALT deducted + ISO bargain element)")
+            print(f"Exemption after phase-out: ${amt_screen['exemption_after_phaseout']:,.2f}")
+            print(f"AMT taxable base:      ${amt_screen['amt_base']:,.2f}")
+            print(f"Tentative Minimum Tax:  ${amt_screen['tentative_minimum_tax']:,.2f}  "
+                  f"(26%/28% split at the year's breakpoint)")
+            print(f"Regular Tax:           ${amt_screen['regular_tax']:,.2f}")
+            if amt_screen["form_6251_required"]:
+                print(f"TMT exceeds regular by:  ${amt_screen['tmt_exceeds_regular_by']:,.2f}  "
+                      f"=> Form 6251 REQUIRED")
+            else:
+                print("TMT does not exceed regular tax => Form 6251 not triggered by this screen")
+            print("  Items this screen IGNORES (so TMT may be overstated):")
+            for item in amt_screen["ignored_items"]:
+                print(f"    - {item}")
+            print(f"  note: {amt_screen['note']}")
 
 
 if __name__ == "__main__":

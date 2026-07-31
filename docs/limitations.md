@@ -20,7 +20,7 @@ The Tax Preparation Plugin is designed for standard US individual and family tax
 - **Section 1256 Contracts**: Specialized treatment for futures and options.
 
 ## 4. Specific Tax Credits & Taxes
-- **Alternative Minimum Tax (AMT)**: The tool does not perform a full Form 6251 AMT calculation. It **does** emit an `amt_risk` warning when an ISO bargain element, a large SALT amount lost to the cap, or income inside the exemption phase-out zone is present — that is a trigger flag only, not a computation.
+- **Alternative Minimum Tax (AMT)**: The tool does not perform a full Form 6251 AMT calculation. It **does** emit an `amt_risk` warning when an ISO bargain element, a large SALT amount lost to the cap, or income inside the exemption phase-out zone is present — a trigger flag + an optional quantitative quick screen (`tax_calculator.py --amt-quick-test`, with `--salt-deducted` for the SALT add-back and `--iso-bargain-element` for the ISO spread). The screen approximates AMTI and tentative minimum tax at 26%/28% and reports whether Form 6251 is likely required; it deliberately ignores preferential-rate carve-outs and several preference items (named in its output), so it overstates TMT for filers with large LTCG/qualified-dividend income. Full Form 6251 remains out of scope.
 - **Energy Credits**: High-depth technical validation of specific heat pump or solar equipment eligibility. Note that most clean-energy credits were terminated by OBBBA during 2025 — see the termination table in `references/credits_guide.md`.
 - **Estate & Gift Taxes**: Form 706 or Form 709.
 - **QBI (§199A)**: The constants carry the thresholds and phase-in ranges, but no full QBI calculator with SSTB / W-2-wage / UBIA limits is implemented.

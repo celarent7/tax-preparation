@@ -94,6 +94,13 @@ python ./scripts/tax_calculator.py --gross-income <confirmed_amount> --adjustmen
 > (positive number) instead of `--ltcg`; the tool applies the annual offset limit and
 > reports the carryforward.
 
+> **ISO exercisers — AMT:** an ISO bargain element is a classic AMT preference item.
+> The `amt_risk` flag always surfaces this; for a quantitative screen, also pass
+> `--amt-quick-test` with `--iso-bargain-element <spread>` and `--salt-deducted <SALT
+> inside your itemized deduction>`. A positive result means Form 6251 must actually be
+> prepared — the screen overstates TMT for filers with large LTCG/qualified-dividend
+> income. See `./docs/limitations.md` §4.
+
 > **Estimated payment safe harbor**: Use `estimated_tax_calculator.py` for quarterly payment amounts. The IRS safe harbor is the **lesser of** (a) 90% of current-year projected tax or (b) 100% of prior-year tax — **110% if prior-year AGI exceeded $150,000, or $75,000 for married filing separately**. Always compute both and present the lower figure to minimize required payments.
 >
 > The MFS threshold is half the general one; applying $150,000 to an MFS filer

@@ -17,6 +17,8 @@ Primary sources:
 import os
 import sys
 
+import json
+
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
@@ -135,3 +137,41 @@ def test_null_breakpoint_raises():
     amt["rate_28_threshold_mfs"] = None
     with pytest.raises(UnverifiedConstantError):
         amt_quick_test(150000, 0, 50000, 30000, "single", amt)
+
+
+# ---------------------------------------------------------------------------
+# Task 3 — CLI flag
+# ---------------------------------------------------------------------------
+
+import subprocess  # noqa: E402
+
+
+SCRIPT = os.path.join(os.path.dirname(__file__), "..", "scripts", "tax_calculator.py")
+
+
+def _run_cli(*extra):
+    """Run tax_calculator.py --output-format json and return the parsed result."""
+    proc = subprocess.run(
+        [sys.executable, SCRIPT, "--gross-income", "164600",
+         "--filing-status", "single", "--year", "2025", "--output-format", "json",
+         *extra],
+        capture_output=True, text=True, check=True,
+    )
+    return json.loads(proc.stdout)
+
+
+def test_cli_amt_quick_test_triggers_form_6251():
+    """Case B via the CLI: ISO + SALT under --amt-quick-test requires Form 6251."""
+    out = _run_cli("--amt-quick-test", "--iso-bargain-element", "300000",
+                   "--salt-deducted", "10000")
+    assert "amt_screen" in out
+    assert out["amt_screen"]["form_6251_required"] is True
+    assert out["amt_screen"]["tentative_minimum_tax"] > out["amt_screen"]["regular_tax"]
+
+
+def test_cli_screen_off_by_default():
+    """Without --amt-quick-test, no amt_screen key is emitted (the flag stays default)."""
+    out = _run_cli("--iso-bargain-element", "300000", "--salt-deducted", "10000")
+    assert "amt_screen" not in out
+    # The risk flag still runs regardless of the screen option.
+    assert "amt_risk" in out
