@@ -160,6 +160,16 @@ Detailed eligibility requirements and calculations for major federal tax credits
 
 ## Lifetime Learning Credit
 
+> **Tool-supported.** `scripts/credit_eligibility_checker.py` computes the LLC —
+> 20% of up to $10,000 of expenses, the shared MAGI phase-out, the MFS bar, and
+> the AOTC same-student exclusion — alongside the other credits. Supply the
+> per-return expense amount and (if applicable) the AOTC-exclusion flag through a
+> `--data-file` JSON with `education_expenses_llc` and optional
+> `aotc_claimed_for_same_student`; the checker reports it in the same run as the
+> other credits. (The `--education-expenses` CLI flag drives the AOTC, not the
+> LLC — the two credits use separate expense keys because the LLC is per-return
+> while the AOTC is per-student.)
+
 ### Eligibility Requirements
 - Student enrolled in eligible institution (accredited college, university, vocational school)
 - Taking courses to acquire/improve job skills OR as part of degree program
@@ -252,6 +262,15 @@ placed in service, even if delivery is later.
 **California note:** CA does not conform to these federal credits and has no
 equivalent state credit; see `references/california_tax_guide.md`.
 
+**Tool enforcement.** `scripts/credit_eligibility_checker.py` now enforces these
+dates automatically for 2023–2025 returns: pass the purchase/in-service date
+(`--ev-purchase-date` for the vehicle credits) and the checker marks a vehicle
+acquired after 2025-09-30 (or §25C/§25D property after 2025-12-31) ineligible
+with a termination note. The energy-credit dataset (`energy_credits` in
+`scripts/tax_constants.json`) carries the `terminated_after` keys only in the
+2025 year block; 2023/2024 ran all year and 2026 has no energy block at all, so
+requesting energy credits for 2026 returns "not available" rather than raising.
+
 ---
 
 ## Residential Clean Energy Credit
@@ -312,6 +331,14 @@ equivalent state credit; see `references/california_tax_guide.md`.
 ---
 
 ## Foreign Tax Credit
+
+> **Tool-supported (the no-Form-1116 election only).** When all foreign tax is
+> passive-category (1099-DIV Box 7 / 1099-INT Box 6) and totals $300 or less
+> ($600 MFJ), `scripts/credit_eligibility_checker.py` flags it as claimable
+> directly on Schedule 3 line 1 — a commonly missed credit on international
+> index-fund 1099-DIVs. Supply `foreign_tax_paid` via a `--data-file`. Above the
+> election limit the checker does NOT compute the credit — it flags that Form
+> 1116 is required and out of scope (see `docs/limitations.md`).
 
 ### Eligibility
 - Paid or accrued foreign income tax

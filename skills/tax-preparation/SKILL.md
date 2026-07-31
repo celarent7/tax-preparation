@@ -156,6 +156,7 @@ python ./scripts/rsu_calculator.py basis --shares-vested <shares> --fmv <fmv>
 | `./scripts/rsu_calculator.py` | RSU cost basis, withholding, and 8949 adjustments |
 | `./scripts/espp_calculator.py` | ESPP disposition and cost basis analysis |
 | `./scripts/draft_reviewer.py` | Cross-check draft returns against verified data |
+| `./scripts/credit_eligibility_checker.py` | Tax-credit eligibility & amount checker (CTC, EITC, CDCC, AOTC, Saver's) incl. LLC, no-1116 FTC, and 2023–2025 clean-energy credits (30D/25E/25C/25D). `--year` switches the constants; vehicle credits enforce the OBBBA 2025-09-30 cut-off by purchase date and the §30D/§25E lesser-of-current/prior-MAGI rule; 2026 returns "not available" for energy credits rather than raising. |
 | `./scripts/qbi_calculator.py` | §199A QBI deduction (Form 8995/8995-A): adjusted QBI, SSTB phase-out, wage/UBIA limit, REIT/PTP component, overall taxable-income limit, negative-QBI carryforward, and the 2026 OBBBA $400 minimum. Sole-prop/Schedule-C + 1099-DIV Box 5 only — K-1 pass-throughs are rejected (see `./docs/limitations.md`). |
 | `./scripts/tax_savings_finder.py` | Proactive savings engine — reads a flat taxpayer profile and emits ranked opportunities (M1–M11: 401(k) headroom, backdoor Roth + pro-rata, mega backdoor, tax-loss harvesting, appreciated-stock donation, QCD, SE health insurance, §179/bonus, HSA, OBBBA senior bonus, tips/overtime) with dollar estimates, deadlines, and CA nonconformity caveats. See `./references/tax_planning.md`. |
 
