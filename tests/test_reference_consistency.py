@@ -207,6 +207,11 @@ def test_every_script_referenced_in_docs_exists():
 
     This scans every reference/doc for `scripts/<name>.py` and asserts the file
     is present, so the class of defect cannot be reintroduced.
+
+    Forward-looking `docs/*_plan.md` roadmaps are excluded: a plan doc naming
+    `scripts/<engine>.py` for a deferred block (e.g. `qbi_calculator_plan.md`,
+    `savings_engine_plan.md` before its scripts exist) is a roadmap, not an
+    operational instruction that sends an agent to a missing file mid-workflow.
     """
     import glob
 
@@ -214,7 +219,8 @@ def test_every_script_referenced_in_docs_exists():
     missing = []
 
     doc_paths = (glob.glob(os.path.join(REFS, "**", "*.md"), recursive=True)
-                 + glob.glob(os.path.join(ROOT, "docs", "*.md"))
+                 + [p for p in glob.glob(os.path.join(ROOT, "docs", "*.md"))
+                    if not p.endswith("_plan.md")]
                  + [os.path.join(ROOT, "skills", "tax-preparation", "SKILL.md")])
 
     for doc in doc_paths:

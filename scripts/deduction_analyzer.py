@@ -362,6 +362,33 @@ def main():
         }
     }
 
+    # --- OBBBA senior bonus (above-the-line, Schedule 1) — shared helper with
+    # the savings finder's M10 rule (blueprint P5.3, acceptance A9). This is
+    # NOT part of the standard-vs-itemized choice; it is a separate
+    # above-the-line deduction, surfaced only when the year carries the
+    # `obbba_deductions` block and at least one person is 65+. ---
+    if args.age_65_plus > 0 and "obbba_deductions" in tax_data:
+        from savings_rules.obbba import (
+            senior_bonus_deduction,
+            senior_bonus_phaseout_start,
+        )
+        senior_bonus = senior_bonus_deduction(
+            tax_data, args.filing_status, magi, args.age_65_plus)
+        phaseout_start = senior_bonus_phaseout_start(tax_data, args.filing_status)
+        block = tax_data["obbba_deductions"]["senior_bonus"]
+        result["obbba_senior_bonus"] = {
+            "deduction_amount": senior_bonus,
+            "qualifying_persons": args.age_65_plus,
+            "magi": magi,
+            "phaseout_start": phaseout_start,
+            "phaseout_rate": block["phaseout_rate"],
+            "fully_phased_out": senior_bonus == 0.0,
+            "note": ("Above-the-line deduction on Schedule 1 — not part of the "
+                     "standard-vs-itemized decision. Phases out at "
+                     f"{block['phaseout_rate']:.0%} per dollar of MAGI over "
+                     f"${phaseout_start:,.0f}."),
+        }
+
     # --- State comparison: CA itemize-vs-standard is a SEPARATE decision (C4) ---
     if args.state and args.state.upper() == "CA":
         try:
@@ -441,6 +468,18 @@ def main():
             print(f"    (Lost to SALT cap: ${salt['lost_to_cap']:,.2f})")
         print(f"  Mortgage Interest:     ${mortgage['deductible_amount']:,.2f}")
         print(f"  Charitable:            ${charitable['deductible_amount']:,.2f}")
+
+        if "obbba_senior_bonus" in result:
+            sb = result["obbba_senior_bonus"]
+            print("\n--- OBBBA Senior Bonus (above-the-line, Schedule 1) ---")
+            if sb["fully_phased_out"]:
+                print(f"  $0 — fully phased out at MAGI ${sb['magi']:,.0f} "
+                      f"(phase-out starts at ${sb['phaseout_start']:,.0f}).")
+            else:
+                print(f"  Deduction: ${sb['deduction_amount']:,.0f} "
+                      f"({sb['qualifying_persons']} qualifying person(s), MAGI ${sb['magi']:,.0f}; "
+                      f"phases out at {sb['phaseout_rate']:.0%}/$ over ${sb['phaseout_start']:,.0f}).")
+            print("  Note: separate from the standard-vs-itemized decision above.")
 
         if "california" in result:
             c = result["california"]
