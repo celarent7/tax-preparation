@@ -91,7 +91,7 @@
         "2025.amt",
         "2025.qbi"
       ],
-      "note": "sec .06 EITC table + $11,950 investment income limit; sec .11 AMT exemptions 137,000 MFJ / 88,100 single / 68,500 MFS, 28% bracket at 239,100 (119,550 MFS), phaseout thresholds 1,252,700 MFJ / 626,350 other; sec .27 QBI thresholds 394,600 MFJ / 197,300 other with phase-in amounts 494,600 / 247,300."
+      "note": "sec .06 EITC table + $11,950 investment income limit; sec .11 AMT exemptions 137,000 MFJ / 88,100 single / 68,500 MFS, 28% bracket at 239,100 (119,550 MFS), phaseout thresholds 1,252,700 MFJ / 626,350 other; sec .27 QBI thresholds 394,600 MFJ / 197,300 MFS & all-other, phase-in amounts 494,600 / 247,300 (50,000 single / 100,000 MFJ ranges). MFS = all-other (pre-OBBBA the single threshold applied to MFS)."
     },
     "rev_proc_2025_32_ty2026": {
       "url": "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
@@ -109,7 +109,7 @@
         "2025.section_179",
         "2026.section_179"
       ],
-      "note": "sec .03 LTCG; sec .05 CTC 2,200/1,700; sec .06 EITC + 12,200 investment limit; sec .10 AMT (OBBBA phaseout reset to 1,000,000 MFJ / 500,000 other); sec .14 standard deduction 32,200/24,150/16,100 and aged-or-blind 1,650 (2,050 if unmarried and not a surviving spouse); sec .26 QBI."
+      "note": "sec .03 LTCG; sec .05 CTC 2,200/1,700; sec .06 EITC + 12,200 investment limit; sec .10 AMT (OBBBA phaseout reset to 1,000,000 MFJ / 500,000 other); sec .14 standard deduction 32,200/24,150/16,100 and aged-or-blind 1,650 (2,050 if unmarried and not a surviving spouse); sec .26 QBI thresholds 403,500 MFJ / 201,775 MFS / 201,750 all-other (single/HoH), phase-in 553,500 / 276,775 / 276,750 \u2014 OBBBA \u00a770105 widened the ranges to 150,000 MFJ / 75,000 other; sec .12 \u00a7199A(i) $400 minimum deduction + $1,000 active-QBI floor (OBBBA \u00a770105), effective TY beginning after 12/31/2025."
     },
     "rev_proc_2022_38_ty2023": {
       "url": "https://www.irs.gov/pub/irs-drop/rp-22-38.pdf",
@@ -119,9 +119,10 @@
         "2023.tax_brackets",
         "2023.standard_deductions",
         "2023.ltcg_brackets",
-        "2023.section_179"
+        "2023.section_179",
+        "2023.qbi"
       ],
-      "note": "sec .03 LTCG 89,250/553,850 MFJ, 44,625/276,900 MFS, 59,750/523,050 HoH, 44,625/492,300 single; sec .15 standard deduction 27,700/20,800/13,850."
+      "note": "sec .03 LTCG 89,250/553,850 MFJ, 44,625/276,900 MFS, 59,750/523,050 HoH, 44,625/492,300 single; sec .15 standard deduction 27,700/20,800/13,850; sec .27 QBI thresholds 364,200 MFJ / 182,100 MFS & all-other, phase-in amounts 464,200 / 232,100 (50,000 single / 100,000 MFJ ranges). MFS = all-other (pre-OBBBA the single threshold applied to MFS)."
     },
     "schedule_1a_2025": {
       "url": "https://www.irs.gov/pub/irs-pdf/f1040s1a.pdf",
@@ -326,9 +327,11 @@
       "title": "OBBBA personal deductions (Pub. L. 119-21) \u2014 IRC 151(d)(5)(C), 224, 225, 163(h)(4)",
       "retrieved": "2026-07-30",
       "backs": [
-        "2026.obbba_deductions"
+        "2026.obbba_deductions",
+        "2026.qbi.min_deduction",
+        "2026.qbi.min_deduction_qbi_floor"
       ],
-      "note": "2026 amounts are identical to 2025: none of the four OBBBA personal deductions (senior bonus IRC 151(d)(5)(C); tips IRC 224; overtime IRC 225; car-loan interest IRC 163(h)(4)) are indexed for inflation. Senior bonus $6,000 (6% phase-out over $75,000 single / $150,000 MFJ); tips $25,000 ($150,000/$300,000, $100 per $1,000 rounded down); overtime $12,500/$25,000 (same phase-out); car-loan interest $10,000 ($100,000/$200,000, $200 per $1,000 rounded up). Effective 2025-2028. Confirmed non-indexed in statute text."
+      "note": "2026 amounts are identical to 2025: none of the four OBBBA personal deductions (senior bonus IRC 151(d)(5)(C); tips IRC 224; overtime IRC 225; car-loan interest IRC 163(h)(4)) are indexed for inflation. Senior bonus $6,000 (6% phase-out over $75,000 single / $150,000 MFJ); tips $25,000 ($150,000/$300,000, $100 per $1,000 rounded down); overtime $12,500/$25,000 (same phase-out); car-loan interest $10,000 ($100,000/$200,000, $200 per $1,000 rounded up). Effective 2025-2028. Confirmed non-indexed in statute text. OBBBA \u00a770105 also widened the \u00a7199A(b)(3)(B) phase-in range to $75,000 (single/HoH/MFS) / $150,000 (MFJ) for TY after 12/31/2025 and added \u00a7199A(i): a $400 minimum deduction for an 'applicable taxpayer' with \u2265$1,000 aggregate QBI from active (material-participation) trades/businesses; the $400 is the GREATER of the normal deduction or $400 and overrides the \u00a7199A(a)(2) overall taxable-income limit."
     },
     "irc_408d8_qcd": {
       "url": "https://www.law.cornell.edu/uscode/text/26/408",
@@ -338,6 +341,56 @@
         "2023.qcd_limit"
       ],
       "note": "$100,000 aggregate annual QCD limit, fixed by statute 2016-2023. SECURE 2.0 Act section 112 (Pub. L. 117-328, Div. T) added inflation indexing beginning 2024 (Notice 2023-75 raised it to $105,000)."
+    },
+    "usc_199a_qbi_statute": {
+      "url": "https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title26-section199A",
+      "title": "26 USC 199A \u2014 Qualified business income (as amended by Pub. L. 119-21 \u00a7\u00a770105, 70201(d))",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2023.qbi.rate",
+        "2023.qbi.reit_ptp_rate",
+        "2023.qbi.wage_limit_pct",
+        "2023.qbi.wage_ubia_pct",
+        "2023.qbi.ubia_pct",
+        "2024.qbi.rate",
+        "2024.qbi.reit_ptp_rate",
+        "2024.qbi.wage_limit_pct",
+        "2024.qbi.wage_ubia_pct",
+        "2024.qbi.ubia_pct",
+        "2025.qbi.rate",
+        "2025.qbi.reit_ptp_rate",
+        "2025.qbi.wage_limit_pct",
+        "2025.qbi.wage_ubia_pct",
+        "2025.qbi.ubia_pct",
+        "2026.qbi.rate",
+        "2026.qbi.reit_ptp_rate",
+        "2026.qbi.wage_limit_pct",
+        "2026.qbi.wage_ubia_pct",
+        "2026.qbi.ubia_pct",
+        "2026.qbi.min_deduction",
+        "2026.qbi.min_deduction_qbi_floor"
+      ],
+      "note": "\u00a7199A(a): deduction = lesser of combined QBI amount or 20% of (taxable income \u2212 net capital gain); amended 'except as provided in subsection (i)'. \u00a7199A(b)(1)(A)/(c): 20% QBI rate and 20% REIT/PTP rate. \u00a7199A(b)(2)(B): W-2 wage/UBIA limit = greater of 50% of W-2 wages or 25% of W-2 wages + 2.5% of UBIA. \u00a7199A(e)(3): net capital gain per \u00a71(h)(11) includes qualified dividends. \u00a7199A(i)(1): for an 'applicable taxpayer' (aggregate QBI from active\u2014materially-participated\u2014trades/businesses \u2265 $1,000 per \u00a7199A(i)(2)), deduction = GREATER of the normally-computed deduction or $400; this OVERRIDES the \u00a7199A(a)(2) overall taxable-income limit. $400/$1,000 fixed for 2026, inflation-adjusted (nearest $5) for TY after 2026."
+    },
+    "irs_form_8995a_instructions": {
+      "url": "https://www.irs.gov/instructions/i8995a",
+      "title": "Instructions for Form 8995-A (2025) \u2014 QBI Deduction",
+      "retrieved": "2026-07-30",
+      "backs": [
+        "2023.qbi.wage_limit_pct",
+        "2023.qbi.wage_ubia_pct",
+        "2023.qbi.ubia_pct",
+        "2024.qbi.wage_limit_pct",
+        "2024.qbi.wage_ubia_pct",
+        "2024.qbi.ubia_pct",
+        "2025.qbi.wage_limit_pct",
+        "2025.qbi.wage_ubia_pct",
+        "2025.qbi.ubia_pct",
+        "2026.qbi.wage_limit_pct",
+        "2026.qbi.wage_ubia_pct",
+        "2026.qbi.ubia_pct"
+      ],
+      "note": "Part II lines 4-11: line 5 = 50% of W-2 wages; line 6 = 25% of W-2 wages; line 8 = 2.5% of UBIA; line 10 = greater of line 5 or (line 6 + line 8); line 11 = lesser of 20% of QBI or line 10. SSTB list (Reg \u00a71.199A-5): health, law, accounting, consulting, financial services, performing arts, athletics, and the 'principal asset is the reputation or skill' catch-all. The tool ASKS the user for SSTB status rather than inferring it."
     }
   },
   "2023": {
@@ -673,10 +726,15 @@
     },
     "qbi": {
       "rate": 0.2,
+      "reit_ptp_rate": 0.2,
       "threshold_single": 182100,
+      "threshold_mfs": 182100,
       "threshold_mfj": 364200,
       "phase_in_range_single": 50000,
-      "phase_in_range_mfj": 100000
+      "phase_in_range_mfj": 100000,
+      "wage_limit_pct": 0.5,
+      "wage_ubia_pct": 0.25,
+      "ubia_pct": 0.025
     },
     "credits": {
       "medical_threshold": 0.075,
@@ -1230,10 +1288,15 @@
     },
     "qbi": {
       "rate": 0.2,
+      "reit_ptp_rate": 0.2,
       "threshold_single": 191950,
+      "threshold_mfs": 191950,
       "threshold_mfj": 383900,
       "phase_in_range_single": 50000,
-      "phase_in_range_mfj": 100000
+      "phase_in_range_mfj": 100000,
+      "wage_limit_pct": 0.5,
+      "wage_ubia_pct": 0.25,
+      "ubia_pct": 0.025
     },
     "ira": {
       "roth_magi_phaseout": {
@@ -1739,10 +1802,15 @@
     },
     "qbi": {
       "rate": 0.2,
+      "reit_ptp_rate": 0.2,
       "threshold_single": 197300,
+      "threshold_mfs": 197300,
       "threshold_mfj": 394600,
       "phase_in_range_single": 50000,
-      "phase_in_range_mfj": 100000
+      "phase_in_range_mfj": 100000,
+      "wage_limit_pct": 0.5,
+      "wage_ubia_pct": 0.25,
+      "ubia_pct": 0.025
     },
     "estimated_tax_due_dates": [
       [
@@ -2165,10 +2233,17 @@
     },
     "qbi": {
       "rate": 0.2,
-      "threshold_single": 201775,
+      "reit_ptp_rate": 0.2,
+      "threshold_single": 201750,
+      "threshold_mfs": 201775,
       "threshold_mfj": 403500,
       "phase_in_range_single": 75000,
-      "phase_in_range_mfj": 150000
+      "phase_in_range_mfj": 150000,
+      "wage_limit_pct": 0.5,
+      "wage_ubia_pct": 0.25,
+      "ubia_pct": 0.025,
+      "min_deduction": 400,
+      "min_deduction_qbi_floor": 1000
     },
     "credits": {
       "medical_threshold": 0.075,

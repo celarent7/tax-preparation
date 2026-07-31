@@ -379,3 +379,81 @@ def test_savers_credit_bands_by_year(year, mfj, single):
     sc = load_tax_constants(year)["credits"]["savers_credit"]
     assert (sc["mfj"]["50_percent"], sc["mfj"]["20_percent"], sc["mfj"]["10_percent"]) == mfj
     assert (sc["single"]["50_percent"], sc["single"]["20_percent"], sc["single"]["10_percent"]) == single
+
+
+# ---------------------------------------------------------------------------
+# QBI (§199A) — thresholds, phase-in ranges, statutory factors, 2026 minimum
+# (QBI engagement; sources: Rev. Proc. 2022-38 sec .27 / 2023-34 sec .27 /
+#  2024-40 sec .27 / 2025-32 sec .26; 26 USC 199A; Form 8995-A instructions)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("year,t_single,t_mfs,t_mfj,r_single,r_mfj", [
+    # Rev. Proc. 2022-38 sec .27 (2023); 2023-34 sec .27 (2024);
+    # 2024-40 sec .27 (2025); 2025-32 sec .26 (2026, post-OBBBA).
+    ("2023", 182100, 182100, 364200, 50000, 100000),
+    ("2024", 191950, 191950, 383900, 50000, 100000),
+    ("2025", 197300, 197300, 394600, 50000, 100000),
+    # OBBBA (P.L. 119-21 §70105) widened the 2026 phase-in ranges to
+    # 75,000 / 150,000 and split MFS off from single for 2026.
+    ("2026", 201750, 201775, 403500, 75000, 150000),
+])
+def test_qbi_thresholds_and_ranges_by_year(year, t_single, t_mfs, t_mfj,
+                                           r_single, r_mfj):
+    """§199A(e)(2) thresholds and §199A(b)(3)(B) phase-in ranges per year,
+    transcribed from each year's IRS Rev. Proc. table (MFJ / MFS / All Other).
+
+    Rev. Proc. 2025-32 sec .26 lists 2026 MFS at $201,775 and 'All Other Returns'
+    (single/HoH/QSS) at $201,750 — MFS no longer equals single from 2026 on.
+    """
+    qbi = load_tax_constants(year)["qbi"]
+    assert qbi["threshold_single"] == t_single
+    assert qbi["threshold_mfs"] == t_mfs
+    assert qbi["threshold_mfj"] == t_mfj
+    assert qbi["phase_in_range_single"] == r_single
+    assert qbi["phase_in_range_mfj"] == r_mfj
+
+
+def test_qbi_2026_mfs_threshold_differs_from_single():
+    """Regression guard for the transposed-digit error found during verification.
+
+    The constants file originally carried 2026 threshold_single = 201775, which
+    is the MFS figure, not the single figure ($201,750). OBBBA split MFS from
+    single for 2026; for 2023-2025 MFS equalled single (verified per Rev. Proc.).
+    """
+    q2026 = load_tax_constants("2026")["qbi"]
+    assert q2026["threshold_single"] == 201750
+    assert q2026["threshold_mfs"] == 201775
+    assert q2026["threshold_mfs"] != q2026["threshold_single"]
+    for y in ("2023", "2024", "2025"):
+        q = load_tax_constants(y)["qbi"]
+        assert q["threshold_mfs"] == q["threshold_single"], (
+            f"{y}: pre-OBBBA, MFS must equal single")
+
+
+@pytest.mark.parametrize("year", SUPPORTED_YEARS)
+def test_qbi_statutory_factors_constant_across_years(year):
+    """The §199A rate and W-2 wage/UBIA factors are statutory, not indexed, so
+    identical for every supported year. 26 USC 199A(a)/(b)(1)/(b)(2)(B);
+    Form 8995-A Part II lines 5-10 (50% wages; 25% wages + 2.5% UBIA)."""
+    qbi = load_tax_constants(year)["qbi"]
+    assert qbi["rate"] == 0.20
+    assert qbi["reit_ptp_rate"] == 0.20
+    assert qbi["wage_limit_pct"] == 0.50
+    assert qbi["wage_ubia_pct"] == 0.25
+    assert qbi["ubia_pct"] == 0.025
+
+
+def test_qbi_2026_minimum_deduction_verified_and_pre2026_absent():
+    """26 USC 199A(i) + Rev. Proc. 2025-32 sec .12: a $400 minimum deduction
+    with a $1,000 active-QBI floor, effective for tax years beginning after
+    12/31/2025. The $400 is the GREATER of the normal deduction or $400 and
+    overrides the §199A(a)(2) overall taxable-income limit. For 2023-2025 the
+    keys are absent (pre-OBBBA), so reading one without a default raises
+    KeyError — a definitive 'not applicable', never a silent null."""
+    q2026 = load_tax_constants("2026")["qbi"]
+    assert get_constant(q2026, "min_deduction") == 400
+    assert get_constant(q2026, "min_deduction_qbi_floor") == 1000
+    for y in ("2023", "2024", "2025"):
+        q = load_tax_constants(y)["qbi"]
+        with pytest.raises(KeyError):
+            get_constant(q, "min_deduction")
