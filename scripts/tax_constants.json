@@ -94,7 +94,8 @@
       "2023.retirement_limits": "2023 401(k)/IRA limits come from IRS Notice 2022-55 and HSA limits from Rev. Proc. 2022-24; neither was fetched. All null.",
       "2023.credits.savers_credit": "Saver's Credit AGI bands for 2023 not verified.",
       "2023.mileage_rate": "Standard mileage rate is announced in a separate IRS Notice.",
-      "states.WA.capital_gains_excise.standard_deduction_2025": "WA capital gains excise standard deduction indexes annually; the 2025 figure was not verified (finding F13)."
+      "states.WA.capital_gains_excise.standard_deduction_2025": "WA capital gains excise standard deduction indexes annually; the 2025 figure was not verified (finding F13).",
+      "states.CA.2026": "FTB 2026 rate schedules not yet published as of 2026-08-05 (the 2026 540-ES instructions reference the 2025 tax table; FTB publishes indexed amounts in late December). Requesting CA 2026 raises — do not extrapolate from 2025 with an assumed inflation factor."
     },
     "rev_proc_2024_40_ty2025": {
       "url": "https://www.irs.gov/pub/irs-drop/rp-24-40.pdf",
