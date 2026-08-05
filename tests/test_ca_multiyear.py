@@ -58,3 +58,36 @@ def test_ca_mfj_brackets_double_single(year):
     single = [b["top"] for b in data["brackets"]["single"]][:-1]
     mfj = [b["top"] for b in data["brackets"]["married_jointly"]][:-1]
     assert mfj == [round(2 * t, 2) for t in single]
+
+
+# ---------------------------------------------------------------------------
+# Anchor values — literal figures typed directly from the FTB/EDD primary
+# documents at transcription time (NOT re-read from the JSON). Each anchor is
+# an independent transcription of a printed source figure.
+# ---------------------------------------------------------------------------
+
+def test_ca_2024_anchor_values():
+    d = load_state_constants("CA", "2024")
+    # 2024 Form 540 Booklet — standard deduction (authoritative booklet figures,
+    # not the 540-ES worksheet's prior-year proxy).
+    assert d["standard_deduction"]["single"] == 5540
+    assert d["standard_deduction"]["married_jointly"] == 11080
+    # 2024 Form 540 Booklet — exemption credits and phase-out.
+    assert d["exemption_credit"]["personal"] == 149
+    assert d["exemption_credit"]["dependent"] == 461
+    assert d["exemption_credit"]["phaseout_federal_agi_start"] == 244857
+    # 2024 540 Booklet — renter's credit AGI limits.
+    assert d["renters_credit"]["agi_limit_single"] == 52421
+    assert d["renters_credit"]["agi_limit_joint"] == 104842
+    # 2024 Tax Rate Schedules — first single bracket floor and top rate.
+    assert d["brackets"]["single"][0]["top"] == 10756
+    assert d["brackets"]["single"][-1]["rate"] == 0.123
+    # EDD DE 44 2024 — first uncapped SDI year (SB 951).
+    assert d["sdi"]["rate"] == 0.011
+    assert d["sdi"]["wage_cap"] is None
+    # 2024 540-ES — installment due dates (Q2/Q3 shifted for weekends/holidays).
+    assert d["estimated_tax"]["due_dates"][1] == ["Q2", "2024-06-17"]
+    assert d["estimated_tax"]["due_dates"][2] == ["Q3", "2024-09-16"]
+    # OBBBA did not exist federally in 2024 — flag is vacuous-true (add-back
+    # structurally suppressed; see _sources.ftb_2024_form_540 note).
+    assert d["nonconformity"]["obbba_tips_overtime_senior"] is True

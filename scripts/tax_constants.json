@@ -292,6 +292,46 @@
       ],
       "note": "California offers NO state income tax deduction for ScholarShare 529 contributions. K-12 withdrawals: 'any earnings portion of these withdrawals are subject to state income tax and an additional 2.5% California tax.' Apprenticeship and student-loan withdrawals are 'free from federal and California income tax' (consistent with R&TC 17140.3(e))."
     },
+    "ftb_2024_rate_schedules": {
+      "url": "https://www.ftb.ca.gov/forms/2024/2024-540-tax-rate-schedules.pdf",
+      "title": "2024 California Tax Rate Schedules (FTB)",
+      "retrieved": "2026-08-04",
+      "backs": [
+        "states.CA.2024.brackets"
+      ],
+      "note": "Schedule X single/MFS, Schedule Y MFJ/QSS, Schedule Z HoH. Nine brackets 1% to 12.3%. Single tops 10756/25499/40245/55866/70606/360659/432787/721314; MFJ tops are exactly 2x single (R&TC 17041); HoH tops 21527/51000/65744/81364/96107/490493/588593/980987. Cumulative-base self-check at each Schedule X floor: tax at 10756=$107.56, 25499=$402.42, 40245=$992.26, 55866=$1,929.52, 70606=$3,108.72, 360659=$30,083.65, 432787=$37,512.83, 721314=$70,116.38 — reconciles to the schedule's printed Tax column."
+    },
+    "ftb_2024_form_540": {
+      "url": "https://www.ftb.ca.gov/forms/2024/2024-540-booklet.html",
+      "title": "2024 Form 540 and 540 Booklet (FTB)",
+      "retrieved": "2026-08-04",
+      "backs": [
+        "states.CA.2024.standard_deduction",
+        "states.CA.2024.exemption_credit",
+        "states.CA.2024.renters_credit",
+        "states.CA.2024.behavioral_health_tax"
+      ],
+      "note": "Standard deduction $5,540 single/MFS, $11,080 MFJ/HoH/QSS (authoritative 540 Booklet figures; the 2024 540-ES worksheet shows the prior-year $5,363/$10,726 proxy amounts — NOT used). Exemptions $149 personal/blind/senior, $461 per dependent; phase-out above federal AGI $244,857. Line 62 Mental Health Services Tax = 1% of taxable income over $1,000,000 (not yet renamed for 2024). Renter's credit $60/$120 with AGI limits $52,421/$104,842."
+    },
+    "edd_de44_2024": {
+      "url": "https://edd.ca.gov/siteassets/files/pdf_pub_ctr/de44-24.pdf",
+      "title": "2024 California Employer's Guide (DE 44), EDD",
+      "retrieved": "2026-08-04",
+      "backs": [
+        "states.CA.2024.supplemental_withholding",
+        "states.CA.2024.sdi"
+      ],
+      "note": "Supplemental wages: bonuses and stock options 10.23% (.1023); other types 6.6% (.066). SDI rate 1.1% for 2024 with NO taxable wage limit — SB 951 removed the cap effective 2024-01-01 (first uncapped year; 2023 was the last capped year at 0.9% / $153,164)."
+    },
+    "ftb_2024_540es": {
+      "url": "https://www.ftb.ca.gov/forms/2024/2024-540-es-instructions.html",
+      "title": "2024 Instructions for Form 540-ES",
+      "retrieved": "2026-08-04",
+      "backs": [
+        "states.CA.2024.estimated_tax"
+      ],
+      "note": "Installments 30%/40%/0%/30%. Due dates Q1 2024-04-15, Q2 2024-06-17, Q3 2024-09-16, Q4 2025-01-15. CA AGI over $150,000 ($75,000 MFS) uses lesser of 90% current or 110% prior year. CA AGI at or above $1,000,000 ($500,000 MFS) must use 90% of CURRENT year (prior-year safe harbor unavailable)."
+    },
     "notice_2022_55_ty2023": {
       "url": "https://www.irs.gov/pub/irs-drop/n-22-55.pdf",
       "title": "Notice 2022-55, 2023 Amounts Relating to Retirement Plans and IRAs",
@@ -2952,6 +2992,279 @@
             [
               "Q4",
               "2026-01-15"
+            ]
+          ]
+        }
+      },
+      "2024": {
+        "brackets": {
+          "single": [
+            {
+              "top": 10756,
+              "rate": 0.01
+            },
+            {
+              "top": 25499,
+              "rate": 0.02
+            },
+            {
+              "top": 40245,
+              "rate": 0.04
+            },
+            {
+              "top": 55866,
+              "rate": 0.06
+            },
+            {
+              "top": 70606,
+              "rate": 0.08
+            },
+            {
+              "top": 360659,
+              "rate": 0.093
+            },
+            {
+              "top": 432787,
+              "rate": 0.103
+            },
+            {
+              "top": 721314,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "married_separately": [
+            {
+              "top": 10756,
+              "rate": 0.01
+            },
+            {
+              "top": 25499,
+              "rate": 0.02
+            },
+            {
+              "top": 40245,
+              "rate": 0.04
+            },
+            {
+              "top": 55866,
+              "rate": 0.06
+            },
+            {
+              "top": 70606,
+              "rate": 0.08
+            },
+            {
+              "top": 360659,
+              "rate": 0.093
+            },
+            {
+              "top": 432787,
+              "rate": 0.103
+            },
+            {
+              "top": 721314,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "married_jointly": [
+            {
+              "top": 21512,
+              "rate": 0.01
+            },
+            {
+              "top": 50998,
+              "rate": 0.02
+            },
+            {
+              "top": 80490,
+              "rate": 0.04
+            },
+            {
+              "top": 111732,
+              "rate": 0.06
+            },
+            {
+              "top": 141212,
+              "rate": 0.08
+            },
+            {
+              "top": 721318,
+              "rate": 0.093
+            },
+            {
+              "top": 865574,
+              "rate": 0.103
+            },
+            {
+              "top": 1442628,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "qualifying_surviving_spouse": [
+            {
+              "top": 21512,
+              "rate": 0.01
+            },
+            {
+              "top": 50998,
+              "rate": 0.02
+            },
+            {
+              "top": 80490,
+              "rate": 0.04
+            },
+            {
+              "top": 111732,
+              "rate": 0.06
+            },
+            {
+              "top": 141212,
+              "rate": 0.08
+            },
+            {
+              "top": 721318,
+              "rate": 0.093
+            },
+            {
+              "top": 865574,
+              "rate": 0.103
+            },
+            {
+              "top": 1442628,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "head_of_household": [
+            {
+              "top": 21527,
+              "rate": 0.01
+            },
+            {
+              "top": 51000,
+              "rate": 0.02
+            },
+            {
+              "top": 65744,
+              "rate": 0.04
+            },
+            {
+              "top": 81364,
+              "rate": 0.06
+            },
+            {
+              "top": 96107,
+              "rate": 0.08
+            },
+            {
+              "top": 490493,
+              "rate": 0.093
+            },
+            {
+              "top": 588593,
+              "rate": 0.103
+            },
+            {
+              "top": 980987,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ]
+        },
+        "behavioral_health_tax": {
+          "name": "Mental Health Services Tax",
+          "former_name": null,
+          "rate": 0.01,
+          "threshold": 1000000
+        },
+        "standard_deduction": {
+          "single": 5540,
+          "married_separately": 5540,
+          "married_jointly": 11080,
+          "head_of_household": 11080,
+          "qualifying_surviving_spouse": 11080
+        },
+        "exemption_credit": {
+          "personal": 149,
+          "blind": 149,
+          "senior": 149,
+          "dependent": 461,
+          "phaseout_federal_agi_start": 244857
+        },
+        "renters_credit": {
+          "amount_single": 60,
+          "amount_joint": 120,
+          "agi_limit_single": 52421,
+          "agi_limit_joint": 104842
+        },
+        "sdi": {
+          "rate": 0.011,
+          "wage_cap": null,
+          "excess_credit_multiple_employers": true
+        },
+        "supplemental_withholding": {
+          "rsu_bonus_stock_options": 0.1023,
+          "other": 0.066
+        },
+        "nonconformity": {
+          "hsa_deductible": false,
+          "hsa_earnings_taxable": true,
+          "qbi_deductible": false,
+          "capital_gains_preferential": false,
+          "mortgage_debt_limit": 1000000,
+          "heloc_limit": 100000,
+          "bonus_depreciation": false,
+          "salt_deductible_on_state_return": false,
+          "obbba_tips_overtime_senior": true,
+          "conformity_date": "2015-01-01"
+        },
+        "estimated_tax": {
+          "installment_pct": [
+            0.3,
+            0.4,
+            0.0,
+            0.3
+          ],
+          "high_income_agi": 150000,
+          "high_income_agi_mfs": 75000,
+          "high_income_prior_year_pct": 1.1,
+          "current_year_pct": 0.9,
+          "safe_harbor_unavailable_agi": 1000000,
+          "safe_harbor_unavailable_agi_mfs": 500000,
+          "due_dates": [
+            [
+              "Q1",
+              "2024-04-15"
+            ],
+            [
+              "Q2",
+              "2024-06-17"
+            ],
+            [
+              "Q3",
+              "2024-09-16"
+            ],
+            [
+              "Q4",
+              "2025-01-15"
             ]
           ]
         }
