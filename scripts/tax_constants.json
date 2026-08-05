@@ -263,6 +263,35 @@
       ],
       "note": "Installments are 30% / 40% / 0% / 30% of the required annual payment. CA AGI over $150,000 ($75,000 MFS) uses the lesser of 90% current or 110% prior year. CA AGI at or above $1,000,000 ($500,000 MFS) must use 90% of the CURRENT year \u2014 the prior-year safe harbor is unavailable."
     },
+    "ftb_2025_3805p": {
+      "url": "https://www.ftb.ca.gov/forms/2025/2025-3805p-instructions.html",
+      "title": "2025 Instructions for Form FTB 3805P (Additional Taxes on Qualified Plans)",
+      "retrieved": "2026-08-04",
+      "backs": [
+        "states.CA.2025.nonconformity.plan_529.additional_tax_rate_on_nonqualified_earnings",
+        "states.CA.2025.nonconformity.plan_529.federal_qualified_but_ca_nonqualified"
+      ],
+      "note": "Line 4: 'Multiply line 3 by 2\u00bd% (.025)' \u2014 the CA additional tax on the earnings portion of a non-qualified 529 distribution (vs. 10% federal). 'California law does not conform to these federal provisions. For California purposes, the earnings portion of a non-qualified distribution from an IRC Section 529 account is includable in California taxable income and subject to an additional tax of 2\u00bd%.' (K-12 OBBBA expansion.) 'California law does not conform to this federal provision. Rollover distributions from an IRC Section 529 plan to a Roth IRA is includible in California taxable income and subject to an additional tax of 2\u00bd%.' (SECURE 2.0 \u00a7126 529-to-Roth rollover.) Income adjustment flows through Schedule CA (540) Part I Section B line 8z."
+    },
+    "rtc_17140_3_529": {
+      "url": "https://california.public.law/codes/revenue_and_taxation_code_section_17140.3",
+      "title": "California Revenue and Taxation Code section 17140.3 (Qualified Tuition Program distributions)",
+      "retrieved": "2026-08-04",
+      "backs": [
+        "states.CA.2025.nonconformity.plan_529.ca_conformed_federal_expansions",
+        "states.CA.2025.nonconformity.plan_529.federal_qualified_but_ca_nonqualified"
+      ],
+      "note": "Subdivision (d): the CA additional tax rate on non-qualified 529 earnings is 2.5%. Subdivisions (e)(1) and (e)(2): for tax years beginning on or after January 1, 2021, CA CONFORMS to the federal expansions for registered apprenticeship program expenses and qualified education loan repayments (up to $10,000 lifetime) \u2014 these are NOT CA-non-qualified. Subdivision (f): IRC 529(c)(3)(E) 529-to-Roth IRA rollovers do NOT apply for CA (non-qualified)."
+    },
+    "scholarshare_529_benefits": {
+      "url": "https://www.scholarshare529.com/why/benefits/",
+      "title": "ScholarShare 529 College Savings Plan \u2014 Benefits (official CA 529 plan)",
+      "retrieved": "2026-08-04",
+      "backs": [
+        "states.CA.2025.nonconformity.plan_529.state_deduction_for_contributions"
+      ],
+      "note": "California offers NO state income tax deduction for ScholarShare 529 contributions. K-12 withdrawals: 'any earnings portion of these withdrawals are subject to state income tax and an additional 2.5% California tax.' Apprenticeship and student-loan withdrawals are 'free from federal and California income tax' (consistent with R&TC 17140.3(e))."
+    },
     "notice_2022_55_ty2023": {
       "url": "https://www.irs.gov/pub/irs-drop/n-22-55.pdf",
       "title": "Notice 2022-55, 2023 Amounts Relating to Retirement Plans and IRAs",
@@ -2880,7 +2909,19 @@
           "bonus_depreciation": false,
           "salt_deductible_on_state_return": false,
           "obbba_tips_overtime_senior": false,
-          "conformity_date": "2015-01-01"
+          "conformity_date": "2015-01-01",
+          "plan_529": {
+            "state_deduction_for_contributions": false,
+            "additional_tax_rate_on_nonqualified_earnings": 0.025,
+            "federal_qualified_but_ca_nonqualified": [
+              "K-12 elementary/secondary education expenses (federally qualified under TCJA and OBBBA 2025; CA does not conform)",
+              "529-to-Roth IRA rollovers (SECURE 2.0 Act section 126 / CAA 2023; CA does not conform per R&TC 17140.3(f))"
+            ],
+            "ca_conformed_federal_expansions": [
+              "Registered apprenticeship program expenses (R&TC 17140.3(e)(1), effective 2021)",
+              "Qualified education loan repayment up to $10,000 lifetime (R&TC 17140.3(e)(2), effective 2021)"
+            ]
+          }
         },
         "estimated_tax": {
           "installment_pct": [
