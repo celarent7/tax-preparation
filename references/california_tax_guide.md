@@ -1,5 +1,14 @@
 # California Tax Guide <!-- YEAR -->2025<!-- /YEAR -->
 
+> **Tax years 2023–2025** are populated from FTB/EDD primary sources and run
+> through the real CA engine (`tax_calculator.py --state CA --year <year>`).
+> **2026** is not yet published by the FTB (indexed amounts appear in late
+> December) and raises rather than approximating. **2023 SDI was capped**
+> (0.9%, wage cap $153,164) — the last capped year before SB 951 removed the
+> cap for 2024+ — so the excess-SDI credit (Form 540 line 74) is live for
+> amended 2023 returns with two or more employers; for 2024–2025 (uncapped)
+> it cannot arise.
+
 California is **not** a scaled-down copy of the federal return. It has its own
 progressive brackets, its own (much smaller) standard deduction, credits instead
 of exemptions, and a long list of non-conformity items. Presenting federal-only

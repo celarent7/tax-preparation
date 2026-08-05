@@ -19,7 +19,7 @@ metadata:
   target-users: individuals, families, self-employed
   tax-year: 2025
   supported-tax-years: "2023-2026"
-  state-coverage: "federal + California (2025)"
+  state-coverage: "federal + California (2023–2025)"
 ---
 # Tax Preparation Skill
 

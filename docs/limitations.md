@@ -27,7 +27,7 @@ The Tax Preparation Plugin is designed for standard US individual and family tax
 
 ## 5. State Coverage
 
-- **California** is the only state with a real engine: progressive brackets, Schedule CA non-conformity add-backs (HSA, QBI, OBBBA deductions), CA standard-vs-itemized, exemption and renter's credits, the Behavioral Health Services Tax, SDI, and the CA estimated-tax rules. **Tax year 2025 only** — other years raise rather than approximate.
+- **California** is the only state with a real engine: progressive brackets, Schedule CA non-conformity add-backs (HSA, QBI, OBBBA deductions), CA standard-vs-itemized, exemption and renter's credits, the Behavioral Health Services Tax, SDI, and the CA estimated-tax rules. **Tax years 2023–2025** are populated from FTB/EDD primary sources (2026 is not yet published by the FTB and raises rather than approximating). Note that **2023 SDI was capped** (rate 0.9%, wage cap $153,164) — the last capped year before SB 951 removed the cap for 2024+ — so the excess-SDI credit (Form 540 line 74) is live for amended 2023 returns with two or more employers; for 2024–2025 (uncapped) it cannot arise. The CA 529 non-conformity calculator and reviewer check are **2025-only** (see plan C4); 2023/2024 529 distributions are out of scope for that screen.
 - **WA, TX, FL, NV** are recognized as no-income-tax states. The WA capital gains excise tax is modeled but its annual standard deduction is unverified, so it returns no figure rather than a stale one.
 - **All other states** carry only a **top marginal rate flagged `estimate_only`**. That is not an effective rate and must never be presented as one.
 
