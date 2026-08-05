@@ -94,8 +94,7 @@
       "2023.retirement_limits": "2023 401(k)/IRA limits come from IRS Notice 2022-55 and HSA limits from Rev. Proc. 2022-24; neither was fetched. All null.",
       "2023.credits.savers_credit": "Saver's Credit AGI bands for 2023 not verified.",
       "2023.mileage_rate": "Standard mileage rate is announced in a separate IRS Notice.",
-      "states.WA.capital_gains_excise.standard_deduction_2025": "WA capital gains excise standard deduction indexes annually; the 2025 figure was not verified (finding F13).",
-      "states.CA.2023": "CA 2023 and 2024 bracket/deduction data not collected in this engagement; only 2025 is populated. Requesting another year raises."
+      "states.WA.capital_gains_excise.standard_deduction_2025": "WA capital gains excise standard deduction indexes annually; the 2025 figure was not verified (finding F13)."
     },
     "rev_proc_2024_40_ty2025": {
       "url": "https://www.irs.gov/pub/irs-drop/rp-24-40.pdf",
@@ -331,6 +330,46 @@
         "states.CA.2024.estimated_tax"
       ],
       "note": "Installments 30%/40%/0%/30%. Due dates Q1 2024-04-15, Q2 2024-06-17, Q3 2024-09-16, Q4 2025-01-15. CA AGI over $150,000 ($75,000 MFS) uses lesser of 90% current or 110% prior year. CA AGI at or above $1,000,000 ($500,000 MFS) must use 90% of CURRENT year (prior-year safe harbor unavailable)."
+    },
+    "ftb_2023_rate_schedules": {
+      "url": "https://www.ftb.ca.gov/forms/2023/2023-540-tax-rate-schedules.pdf",
+      "title": "2023 California Tax Rate Schedules (FTB)",
+      "retrieved": "2026-08-04",
+      "backs": [
+        "states.CA.2023.brackets"
+      ],
+      "note": "Schedule X single/MFS, Schedule Y MFJ/QSS, Schedule Z HoH. Nine brackets 1% to 12.3%. Single tops 10412/24684/38959/54081/68350/349137/418961/698271; MFJ tops are exactly 2x single (R&TC 17041); HoH tops 20839/49371/63644/78765/93037/474824/569790/949649. Cumulative-base self-check at each Schedule X floor: tax at 10412=$104.12, 24684=$389.56, 38959=$960.56, 54081=$1,867.88, 68350=$3,009.40, 349137=$29,122.59, 418961=$36,314.46, 698271=$67,876.49 — reconciles to the schedule's printed Tax column."
+    },
+    "ftb_2023_form_540": {
+      "url": "https://www.ftb.ca.gov/forms/2023/2023-540-booklet.html",
+      "title": "2023 Form 540 and 540 Booklet (FTB)",
+      "retrieved": "2026-08-04",
+      "backs": [
+        "states.CA.2023.standard_deduction",
+        "states.CA.2023.exemption_credit",
+        "states.CA.2023.renters_credit",
+        "states.CA.2023.behavioral_health_tax"
+      ],
+      "note": "Standard deduction $5,363 single/MFS, $10,726 MFJ/HoH/QSS. Exemptions $144 personal/blind/senior, $446 per dependent; phase-out above federal AGI $237,035. Line 62 Mental Health Services Tax = 1% of taxable income over $1,000,000. Renter's credit $60/$120 with AGI limits $50,746/$101,492."
+    },
+    "edd_de44_2023": {
+      "url": "https://edd.ca.gov/siteassets/files/pdf_pub_ctr/de44-23.pdf",
+      "title": "2023 California Employer's Guide (DE 44), EDD",
+      "retrieved": "2026-08-04",
+      "backs": [
+        "states.CA.2023.supplemental_withholding",
+        "states.CA.2023.sdi"
+      ],
+      "note": "Supplemental wages: bonuses and stock options 10.23% (.1023); other types 6.6% (.066). SDI rate 0.9% for 2023 with taxable wage cap $153,164 — the LAST capped year (SB 951 removed the cap effective 2024-01-01). The cap means the excess-SDI credit (Form 540 line 74) is live for amended 2023 returns with two or more employers (see utils.excess_sdi_credit)."
+    },
+    "ftb_2023_540es": {
+      "url": "https://www.ftb.ca.gov/forms/2023/2023-540-es-instructions.html",
+      "title": "2023 Instructions for Form 540-ES",
+      "retrieved": "2026-08-04",
+      "backs": [
+        "states.CA.2023.estimated_tax"
+      ],
+      "note": "Installments 30%/40%/0%/30%. Due dates Q1 2023-04-18, Q2 2023-06-15, Q3 2023-09-15, Q4 2024-01-16 (Q1 shifted for the Emancipation Day / DC holiday weekend). CA AGI over $150,000 ($75,000 MFS) uses lesser of 90% current or 110% prior year. CA AGI at or above $1,000,000 ($500,000 MFS) must use 90% of CURRENT year (prior-year safe harbor unavailable)."
     },
     "notice_2022_55_ty2023": {
       "url": "https://www.irs.gov/pub/irs-drop/n-22-55.pdf",
@@ -3265,6 +3304,279 @@
             [
               "Q4",
               "2025-01-15"
+            ]
+          ]
+        }
+      },
+      "2023": {
+        "brackets": {
+          "single": [
+            {
+              "top": 10412,
+              "rate": 0.01
+            },
+            {
+              "top": 24684,
+              "rate": 0.02
+            },
+            {
+              "top": 38959,
+              "rate": 0.04
+            },
+            {
+              "top": 54081,
+              "rate": 0.06
+            },
+            {
+              "top": 68350,
+              "rate": 0.08
+            },
+            {
+              "top": 349137,
+              "rate": 0.093
+            },
+            {
+              "top": 418961,
+              "rate": 0.103
+            },
+            {
+              "top": 698271,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "married_separately": [
+            {
+              "top": 10412,
+              "rate": 0.01
+            },
+            {
+              "top": 24684,
+              "rate": 0.02
+            },
+            {
+              "top": 38959,
+              "rate": 0.04
+            },
+            {
+              "top": 54081,
+              "rate": 0.06
+            },
+            {
+              "top": 68350,
+              "rate": 0.08
+            },
+            {
+              "top": 349137,
+              "rate": 0.093
+            },
+            {
+              "top": 418961,
+              "rate": 0.103
+            },
+            {
+              "top": 698271,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "married_jointly": [
+            {
+              "top": 20824,
+              "rate": 0.01
+            },
+            {
+              "top": 49368,
+              "rate": 0.02
+            },
+            {
+              "top": 77918,
+              "rate": 0.04
+            },
+            {
+              "top": 108162,
+              "rate": 0.06
+            },
+            {
+              "top": 136700,
+              "rate": 0.08
+            },
+            {
+              "top": 698274,
+              "rate": 0.093
+            },
+            {
+              "top": 837922,
+              "rate": 0.103
+            },
+            {
+              "top": 1396542,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "qualifying_surviving_spouse": [
+            {
+              "top": 20824,
+              "rate": 0.01
+            },
+            {
+              "top": 49368,
+              "rate": 0.02
+            },
+            {
+              "top": 77918,
+              "rate": 0.04
+            },
+            {
+              "top": 108162,
+              "rate": 0.06
+            },
+            {
+              "top": 136700,
+              "rate": 0.08
+            },
+            {
+              "top": 698274,
+              "rate": 0.093
+            },
+            {
+              "top": 837922,
+              "rate": 0.103
+            },
+            {
+              "top": 1396542,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "head_of_household": [
+            {
+              "top": 20839,
+              "rate": 0.01
+            },
+            {
+              "top": 49371,
+              "rate": 0.02
+            },
+            {
+              "top": 63644,
+              "rate": 0.04
+            },
+            {
+              "top": 78765,
+              "rate": 0.06
+            },
+            {
+              "top": 93037,
+              "rate": 0.08
+            },
+            {
+              "top": 474824,
+              "rate": 0.093
+            },
+            {
+              "top": 569790,
+              "rate": 0.103
+            },
+            {
+              "top": 949649,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ]
+        },
+        "behavioral_health_tax": {
+          "name": "Mental Health Services Tax",
+          "former_name": null,
+          "rate": 0.01,
+          "threshold": 1000000
+        },
+        "standard_deduction": {
+          "single": 5363,
+          "married_separately": 5363,
+          "married_jointly": 10726,
+          "head_of_household": 10726,
+          "qualifying_surviving_spouse": 10726
+        },
+        "exemption_credit": {
+          "personal": 144,
+          "blind": 144,
+          "senior": 144,
+          "dependent": 446,
+          "phaseout_federal_agi_start": 237035
+        },
+        "renters_credit": {
+          "amount_single": 60,
+          "amount_joint": 120,
+          "agi_limit_single": 50746,
+          "agi_limit_joint": 101492
+        },
+        "sdi": {
+          "rate": 0.009,
+          "wage_cap": 153164,
+          "excess_credit_multiple_employers": true
+        },
+        "supplemental_withholding": {
+          "rsu_bonus_stock_options": 0.1023,
+          "other": 0.066
+        },
+        "nonconformity": {
+          "hsa_deductible": false,
+          "hsa_earnings_taxable": true,
+          "qbi_deductible": false,
+          "capital_gains_preferential": false,
+          "mortgage_debt_limit": 1000000,
+          "heloc_limit": 100000,
+          "bonus_depreciation": false,
+          "salt_deductible_on_state_return": false,
+          "obbba_tips_overtime_senior": true,
+          "conformity_date": "2015-01-01"
+        },
+        "estimated_tax": {
+          "installment_pct": [
+            0.3,
+            0.4,
+            0.0,
+            0.3
+          ],
+          "high_income_agi": 150000,
+          "high_income_agi_mfs": 75000,
+          "high_income_prior_year_pct": 1.1,
+          "current_year_pct": 0.9,
+          "safe_harbor_unavailable_agi": 1000000,
+          "safe_harbor_unavailable_agi_mfs": 500000,
+          "due_dates": [
+            [
+              "Q1",
+              "2023-04-18"
+            ],
+            [
+              "Q2",
+              "2023-06-15"
+            ],
+            [
+              "Q3",
+              "2023-09-15"
+            ],
+            [
+              "Q4",
+              "2024-01-16"
             ]
           ]
         }

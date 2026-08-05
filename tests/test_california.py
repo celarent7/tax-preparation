@@ -420,9 +420,10 @@ def test_flat_state_rate_table_no_longer_advertises_ca():
 
 
 def test_unsupported_state_year_raises():
-    """Only 2025 CA data was collected; other years must raise, not guess."""
+    """CA 2023-2025 are populated; 2026 is not yet published by the FTB and
+    must raise rather than fall back to an adjacent year's indexed figures."""
     with pytest.raises(ValueError):
-        load_state_constants("CA", "2023")
+        load_state_constants("CA", "2026")
 
 
 def test_no_income_tax_states_report_zero():

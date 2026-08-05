@@ -91,3 +91,30 @@ def test_ca_2024_anchor_values():
     # OBBBA did not exist federally in 2024 — flag is vacuous-true (add-back
     # structurally suppressed; see _sources.ftb_2024_form_540 note).
     assert d["nonconformity"]["obbba_tips_overtime_senior"] is True
+
+
+def test_ca_2023_anchor_values():
+    d = load_state_constants("CA", "2023")
+    # 2023 Form 540 Booklet — standard deduction.
+    assert d["standard_deduction"]["single"] == 5363
+    assert d["standard_deduction"]["married_jointly"] == 10726
+    # 2023 Form 540 Booklet — exemption credits and phase-out.
+    assert d["exemption_credit"]["personal"] == 144
+    assert d["exemption_credit"]["dependent"] == 446
+    assert d["exemption_credit"]["phaseout_federal_agi_start"] == 237035
+    # 2023 Form 540 Booklet — renter's credit AGI limits.
+    assert d["renters_credit"]["agi_limit_single"] == 50746
+    assert d["renters_credit"]["agi_limit_joint"] == 101492
+    # 2023 Tax Rate Schedules — first single bracket floor and top rate.
+    assert d["brackets"]["single"][0]["top"] == 10412
+    assert d["brackets"]["single"][-1]["rate"] == 0.123
+    # EDD DE 44 2023 — last CAPPED SDI year (cap removed by SB 951 in 2024).
+    assert d["sdi"]["rate"] == 0.009
+    assert d["sdi"]["wage_cap"] == 153164
+    # 2023 540-ES — installment due dates (Q1 shifted for Emancipation Day).
+    assert d["estimated_tax"]["due_dates"][0] == ["Q1", "2023-04-18"]
+    assert d["estimated_tax"]["due_dates"][3] == ["Q4", "2024-01-16"]
+    # OBBBA did not exist federally in 2023 — flag is vacuous-true.
+    assert d["nonconformity"]["obbba_tips_overtime_senior"] is True
+    # The capped wage cap means the excess-SDI credit is live for 2023.
+    assert d["sdi"]["wage_cap"] is not None
