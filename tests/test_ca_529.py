@@ -14,7 +14,10 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-from utils import load_state_constants, ca_529_nonqualified_withdrawal
+from utils import load_state_constants, load_tax_constants, ca_529_nonqualified_withdrawal
+from credit_eligibility_checker import get_credit_params
+from draft_reviewer import ReviewContext, Severity, check_529
+from savings_rules import RULES
 
 
 def test_ca_529_block_shape():
@@ -76,3 +79,131 @@ def test_negative_inputs_rejected(plan529):
         ca_529_nonqualified_withdrawal(-1000, 0, plan529)
     with pytest.raises(ValueError):
         ca_529_nonqualified_withdrawal(1000, -100, plan529)
+
+
+# ---------------------------------------------------------------------------
+# C4.3a — draft reviewer check_529
+# ---------------------------------------------------------------------------
+
+_TD_2025 = load_tax_constants("2025")
+
+
+def _ctx(year="2025"):
+    """A ReviewContext pinned to `year`; only year/exact_tolerance are read by
+    check_529 (the rest are populated from the real 2025 constants so the
+    dataclass is valid)."""
+    td = _TD_2025
+    return ReviewContext(
+        year=year, tax_brackets=td["tax_brackets_processed"],
+        ltcg_brackets=td["ltcg_brackets_processed"],
+        standard_deductions=td["standard_deductions"],
+        additional_deductions=td["additional_deduction_65_blind"],
+        ctc_params=get_credit_params(td)["child_tax_credit"],
+        salt_constants=td["salt"], capital_loss_limit=td["capital_loss_limit"],
+        capital_loss_limit_mfs=td["capital_loss_limit_mfs"],
+        ss_wage_base=td["se_tax"]["ss_wage_base"],
+        se_tax_factor=td["se_tax"]["se_adjustment_factor"],
+        se_ss_rate=td["se_tax"]["ss_rate"],
+        se_medicare_rate=td["se_tax"]["medicare_rate"],
+        add_medicare_threshold_single=td["se_tax"]["additional_medicare_threshold_single"],
+        add_medicare_threshold_mfj=td["se_tax"]["additional_medicare_threshold_married"],
+        hsa_limit_self=td["retirement_limits"]["hsa"]["single"],
+        hsa_limit_family=td["retirement_limits"]["hsa"]["family"],
+        charitable_cash_limit=td["credits"]["charitable_cash_limit"],
+        charitable_property_limit=td["charitable_property_agi_limit"],
+        educator_limit=td["educator_expense_limit"],
+        student_loan_limit=td["student_loan_interest_limit"],
+        year_constants=td)
+
+
+_W = {"withdrawal": 10000, "earnings": 3000}
+
+
+def test_check_529_omitted_addback_is_error():
+    """CA draft omits the earnings add-back for a declared K-12 529 withdrawal."""
+    draft = {"form_540": {}}  # no line_529_earnings_addback
+    computed = {"state": "CA", "plan_529_withdrawal_ca_nonqualified": _W}
+    findings = check_529(draft, computed, _ctx("2025"))
+    assert len(findings) == 1
+    assert findings[0].severity == Severity.ERROR
+    msg = findings[0].message
+    assert "$3,000.00" in msg       # the earnings add-back amount
+    assert "$75.00" in msg          # the 2.5% additional tax
+
+
+def test_check_529_present_addback_is_ok():
+    """CA draft reports the correct earnings add-back -> OK finding."""
+    draft = {"form_540": {"line_529_earnings_addback": 3000}}
+    computed = {"state": "CA", "plan_529_withdrawal_ca_nonqualified": _W}
+    findings = check_529(draft, computed, _ctx("2025"))
+    assert len(findings) == 1
+    assert findings[0].severity == Severity.OK
+    assert "$75.00" in findings[0].message
+
+
+def test_check_529_non_ca_no_findings():
+    computed = {"state": "TX", "plan_529_withdrawal_ca_nonqualified": _W}
+    assert check_529({"form_540": {}}, computed, _ctx("2025")) == []
+
+
+def test_check_529_no_withdrawal_no_findings():
+    computed = {"state": "CA"}  # no plan_529_withdrawal_ca_nonqualified
+    assert check_529({"form_540": {}}, computed, _ctx("2025")) == []
+
+
+def test_check_529_year_without_plan529_skips_gracefully():
+    """2023/2024 have no plan_529 sub-block (C4 is 2025-scoped); a declared
+    withdrawal must not crash the reviewer — it skips with no findings."""
+    computed = {"state": "CA", "plan_529_withdrawal_ca_nonqualified": _W}
+    assert check_529({"form_540": {}}, computed, _ctx("2023")) == []
+
+
+# ---------------------------------------------------------------------------
+# C4.3b — savings-engine caveat rule (rule_529_ca_caveat)
+# ---------------------------------------------------------------------------
+
+def _profile(**over):
+    p = {"filing_status": "single", "agi": 100000, "taxable_income": 80000}
+    p.update(over)
+    return p
+
+
+def test_rule_529_ca_fires_with_dollar_exposure():
+    ops = RULES["plan_529_ca"](
+        _profile(state="CA", plan_529_k12_withdrawals=10000,
+                 plan_529_k12_earnings=3000), _TD_2025)
+    assert len(ops) == 1
+    op = ops[0]
+    assert op.rule_id == "plan_529_ca"
+    assert op.savings_federal is None  # zero-savings caveat, not a savings claim
+    cav = op.state_caveat
+    assert "$3,000.00" in cav   # CA-taxable earnings
+    assert "$75.00" in cav      # 2.5% additional tax
+    assert "K-12" in cav
+
+
+def test_rule_529_tx_does_not_fire():
+    ops = RULES["plan_529_ca"](
+        _profile(state="TX", plan_529_k12_withdrawals=10000,
+                 plan_529_k12_earnings=3000), _TD_2025)
+    assert ops == []
+
+
+def test_rule_529_ca_zero_withdrawal_does_not_fire():
+    ops = RULES["plan_529_ca"](
+        _profile(state="CA", plan_529_k12_withdrawals=0,
+                 plan_529_k12_earnings=3000), _TD_2025)
+    assert ops == []
+
+
+def test_rule_529_ca_no_earnings_fires_caveat_unquantified():
+    """Earnings=0 still fires the caveat (the withdrawal is CA-non-qualified)
+    but without a dollar quantification line."""
+    ops = RULES["plan_529_ca"](
+        _profile(state="CA", plan_529_k12_withdrawals=10000,
+                 plan_529_k12_earnings=0), _TD_2025)
+    assert len(ops) == 1
+    assert ops[0].savings_federal is None
+    # No dollar-exposure sentence (earnings == 0).
+    assert "$75.00" not in (ops[0].state_caveat or "")
+    assert "K-12" in (ops[0].state_caveat or "")

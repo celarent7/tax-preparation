@@ -15,6 +15,7 @@ from .engine import (
     filing_status_of,
 )
 from .models import Priority, TaxOpportunity
+from utils import ca_529_nonqualified_withdrawal
 
 
 # ---------------------------------------------------------------------------
@@ -322,4 +323,74 @@ def rule_hsa(profile: Dict[str, Any], tax_data: Dict[str, Any]) -> List[TaxOppor
         deadline="By the tax filing deadline (April 15 of the following year).",
         assumptions=["Triple-tax-advantaged: deductible in, tax-free growth, tax-free medical out.",
                     "Marginal rate computed on the profile's taxable income."],
+    )]
+
+
+# ---------------------------------------------------------------------------
+# C4 — 529 K-12 CA non-conformity caveat (zero-savings; quantifies exposure)
+# ---------------------------------------------------------------------------
+
+
+def rule_529_ca_caveat(profile: Dict[str, Any],
+                       tax_data: Dict[str, Any]) -> List[TaxOpportunity]:
+    """CA caveat for federally-qualified K-12 529 withdrawals.
+
+    K-12 tuition paid from a 529 is federally qualified (TCJA) but NON-qualified
+    for California: the earnings portion is includable in CA income (Schedule CA
+    (540) line 8z) and carries a 2.5% CA additional tax (Form FTB 3805P). CA also
+    offers NO state deduction for ScholarShare contributions. This rule emits a
+    zero-savings opportunity (savings_federal=None) that surfaces the cost and
+    recommends paying K-12 tuition from taxable funds instead.
+
+    Fires only when the profile is CA and ``plan_529_k12_withdrawals`` > 0. The
+    2.5% rate and the non-qualified classification come from the year's
+    ``plan_529`` constants block; when ``plan_529_k12_earnings`` is supplied the
+    exposure is quantified via ``utils.ca_529_nonqualified_withdrawal``. Years
+    without a ``plan_529`` sub-block (2023/2024 — 529 coverage is 2025-only per
+    plan C4) still get the caveat but without a dollar quantification, since the
+    2.5% rate must not be hard-coded (ground rule 5).
+    """
+    if str(profile.get("state", "")).upper() != "CA":
+        return []
+    withdrawal = float(profile.get("plan_529_k12_withdrawals", 0) or 0)
+    if withdrawal <= 0:
+        return []
+    earnings = float(profile.get("plan_529_k12_earnings", 0) or 0)
+
+    plan_529 = ca_nonconformity(tax_data).get("plan_529")
+    caveat = (
+        "California does NOT conform to the federal K-12 expansion of IRC 529 "
+        "'qualified' expenses: the EARNINGS portion of a K-12 529 withdrawal is "
+        "includable in CA income (Schedule CA (540) line 8z) and subject to a CA "
+        "additional tax (Form FTB 3805P). California also offers NO state income "
+        "tax deduction for ScholarShare 529 contributions. Consider paying K-12 "
+        "tuition from taxable funds instead."
+    )
+    if plan_529 is not None and earnings > 0:
+        r = ca_529_nonqualified_withdrawal(withdrawal, earnings, plan_529)
+        caveat += (f" At ${withdrawal:,.0f} withdrawn with ${earnings:,.0f} of "
+                   f"earnings, the CA exposure is ${r['ca_taxable_earnings']:,.2f} "
+                   f"of added income plus ${r['additional_tax']:,.2f} of "
+                   f"additional tax ({r['rate']:.1%} x earnings).")
+
+    return [TaxOpportunity(
+        category="Retirement",
+        name="529 K-12 CA non-conformity",
+        description=(f"You reported ${withdrawal:,.0f} of K-12 529 withdrawals. "
+                     "These are federally qualified but CA-NON-qualified — the "
+                     "earnings are CA-taxable."),
+        potential_savings="$0 (a cost to avoid, not a savings)",
+        priority=Priority.MEDIUM,
+        action_required=("Pay K-12 tuition from taxable funds rather than a 529 "
+                         "distribution. If already withdrawn, add the earnings "
+                         "back on Schedule CA (540) line 8z and file Form 3805P."),
+        documentation_needed=["529 distribution statement (basis vs earnings)",
+                             "Schedule CA (540) line 8z entry"],
+        rule_id="plan_529_ca",
+        savings_federal=None,
+        savings_state=None,
+        state_caveat=caveat,
+        assumptions=["529 K-12 non-conformity is CA-wide (R&TC 17140.3); the "
+                     "additional-tax rate and non-qualified list come from the "
+                     "year's plan_529 constants block."],
     )]

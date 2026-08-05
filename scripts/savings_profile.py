@@ -85,6 +85,9 @@ CANONICAL_FIELDS: Dict[str, Any] = {
     # Misc / OBBBA
     "tips_income": 0,
     "overtime_premium_income": 0,
+    # 529 plan (C4: CA non-conformity caveat)
+    "plan_529_k12_withdrawals": 0,   # K-12 529 distributions (federally qualified, CA-non-qualified)
+    "plan_529_k12_earnings": 0,      # earnings portion of those withdrawals (drives the 2.5% CA additional tax)
 }
 
 _REQUIRED: List[str] = ["filing_status"]

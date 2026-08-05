@@ -25,6 +25,7 @@ from deduction_analyzer import resolve_salt_cap
 from tax_calculator import calculate_preferential_tax, calculate_tax
 from utils import (
     excess_sdi_credit,
+    ca_529_nonqualified_withdrawal,
     get_status_value,
     load_state_constants,
     load_tax_constants,
@@ -568,12 +569,71 @@ def check_excess_sdi(draft: Dict, computed: Dict, ctx: ReviewContext,
                     draft_credit, result["credit"], diff)]
 
 
+def check_529(draft: Dict, computed: Dict, ctx: ReviewContext,
+              plan_529: Optional[Dict] = None) -> List[Finding]:
+    """C4: verify a federally-qualified-but-CA-non-qualified 529 withdrawal is
+    reflected on the CA draft.
+
+    Fires only for a CA return when ``computed["plan_529_withdrawal_ca_nonqualified"]``
+    is present — a dict ``{"withdrawal": x, "earnings": y}`` describing a
+    federally-qualified withdrawal that is NON-qualified for California (K-12
+    tuition, 529-to-Roth rollover — see the constants list). The earnings
+    portion must be added back to CA income on Schedule CA (540) line 8z AND
+    carries a 2.5% CA additional tax (Form FTB 3805P). A draft that omits the
+    add-back is an ERROR; a draft that reports it is OK.
+
+    ``plan_529`` is injectable for tests; by default it is resolved from the
+    year's nonconformity block. Years without a ``plan_529`` sub-block (2023/
+    2024 — 529 coverage is 2025-only per plan C4) produce no findings, so the
+    reviewer never crashes on a year that does not yet carry 529 data.
+    """
+    if str(computed.get("state", "")).upper() != "CA":
+        return []
+    w = computed.get("plan_529_withdrawal_ca_nonqualified")
+    if not w:
+        return []
+
+    if plan_529 is None:
+        try:
+            plan_529 = load_state_constants("CA", ctx.year)["nonconformity"].get(
+                "plan_529")
+        except ValueError:
+            return []  # CA data not available for this year — nothing to check
+        if plan_529 is None:
+            return []  # year has no 529 sub-block (2023/2024) — out of scope
+
+    withdrawal = float(w.get("withdrawal", 0))
+    earnings = float(w.get("earnings", 0))
+    result = ca_529_nonqualified_withdrawal(withdrawal, earnings, plan_529)
+    expected_addback = result["ca_taxable_earnings"]
+    stated_addback = float(
+        draft.get("form_540", {}).get("line_529_earnings_addback", 0) or 0)
+
+    ok, diff = compare_values(stated_addback, expected_addback,
+                              ctx.exact_tolerance)
+    if ok:
+        return [_ok("california", "line_529_earnings_addback",
+                    (f"529 non-qualified earnings ${expected_addback:,.2f} "
+                     f"added back to CA income (Schedule CA line 8z); "
+                     f"${result['additional_tax']:,.2f} CA additional tax "
+                     f"(Form 3805P)."),
+                    stated_addback, expected_addback)]
+    return [Finding(
+        Severity.ERROR, "california", "line_529_earnings_addback",
+        (f"Draft omits the CA add-back for a federally-qualified-but-CA-non-"
+         f"qualified 529 withdrawal: ${expected_addback:,.2f} of earnings must "
+         f"be added to CA income on Schedule CA (540) line 8z, plus a "
+         f"${result['additional_tax']:,.2f} CA additional tax on Form 3805P "
+         f"(2.5% x earnings). The basis portion is tax-free."),
+        stated_addback, expected_addback, diff)]
+
+
 def run_review(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
     all_findings = []
     for check in (check_income, check_agi, check_deductions, check_tax,
                   check_se_tax, check_total_tax, check_capital_gains,
                   check_withholding, check_salt, check_credits, check_qbi,
-                  check_excess_sdi):
+                  check_excess_sdi, check_529):
         all_findings.extend(check(draft, computed, ctx))
     return all_findings
 

@@ -14,6 +14,7 @@ from .retirement import (
     rule_backdoor_roth,
     rule_mega_backdoor_roth,
     rule_hsa,
+    rule_529_ca_caveat,
 )
 from .harvesting import rule_tax_loss_harvesting
 from .charitable import rule_appreciated_stock_donation, rule_qcd
@@ -26,6 +27,7 @@ RULES: Dict[str, Callable[[Dict[str, Any], Dict[str, Any]], List[TaxOpportunity]
     "backdoor_roth": rule_backdoor_roth,
     "mega_backdoor_roth": rule_mega_backdoor_roth,
     "hsa": rule_hsa,
+    "plan_529_ca": rule_529_ca_caveat,
     "tlh": rule_tax_loss_harvesting,
     "appreciated_stock_donation": rule_appreciated_stock_donation,
     "qcd": rule_qcd,
