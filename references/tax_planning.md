@@ -96,7 +96,7 @@ python ./scripts/tax_calculator.py --gross-income <amt> --filing-status <status>
 ### Children
 - Child Tax Credit ($2,200/child under 17 for 2025+ under OBBBA; $2,000 for 2024 and earlier)
 - Dependent care credit for childcare expenses
-- Education savings (529 plan, state deduction possible)
+- Education savings (529 plan — **no CA deduction** for ScholarShare contributions; many other states do offer one. K-12 529 withdrawals are federally qualified but CA-non-qualified — see `./california_tax_guide.md` §2a)
 - Filing status may change to Head of Household if unmarried
 
 ### Home Purchase

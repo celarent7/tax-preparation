@@ -59,11 +59,54 @@ income or disallowed deductions California does tax.
 | **SALT** | Capped deduction | **Not deductible at all** on the CA return | Remove state income tax from CA itemized |
 | **Bonus depreciation** | Available | **Not allowed** | Recompute depreciation for CA |
 | **OBBBA tips / overtime / senior / car-loan deductions** | Deductible 2025–2028 | **Not allowed** | CA conformity date is **2015-01-01**, so no post-2015 federal provision applies unless CA enacts it separately |
-| **529 for K-12** | Qualified | Non-qualified for CA | CA taxes the earnings portion |
+| **529 plans** | See [§2a](#2a-529-plans-california-does-not-follow-the-federal-expansions) below | **K-12 and Roth-rollover withdrawals are non-qualified** | Earnings are CA-taxable + a 2.5% additional tax |
 
 Because California's conformity date is fixed at **January 1, 2015**, the default
 assumption for *any* newer federal provision is that California does **not**
 follow it.
+
+---
+
+## 2a. 529 plans: California does not follow the federal expansions
+
+California conforms to IRC 529 only on its own terms (R&TC 17140.3). Two federal
+"qualified" purposes are **non-qualified for CA**, so the **earnings portion** of
+such a withdrawal is includable in CA income (Schedule CA (540) Part I Section B,
+**line 8z**) **and** subject to a **2.5% CA additional tax** (Form FTB 3805P — the
+federal 10% penalty does not apply for CA; CA charges its own 2.5%). The **basis**
+portion is never taxed. The amounts and the non-qualified list live in
+`scripts/tax_constants.json` under `states.CA.2025.nonconformity.plan_529`.
+
+**Federally qualified but CA-non-qualified:**
+- **K-12 elementary/secondary education expenses** — federally qualified since
+  TCJA (up to $10,000/yr/beneficiary) and expanded by OBBBA 2025; CA does not
+  conform.
+- **529-to-Roth IRA rollovers** — SECURE 2.0 Act §126 (effective 2024); CA does
+  not conform per R&TC 17140.3(f).
+
+**CA *does* conform** to the registered-apprenticeship and
+qualified-education-loan-repayment expansions (R&TC 17140.3(e)(1)/(e)(2),
+effective 2021) — those withdrawals are **not** in the CA-non-qualified list.
+
+> **No CA deduction for ScholarShare contributions.** California offers **no**
+> state income tax deduction for contributions to its 529 plan (ScholarShare).
+> Many other states *do* deduct 529 contributions — a cross-state planning point,
+> but not a CA benefit.
+
+**Worked example (matches the `ca_529_nonqualified_withdrawal` test):** a $10,000
+K-12 withdrawal of which $3,000 is earnings adds **$3,000** to CA income on
+Schedule CA line 8z, plus a **$75** CA additional tax (2.5% × $3,000) on Form
+3805P. The remaining $7,000 (basis) is tax-free. Compute it with
+`scripts/draft_reviewer.py` (the `check_529` check flags a draft that omits the
+line 8z add-back) or surface the exposure via `scripts/tax_savings_finder.py`
+(the `plan_529_ca` caveat rule).
+
+**Planning takeaway:** a federally-qualified/CA-non-qualified 529 withdrawal is
+often still worthwhile (the federal benefit can outweigh the CA cost), but the CA
+cost must be priced in. For K-12 tuition specifically, paying from taxable funds
+instead avoids the CA add-back entirely. 529 coverage here is **2025-only**
+(2023/2024 529 distributions are out of scope for the calculator and reviewer
+screen — see `docs/limitations.md` §5).
 
 ---
 
