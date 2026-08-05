@@ -470,3 +470,37 @@ def excess_sdi_credit(sdi_by_employer, sdi_config):
             "credit": credit, "possible": credit > 0,
             "note": ("Claim on Form 540 line 74." if credit > 0 else
                      "Combined SDI does not exceed the per-year maximum.")}
+
+
+def ca_529_nonqualified_withdrawal(withdrawal, earnings_portion, plan_529):
+    """CA treatment of a 529 withdrawal that is federally qualified but
+    NON-qualified for California (K-12 expenses, 529-to-Roth IRA rollovers —
+    see the constants list; apprenticeship and student-loan repayment ARE
+    conformed and never reach this function).
+
+    California taxes the EARNINGS portion as ordinary income on Schedule CA
+    (540) line 8z and adds its own additional tax (2.5%) on those earnings via
+    Form FTB 3805P. The basis portion is never taxed. This function returns the
+    add-back and the additional tax; the CA income tax itself is computed by the
+    existing CA engine when the caller includes `ca_taxable_earnings` in CA AGI
+    — no second CA tax path here (the single-CA-engine rule).
+
+    R&TC 17140.3(d) for the rate; the rate and the purpose list come from the
+    constants block, never hard-coded.
+    """
+    withdrawal = float(withdrawal)
+    earnings = float(earnings_portion)
+    if withdrawal < 0 or earnings < 0:
+        raise ValueError("Withdrawal and earnings must be non-negative.")
+    if earnings > withdrawal:
+        raise ValueError("Earnings portion cannot exceed the total withdrawal.")
+    rate = plan_529["additional_tax_rate_on_nonqualified_earnings"]
+    return {
+        "ca_taxable_earnings": round(earnings, 2),
+        "additional_tax": round(earnings * rate, 2),
+        "rate": rate,
+        "note": ("Include the earnings in CA income (Schedule CA (540) line 8z) "
+                 "and add the additional tax on Form FTB 3805P; the basis "
+                 "portion is tax-free. Federal treatment is unchanged "
+                 "(qualified federally)."),
+    }
