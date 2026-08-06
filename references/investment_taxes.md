@@ -424,9 +424,16 @@ This is the #1 mistake on RSU tax returns. Many people:
 - Don't adjust for taxes withheld (see below)
 
 **The 1099-B Problem:**
-- Brokers often report INCORRECT or MISSING cost basis for RSUs
-- 1099-B may show $0 basis or be blank
-- YOU must correct this on Form 8949 using adjustment code "B"
+- Brokers often report a **wrong** basis or **no** basis at all for RSUs
+- 1099-B may show $0 basis, be blank, or show a wrong nonzero figure
+- Two distinct cases (see `rsu/form_8949_guide.md`):
+  - **Wrong basis reported** (nonzero but incorrect, Box A/D): use Form 8949
+    adjustment code "B" and enter the **signed** column (g) =
+    `reported basis − correct basis` (a **negative** number when the broker
+    under-reported, the usual RSU case).
+  - **No basis reported** (blank/$0, noncovered, Box B/E): do **not** use
+    code B — enter the correct basis directly in column (e) and leave the
+    adjustment code and column (g) blank.
 
 #### RSU Tax Withholding at Vesting
 
@@ -523,24 +530,36 @@ Capital gain: $0 ✓
 - This is your true cost basis
 
 **Step 3: Report on Form 8949**
-- If 1099-B basis is correct: Report as shown
-- If 1099-B basis is wrong or missing:
-  - Report proceeds as shown on 1099-B
-  - Enter CORRECT basis
-  - Use adjustment code "B" (basis incorrect)
-  - Enter adjustment amount
+- If 1099-B basis is correct: Report as shown (no code).
+- If 1099-B reported **no** basis (blank/$0, noncovered — Box B/E): enter the
+  correct basis directly in column (e); leave the code and column (g) blank.
+- If 1099-B reported a **wrong** basis (nonzero but incorrect — Box A/D): use
+  adjustment code "B" and enter column (g) = `reported basis − correct basis`,
+  a **negative** number when the broker under-reported.
 
-**Form 8949 Example:**
+**Form 8949 Example — no basis reported (noncovered, Box E):**
 ```
 Column (a): Description - "100 shares XYZ Corp RSU"
 Column (b): Date acquired - "01/15/2024" (vesting date)
 Column (c): Date sold - "06/20/2024"
 Column (d): Proceeds - $15,000 (from 1099-B)
-Column (e): Cost basis - $10,000 (YOUR CORRECTED BASIS)
-Column (f): Adjustment code - "B"
-Column (g): Adjustment - $10,000 (if 1099-B showed $0)
-Column (h): Gain or loss - $5,000
+Column (e): Cost basis - $10,000 (YOUR CORRECT BASIS, entered directly)
+Column (f): Adjustment code - (blank — no code for noncovered)
+Column (g): Adjustment - (blank)
+Column (h): Gain or loss - $5,000   ($15,000 − $10,000)
 ```
+
+**Form 8949 Example — wrong basis reported (Box D), code B:**
+```
+Column (d): Proceeds - $15,000
+Column (e): Cost basis - $2,000  (as reported on 1099-B — wrong)
+Column (f): Adjustment code - "B"
+Column (g): Adjustment - −$8,000  (reported − correct = 2,000 − 10,000; NEGATIVE)
+Column (h): Gain or loss - $5,000  ($15,000 − $10,000)
+```
+
+The negative column (g) replaces the broker's too-low reported gain
+($15,000 − $2,000 = $13,000) with the correct $5,000 gain.
 
 #### RSU Withholding Verification
 
@@ -769,6 +788,12 @@ Capital gain: $10 ($120 - $110)
 | Code | Meaning |
 |------|---------|
 | W | Wash sale loss disallowed |
-| B | Basis reported incorrectly on 1099-B |
+| B | Basis reported **incorrectly** on 1099-B (wrong nonzero basis; not for blank/noncovered basis — that goes in column (e) with no code) |
 | T | Short-term reported as long-term (or vice versa) |
 | O | Other (explain) |
+
+> Code B is **not** used when the 1099-B reports no basis (noncovered shares,
+> Box B/E). In that case the correct basis is entered directly in column (e)
+> and no adjustment code is needed. With code B, column (g) =
+> `reported basis − correct basis`, entered as a **negative** number when the
+> broker under-reported (the usual RSU case). See `rsu/form_8949_guide.md`.
