@@ -141,6 +141,12 @@ class TaxBreakdown:
     form_8949_adjustment_code: Optional[str]
     form_8949_adjustment_amount: Optional[float]
     reported_basis: Optional[float]
+    # D1: signed column (g) = reported_basis - adjusted_basis (None when no
+    # adjustment is needed; negative when the broker under-reported basis).
+    column_g_adjustment: Optional[float] = None
+    # D2: True when the 1099-B reported NO basis (None or falsy 0.0); the
+    # adjusted basis goes straight into column (e) with no adjustment code.
+    basis_missing_on_1099b: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -269,12 +275,20 @@ def calculate_tax_breakdown(
                     if is_long_term(purchase.purchase_date, sale.sale_date)
                     else "short-term")
 
-    # Form 8949 adjustment
+    # Form 8949 handling (findings D1/D2) — mirrors calculate_lot_sale():
+    #   * Broker reported a WRONG basis  -> code B, signed column (g)
+    #     = reported - adjusted (negative when the broker under-reported).
+    #   * Broker reported NO basis (None, or falsy 0.0 to match the RSU
+    #     convention) -> no code; the adjusted basis is entered directly
+    #     in column (e).
+    basis_missing = not reported_basis
     adj_code = None
     adj_amount = None
-    if reported_basis is not None and abs(reported_basis - adjusted_basis) > 0.50:
+    column_g = None
+    if not basis_missing and abs(reported_basis - adjusted_basis) > 0.50:
         adj_code = "B"
-        adj_amount = round(adjusted_basis - reported_basis, 2)
+        adj_amount = round(adjusted_basis - reported_basis, 2)   # legacy field, unchanged
+        column_g = round(reported_basis - adjusted_basis, 2)    # signed, filing-ready
 
     return TaxBreakdown(
         disposition_type=disposition.disposition_type,
@@ -293,6 +307,8 @@ def calculate_tax_breakdown(
         form_8949_adjustment_code=adj_code,
         form_8949_adjustment_amount=adj_amount,
         reported_basis=reported_basis,
+        column_g_adjustment=column_g,
+        basis_missing_on_1099b=basis_missing,
     )
 
 
@@ -363,7 +379,14 @@ def process_lots(lots_data: List[Dict]) -> List[Dict]:
                     "adjustment_amount": breakdown.form_8949_adjustment_amount,
                     "reported_basis": breakdown.reported_basis,
                     "correct_basis": breakdown.adjusted_basis,
-                } if breakdown.form_8949_adjustment_code else None,
+                    # D1: signed column (g) = reported - correct (None when no
+                    # adjustment; negative when the broker under-reported).
+                    "column_g": breakdown.column_g_adjustment,
+                    # D2: True when the 1099-B reported no basis -> enter
+                    # correct_basis in column (e) with no adjustment code.
+                    "basis_missing": breakdown.basis_missing_on_1099b,
+                } if (breakdown.form_8949_adjustment_code
+                      or breakdown.basis_missing_on_1099b) else None,
             } if breakdown else None,
         })
 
@@ -448,8 +471,16 @@ def format_tax_breakdown(breakdown: TaxBreakdown) -> str:
     lines.append(f"   Type: {breakdown.capital_gain_type.upper()}")
     lines.append("   [Proceeds − Adjusted Basis]")
 
-    # Form 8949 adjustment
-    if breakdown.form_8949_adjustment_code:
+    # Form 8949 adjustment (D1/D2)
+    if breakdown.basis_missing_on_1099b:
+        lines.append(f"\n{'─' * 50}")
+        lines.append("  FORM 8949 — NO BASIS REPORTED ON 1099-B")
+        lines.append(f"{'─' * 50}")
+        lines.append(f"  1099-B reported no basis (noncovered).")
+        lines.append(f"  Enter the correct basis ${breakdown.adjusted_basis:,.2f} "
+                      "directly in Form 8949 column (e).")
+        lines.append("  No adjustment code needed.")
+    elif breakdown.form_8949_adjustment_code:
         lines.append(f"\n{'─' * 50}")
         lines.append("  FORM 8949 ADJUSTMENT REQUIRED")
         lines.append(f"{'─' * 50}")
@@ -457,6 +488,8 @@ def format_tax_breakdown(breakdown: TaxBreakdown) -> str:
         lines.append(f"  Correct basis:          ${breakdown.adjusted_basis:,.2f}")
         lines.append(f"  Adjustment code:        {breakdown.form_8949_adjustment_code}")
         lines.append(f"  Adjustment amount:      ${breakdown.form_8949_adjustment_amount:,.2f}")
+        lines.append(f"  Column (g):             ${breakdown.column_g_adjustment:,.2f} "
+                      "(enter as a NEGATIVE number when it reduces gain)")
 
     lines.append(f"\n{'─' * 50}")
     lines.append("  SUMMARY")
@@ -507,9 +540,14 @@ def format_lots_summary(results: List[Dict]) -> str:
 
             f8949 = tax.get("form_8949")
             if f8949:
-                lines.append(f"  ⚠️  Form 8949 adjustment needed: "
-                           f"code {f8949['adjustment_code']}, "
-                           f"amount ${f8949['adjustment_amount']:,.2f}")
+                if f8949.get("basis_missing"):
+                    lines.append(f"  ⚠️  1099-B reported NO basis: enter "
+                               f"${f8949['correct_basis']:,.2f} in Form 8949 "
+                               "column (e). No adjustment code needed.")
+                elif f8949.get("adjustment_code"):
+                    lines.append(f"  ⚠️  Form 8949 adjustment needed: "
+                               f"code {f8949['adjustment_code']}, "
+                               f"column (g) = ${f8949['column_g']:,.2f}")
         else:
             lines.append("  (Not yet sold)")
 
@@ -640,7 +678,10 @@ ESPP Holding Period Rules:
                     "amount": breakdown.form_8949_adjustment_amount,
                     "reported_basis": breakdown.reported_basis,
                     "correct_basis": breakdown.adjusted_basis,
-                } if breakdown.form_8949_adjustment_code else None,
+                    "column_g": breakdown.column_g_adjustment,
+                    "basis_missing": breakdown.basis_missing_on_1099b,
+                } if (breakdown.form_8949_adjustment_code
+                      or breakdown.basis_missing_on_1099b) else None,
             }, indent=2))
         else:
             print(format_tax_breakdown(breakdown))

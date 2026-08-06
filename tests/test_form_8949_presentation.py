@@ -13,11 +13,13 @@ D2 — Form 8949 code "B" is gated to the case where the broker actually
 """
 import os
 import sys
+from datetime import date
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from rsu_calculator import VestingLot, calculate_lot_sale
+from espp_calculator import ESPPPurchase, ESPPSale, calculate_tax_breakdown
 
 
 def make_lot(**kw):
@@ -97,5 +99,70 @@ def test_none_basis_behaves_like_missing():
 
 
 # ---------------------------------------------------------------------------
-# Task 2: ESPP mirror (added in D12.2)
+# Task 2: ESPP mirror (D12.2)
 # ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def espp_disqualifying_sale():
+    """Disqualifying disposition: FMV at purchase $50, purchase price
+    $42.50, 100 shares -> adjusted basis = FMV at purchase = $5,000.
+
+    Construction pattern copied from tests/test_espp_calculator.py.
+    Sale is within 1 year of purchase -> disqualifying.
+    """
+    purchase = ESPPPurchase(
+        offering_date=date(2024, 1, 1),
+        purchase_date=date(2024, 6, 30),
+        shares=100,
+        purchase_price=42.50,
+        fmv_at_offering=48.00,
+        fmv_at_purchase=50.00,
+    )
+    return ESPPSale(
+        sale_date=date(2025, 1, 1),   # disqualifying (< 1 yr from purchase)
+        shares_sold=100,
+        sale_price=60.00,
+        purchase=purchase,
+    )
+
+
+def test_espp_underreported_basis_negative_column_g(espp_disqualifying_sale):
+    # Broker reported the purchase price (100 x 42.50 = 4,250); correct
+    # adjusted basis is FMV at purchase (5,000). Column (g) = 4,250 - 5,000.
+    b = calculate_tax_breakdown(espp_disqualifying_sale, reported_basis=4250.0)
+    assert b.disposition_type == "disqualifying"
+    assert b.adjusted_basis == 5000.0
+    assert b.form_8949_adjustment_code == "B"
+    assert b.column_g_adjustment == -750.0
+    assert b.basis_missing_on_1099b is False
+    # Legacy field (adjusted - reported) unchanged in the wrong-basis case.
+    assert b.form_8949_adjustment_amount == 750.0
+
+
+def test_espp_no_reported_basis_no_code(espp_disqualifying_sale):
+    """D2: 1099-B reported NO basis (None). Correct (adjusted) basis goes
+    in column (e); no code, no column (g) entry."""
+    b = calculate_tax_breakdown(espp_disqualifying_sale, reported_basis=None)
+    assert b.form_8949_adjustment_code is None
+    assert b.column_g_adjustment is None
+    assert b.basis_missing_on_1099b is True
+    assert b.adjusted_basis == 5000.0   # surfaced for column (e)
+
+
+def test_espp_falsy_zero_basis_behaves_like_none(espp_disqualifying_sale):
+    """D2 (plan note): a falsy 0.0 reported basis must behave the same as
+    None — no code, basis_missing flagged — matching Task 1's convention.
+    The previous code treated `0.0 is not None` as a wrong basis and emitted
+    code B; that was the same bug as the RSU path."""
+    b = calculate_tax_breakdown(espp_disqualifying_sale, reported_basis=0.0)
+    assert b.form_8949_adjustment_code is None
+    assert b.column_g_adjustment is None
+    assert b.basis_missing_on_1099b is True
+
+
+def test_espp_matching_basis_no_code(espp_disqualifying_sale):
+    """Broker reported the correct adjusted basis exactly -> no adjustment."""
+    b = calculate_tax_breakdown(espp_disqualifying_sale, reported_basis=5000.0)
+    assert b.form_8949_adjustment_code is None
+    assert b.column_g_adjustment is None
+    assert b.basis_missing_on_1099b is False
