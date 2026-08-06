@@ -85,6 +85,13 @@ class TaxLotResult:
     correct_basis: float
     adjustment_amount: float
     form_8949_code: str
+    # D1: signed column (g) = reported_basis - correct_basis (negative when
+    # the broker under-reported basis, the typical RSU double-taxation case).
+    # 0.0 when no adjustment is needed.
+    column_g_adjustment: float = 0.0
+    # D2: True when the 1099-B reported NO basis (noncovered shares, Box B/E);
+    # the correct basis goes straight into column (e) with no adjustment code.
+    basis_missing_on_1099b: bool = False
 
 
 def parse_date(date_str: str) -> datetime:
@@ -231,10 +238,23 @@ def calculate_lot_sale(
     cost_basis = shares_to_sell * lot.cost_basis_per_share
     gain_loss = proceeds - cost_basis
 
-    # Check if basis adjustment needed
-    basis_adjustment_needed = abs(reported_basis_1099b - cost_basis) > 0.01 if reported_basis_1099b else True
-    adjustment_amount = cost_basis - reported_basis_1099b if basis_adjustment_needed else 0
-    form_8949_code = "B" if basis_adjustment_needed else ""
+    # Form 8949 handling (findings D1/D2):
+    #   * Broker reported a WRONG basis  -> code B, signed column (g)
+    #     = reported - correct (negative when the broker under-reported,
+    #     the typical RSU double-taxation case).
+    #   * Broker reported NO basis (noncovered, Box B/E) -> no code; the
+    #     correct basis is entered directly in column (e).
+    basis_missing = not reported_basis_1099b
+    if basis_missing:
+        basis_adjustment_needed = False
+        adjustment_amount = 0.0
+        column_g = 0.0
+        form_8949_code = ""
+    else:
+        basis_adjustment_needed = abs(reported_basis_1099b - cost_basis) > 0.01
+        adjustment_amount = cost_basis - reported_basis_1099b if basis_adjustment_needed else 0.0
+        column_g = round(reported_basis_1099b - cost_basis, 2) if basis_adjustment_needed else 0.0
+        form_8949_code = "B" if basis_adjustment_needed else ""
 
     return TaxLotResult(
         vesting_date=lot.vesting_date,
@@ -250,7 +270,9 @@ def calculate_lot_sale(
         reported_basis=reported_basis_1099b,
         correct_basis=round(cost_basis, 2),
         adjustment_amount=round(adjustment_amount, 2),
-        form_8949_code=form_8949_code
+        form_8949_code=form_8949_code,
+        column_g_adjustment=column_g,
+        basis_missing_on_1099b=basis_missing,
     )
 
 
@@ -552,8 +574,13 @@ def main():
             print(f"  Holding: {r.holding_period} ({r.holding_days} days)")
             print(f"  Basis:   ${r.cost_basis:,.2f} (${r.cost_basis_per_share:,.2f}/sh)")
             print(f"  Gain:    ${r.gain_loss:,.2f}")
-            if r.basis_adjustment_needed:
-                print(f"  ⚠️  ADJUSTMENT NEEDED (Form 8949): Code {r.form_8949_code}, Amount ${r.adjustment_amount:,.2f}")
+            if r.basis_missing_on_1099b:
+                print(f"  ⚠️  1099-B reported NO basis: enter ${r.correct_basis:,.2f} "
+                      "directly in Form 8949 column (e). No adjustment code needed.")
+            elif r.form_8949_code:
+                print(f"  ⚠️  ADJUSTMENT NEEDED (Form 8949): Code {r.form_8949_code}, "
+                      f"column (g) = ${r.column_g_adjustment:,.2f} "
+                      f"(enter as a NEGATIVE number when it reduces gain)")
             total_basis += r.cost_basis
             total_gain += r.gain_loss
             

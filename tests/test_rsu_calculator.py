@@ -65,9 +65,9 @@ def test_rsu_lot_sale_long_term():
         shares_to_sell=50,
         sale_price=200.00,
         sale_date="2025-01-02",
-        reported_basis_1099b=0.00 # Common broker error
+        reported_basis_1099b=0.00 # 1099-B reported NO basis (noncovered)
     )
-    
+
     assert sale_result.holding_period == "long_term"
     # Proceeds = 50 * 200 = 10000
     assert sale_result.proceeds == 10000.00
@@ -75,7 +75,12 @@ def test_rsu_lot_sale_long_term():
     assert sale_result.correct_basis == 7500.00
     # Gain = 2500
     assert sale_result.gain_loss == 2500.00
-    # Adjustment needed for 8949
-    assert sale_result.basis_adjustment_needed is True
-    assert sale_result.adjustment_amount == 7500.00
-    assert sale_result.form_8949_code == "B"
+    # D2 (plan 2026-07-30-D1-D2): when the 1099-B reports NO basis (0.0),
+    # there is no code "B" — the correct basis goes in column (e) directly.
+    # The previous assertion (`basis_adjustment_needed is True`, code "B",
+    # adjustment 7500) encoded the buggy always-"B" gating; corrected here.
+    assert sale_result.basis_adjustment_needed is False
+    assert sale_result.adjustment_amount == 0.0
+    assert sale_result.form_8949_code == ""
+    assert sale_result.basis_missing_on_1099b is True
+    assert sale_result.column_g_adjustment == 0.0
