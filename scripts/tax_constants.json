@@ -83,7 +83,6 @@
       "note": "0.9% on wages/SE income over $250,000 joint, $125,000 MFS, $200,000 in any other case (incl. HoH and QSS). Statutory, not inflation-indexed."
     },
     "TODO_VERIFY": {
-      "2026.salt": "Genuinely CONFLICTING secondary sources, no IRS primary published (Rev. Proc. 2025-32 does not cover SALT -- confirmed by direct text search). IRC 164(b)(6) as amended by OBBBA provides that for 2027-2029 the cap is 101% of the prior year's amount; multiple professional tax publications (Journal of Accountancy/thetaxadviser.com, Venable LLP, Anchin) state this escalator ALREADY applies starting 2026, giving cap=$40,400, phasedown_magi_start=$505,000 (=$500,000 x 1.01) by clean arithmetic. However: (a) one source explicitly stated the MFS cap is NOT increased for 2026 and remains $20,000 rather than the arithmetically-implied $20,200; (b) another source gave the phase-down threshold as $500,500 rather than $505,000, which does not match a clean 1% escalation and appears to be an error, but cannot be ruled out without the statute text (Congress.gov blocked WebFetch with a 403). Do NOT resolve this by picking the majority-consensus numbers -- get the actual bill text (H.R. 1 / Public Law 119-21, IRC 164(b)(6) as amended) or a direct IRS statement before writing a value.",
       "2026.se_tax.ss_wage_base": "Social Security wage base is announced by SSA, not in the Rev. Proc. Needs the SSA 2026 fact sheet.",
       "2026.retirement_limits": "401(k)/IRA/HSA limits come from an IRS Notice (401k/IRA) and Rev. Proc. (HSA), neither fetched. All null.",
       "2026.credits.savers_credit": "Saver's Credit AGI bands for 2026 not verified.",
@@ -504,6 +503,19 @@
         "2026.amt.phaseout_start_mfs"
       ],
       "note": "OBBBA \u00a770107 (Pub. L. 119-21, July 4 2025) made the TCJA AMT exemption/threshold increases permanent AND, for taxable years beginning after 12/31/2025: (a) reset the exemption phase-out threshold to $1,000,000 MFJ / $500,000 other (non-indexed through 2026 per \u00a755(d)(4)(A)(ii)(I)); (b) doubled the phase-out rate from 25% to 50%, creating a steeper 'bump zone' (effective ~39%/42% within the phase-out range). The 28% breakpoint remains inflation-indexed via Rev. Proc. 2025-32 ($244,500 / $122,250 MFS \u2014 see rev_proc_2025_32_ty2026). 2026 exemptions 140,200 MFJ / 90,100 single / 70,100 MFS."
+    },
+    "obbba_salt_2026": {
+      "url": "https://www.law.cornell.edu/uscode/text/26/164",
+      "title": "Pub. L. 119-21 \u00a770120 / IRC 164(b)(6) and (b)(7) as amended \u2014 2026 SALT cap & phase-down",
+      "retrieved": "2026-08-05",
+      "backs": [
+        "2026.salt.cap",
+        "2026.salt.cap_mfs",
+        "2026.salt.phasedown_magi_start",
+        "2026.salt.phasedown_magi_start_mfs"
+      ],
+      "quote": "IRC 164(b)(7)(A) applicable limitation amount: '(ii) in the case of any taxable year beginning in calendar year 2026, $40,400'; '(iii) in the case of any taxable year beginning after calendar year 2026 and before 2030, 101 percent of the dollar amount in effect under this subparagraph for taxable years beginning in the preceding calendar year'. IRC 164(b)(6)(B): 'the applicable limitation amount (half the applicable limitation amount in the case of a married individual filing a separate return)'. IRC 164(b)(7)(B)(i): 'the applicable limitation amount shall be reduced by 30 percent of the excess (if any) of the taxpayer's modified adjusted gross income over the threshold amount (half the threshold amount in the case of a married individual filing a separate return)'. IRC 164(b)(7)(B)(ii): '(I) in the case of any taxable year beginning in calendar year 2025, $500,000'; '(II) in the case of any taxable year beginning in calendar year 2026, $505,000'; '(III) in the case of any taxable year beginning after calendar year 2026, 101 percent of the dollar amount in effect under this subparagraph for taxable years beginning in the preceding calendar year'. IRC 164(b)(7)(B)(iii): 'The reduction under clause (i) shall not result in the applicable limitation amount being less than $10,000.'",
+      "note": "Resolves the two conflicts secondary sources had (plan E1): (1) the MFS cap ESCALATES \u2014 'half the applicable limitation amount' \u2014 so 2026 MFS cap = $20,200, not the frozen $20,000 one secondary source claimed; (2) the 2026 phase-down MAGI start is $505,000 (101% of the 2025 $500,000 threshold), not the $500,500 another source gave. Both the cap and the threshold escalate at 101%/year through 2029; after 2029 the cap drops to $10,000. The $10,000 reduction floor is stated without a 'half' qualifier in (b)(7)(B)(iii); the existing 2026 salt.floor_mfs = 5000 follows the 'half' rule of (b)(6)(B) and the established 2025 pattern. Source hierarchy attempted in order: govinfo.gov PLAW-119publ21 (truncated, body did not reach \u00a770120); uscode.house.gov (returned the 2000 edition, pre-SALT); Cornell LII (current-law text, succeeded \u2014 used here)."
     },
     "irc_408d8_qcd": {
       "url": "https://www.law.cornell.edu/uscode/text/26/408",
@@ -2332,11 +2344,11 @@
       "qualifying_surviving_spouse": 1650
     },
     "salt": {
-      "cap": null,
-      "cap_mfs": null,
+      "cap": 40400,
+      "cap_mfs": 20200,
       "phasedown": true,
-      "phasedown_magi_start": null,
-      "phasedown_magi_start_mfs": null,
+      "phasedown_magi_start": 505000,
+      "phasedown_magi_start_mfs": 252500,
       "phasedown_rate": 0.3,
       "floor": 10000,
       "floor_mfs": 5000

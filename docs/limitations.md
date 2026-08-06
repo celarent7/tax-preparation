@@ -38,8 +38,11 @@ Some statutory figures could not be confirmed against a primary source during
 the last data refresh and are stored as `null` with an entry in
 `_sources.TODO_VERIFY` in `scripts/tax_constants.json`. Reading one raises
 `UnverifiedConstantError` rather than returning a guess. Currently this includes
-the 2026 SALT cap, the 2026 Social Security wage base, and the 2023/2026
-retirement-plan contribution limits. See the remediation log for the full list.
+the 2026 Social Security wage base and the 2023/2026 retirement-plan
+contribution limits. (The 2026 SALT cap was resolved from the enrolled statute
+text — IRC 164(b)(6)/(b)(7) as amended by Pub. L. 119-21 §70120 — and is no
+longer unverified; see `_sources.obbba_salt_2026`.) See the remediation log for
+the full list.
 
 ---
 **Recommendation**: If your situation involves any of the above, please use this tool only for preliminary data gathering and consult a **Qualified Tax Professional** before filing.

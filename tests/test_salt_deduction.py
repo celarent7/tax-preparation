@@ -179,3 +179,52 @@ def test_deduction_analyzer_cli_magi_drives_phasedown():
     salt = json.loads(result.stdout)["itemized_breakdown"]["salt"]
     assert salt["salt_cap"] == 25000
     assert salt["phasedown_applied"] is True
+
+
+# ---------------------------------------------------------------------------
+# E1 — 2026 SALT cap primary-source resolution
+# Primary source: IRC 164(b)(6)/(b)(7) as amended by Pub. L. 119-21 §70120
+# (One Big Beautiful Bill Act), retrieved via Cornell LII current-law text.
+# See scripts/tax_constants.json _sources.obbba_salt_2026 for the verbatim quote.
+#
+# Statute settles the two points secondary sources conflicted on:
+#   * MFS cap ESCALATES ("half the applicable limitation amount"), not frozen.
+#   * 2026 phase-down start is $505,000 (101% of $500,000), not $500,500.
+# ---------------------------------------------------------------------------
+
+def test_2026_salt_constants_resolved():
+    """E1: 2026 SALT figures from Pub. L. 119-21 §70120 (see _sources.obbba_salt_2026).
+
+    Verbatim from IRC 164(b)(7) (Cornell LII current text):
+      (b)(7)(A)(ii)  "in the case of any taxable year beginning in calendar
+                      year 2026, $40,400"
+      (b)(6)(B)      "... (half the applicable limitation amount in the case
+                      of a married individual filing a separate return)"
+      (b)(7)(B)(ii)(II) "in the case of any taxable year beginning in
+                        calendar year 2026, $505,000"
+      (b)(7)(B)(i)   "... half the threshold amount in the case of a married
+                      individual filing a separate return"
+    """
+    salt = load_tax_constants("2026")["salt"]
+    assert salt["cap"] == 40400
+    # MFS escalates (half of the general amount), NOT frozen at $20,000.
+    assert salt["cap_mfs"] == salt["cap"] / 2 == 20200
+    assert salt["phasedown_magi_start"] == 505000
+    assert salt["phasedown_magi_start_mfs"] == salt["phasedown_magi_start"] / 2 == 252500
+    assert salt["phasedown"] is True
+
+
+def test_2026_salt_phasedown_computes():
+    """E1: resolve_salt_cap no longer raises for 2026 and floors at $10,000."""
+    salt = load_tax_constants("2026")["salt"]
+    # Below the phase-down start -> full cap.
+    assert resolve_salt_cap(salt, "single", magi=400000) == salt["cap"] == 40400
+    # At the start -> full cap (boundary is inclusive: magi <= start).
+    assert resolve_salt_cap(salt, "single", magi=505000) == 40400
+    # Extreme MAGI -> floored at $10,000 (0.3 * (2,000,000 - 505,000) >> cap).
+    assert resolve_salt_cap(salt, "single", magi=2000000) == salt["floor"] == 10000
+    # MFS mirrors with half-cap ($20,200) and half-threshold ($252,500).
+    # 250,000 <= 252,500 -> full MFS cap (boundary inclusive).
+    assert resolve_salt_cap(salt, "mfs", magi=250000) == salt["cap_mfs"] == 20200
+    # Extreme MAGI -> floored at $5,000 MFS.
+    assert resolve_salt_cap(salt, "mfs", magi=2000000) == salt["floor_mfs"] == 5000

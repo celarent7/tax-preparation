@@ -230,16 +230,18 @@ def test_estimated_tax_due_dates_present_and_year_correct(year):
 # Ground rule 1 — unverified 2026 figures raise instead of guessing
 # ---------------------------------------------------------------------------
 
-def test_unverified_2026_salt_cap_raises_when_read():
-    """The 2026 SALT cap is not published in Rev. Proc. 2025-32, so it is null.
+def test_2026_salt_cap_resolved_from_statute():
+    """E1 (plan 2026-07-30-E1): the 2026 SALT cap is now resolved from the
+    enrolled statute text — IRC 164(b)(7)(A)(ii): "in the case of any taxable
+    year beginning in calendar year 2026, $40,400". Previously null because
+    Rev. Proc. 2025-32 does not cover SALT and secondary sources conflicted;
+    the statute (Cornell LII current-law text) settles it. See
+    _sources.obbba_salt_2026 for the verbatim quote.
 
-    Reading it must raise rather than silently returning None or a guess.
+    Reading it no longer raises; it returns the statute-confirmed figure.
     """
-    from utils import UnverifiedConstantError
-
     salt_2026 = load_tax_constants("2026")["salt"]
-    with pytest.raises(UnverifiedConstantError):
-        get_constant(salt_2026, "cap")
+    assert get_constant(salt_2026, "cap") == 40400
 
 
 def test_2026_ss_wage_base_is_verified():
@@ -255,21 +257,22 @@ def test_2026_ss_wage_base_is_verified():
     assert get_constant(se, "ss_wage_base") == 184500
 
 
-def test_unverified_2026_salt_cap_still_raises_when_read():
-    """The 2026 SALT cap has genuinely conflicting secondary sources and no
-    published IRS primary source, so it remains null.
+def test_2026_salt_mfs_and_phasedown_conflicts_resolved_by_statute():
+    """E1 (plan 2026-07-30-E1): the two points secondary sources conflicted on
+    are settled by the enrolled statute text (IRC 164(b)(6)/(b)(7), per
+    _sources.obbba_salt_2026):
 
-    Multiple professional tax publications state the OBBBA 101%-escalator
-    already applies for 2026 (cap $40,400, threshold $505,000), but one source
-    says the MFS cap is frozen at $20,000 (not the arithmetically-implied
-    $20,200) and another gives a different threshold ($500,500). Rather than
-    pick the majority answer, this stays null — see _sources.TODO_VERIFY.
+      * MFS cap ESCALATES — (b)(6)(B) "half the applicable limitation amount"
+        -> 2026 MFS cap = $20,200, NOT the frozen $20,000 one source claimed.
+      * 2026 phase-down start is $505,000 — (b)(7)(B)(ii)(II) "in the case of
+        any taxable year beginning in calendar year 2026, $505,000" (101% of
+        the 2025 $500,000 threshold), NOT the $500,500 another source gave.
+      * MFS phase-down start is half the threshold -> $252,500.
     """
-    from utils import UnverifiedConstantError
-
     salt_2026 = load_tax_constants("2026")["salt"]
-    with pytest.raises(UnverifiedConstantError):
-        get_constant(salt_2026, "cap")
+    assert get_constant(salt_2026, "cap_mfs") == 20200
+    assert get_constant(salt_2026, "phasedown_magi_start") == 505000
+    assert get_constant(salt_2026, "phasedown_magi_start_mfs") == 252500
 
 
 def test_verified_2026_figures_are_readable():
