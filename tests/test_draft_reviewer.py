@@ -270,6 +270,47 @@ def test_allows_capital_loss_at_the_limit(draft, tmp_path):
     assert not any("Capital loss" in f["field"] for f in found)
 
 
+# ---------------------------------------------------------------------------
+# check_total_tax must account for the Child Tax Credit (line 19)
+# ---------------------------------------------------------------------------
+
+def test_total_tax_accounts_for_child_tax_credit(draft, tmp_path):
+    """A correct return with a nonzero CTC must not be falsely flagged.
+
+    2 qualifying children -> CTC $4,400 (2025 OBBBA $2,200/child). Line 24
+    = line 16 ($22,866.30) - CTC ($4,400) + line 23 SE tax ($5,651.82)
+    = $24,118.12. The reviewer previously computed expected line 24 as just
+    line 16 + line 23 ($28,518.12), which would falsely flag this correct
+    return as a ~$4,400 error.
+    """
+    good = copy.deepcopy(draft)
+    good["taxpayer_info"]["children_under_17"] = 2
+    good["form_1040"]["line_19_child_tax_credit"] = 4400
+    good["form_1040"]["line_24_total_tax"] = round(
+        (EXPECTED_LINE_16 - 4400) + EXPECTED_SE_TAX, 2)
+
+    findings = review(good, tmp_path)
+    assert errors(findings) == [], (
+        "correct return with CTC flagged errors: "
+        + "; ".join(f"{f['field']}: {f['message']}" for f in errors(findings))
+    )
+    total = next(f for f in findings if f["field"] == "Total tax (Line 24)")
+    assert total["computed_value"] == 24118.12
+
+
+def test_total_tax_still_catches_a_wrong_total_with_ctc_present(draft, tmp_path):
+    """The old line16+line23 formula (ignoring CTC) must now be flagged as
+    wrong, since it overstates total tax by the CTC amount once CTC is
+    nonzero."""
+    bad = copy.deepcopy(draft)
+    bad["taxpayer_info"]["children_under_17"] = 2
+    bad["form_1040"]["line_19_child_tax_credit"] = 4400
+    bad["form_1040"]["line_24_total_tax"] = round(EXPECTED_LINE_16 + EXPECTED_SE_TAX, 2)
+
+    found = errors(review(bad, tmp_path))
+    assert any(f["field"] == "Total tax (1040 Line 24)" for f in found)
+
+
 def test_detects_withholding_not_matching_w2(draft, tmp_path):
     bad = copy.deepcopy(draft)
     bad["w2_records"][0]["box_2_federal_withheld"] = 19000

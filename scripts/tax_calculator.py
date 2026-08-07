@@ -710,7 +710,10 @@ def main():
     nonrefundable = args.nonrefundable_credits + args.credits
     refundable = args.refundable_credits
 
-    nonrefundable_applied = min(nonrefundable, tax_before_credits)
+    # Nonrefundable credits offset only regular income tax (Form 1040 line 18);
+    # NIIT and Additional Medicare Tax are added afterward at line 23 and
+    # cannot be reduced by nonrefundable credits.
+    nonrefundable_applied = min(nonrefundable, income_tax)
     tax_after_nonrefundable = tax_before_credits - nonrefundable_applied
     tax_after_credits = round(tax_after_nonrefundable - refundable, 2)
     refund_from_credits = round(max(0.0, -tax_after_credits), 2)

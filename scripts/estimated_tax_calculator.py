@@ -304,8 +304,11 @@ def main():
     se_results = calculate_se_tax(args.projected_se_income, se_tax_config)
 
     # Calculate AGI
-    # Gross income includes SE income - adjustments (half of SE tax)
-    agi = args.projected_income - se_results["deduction"]
+    # Gross income includes SE income - adjustments (half of SE tax, SE health
+    # insurance premiums, and SE retirement plan contributions — all
+    # above-the-line Schedule 1 deductions).
+    agi = (args.projected_income - se_results["deduction"]
+           - args.se_health_insurance - args.se_retirement)
 
     # Calculate Taxable Income
     std_deduction = get_status_value(

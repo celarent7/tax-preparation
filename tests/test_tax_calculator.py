@@ -90,3 +90,43 @@ def test_tax_calculation_mfj_2025(tax_data_2025):
     tax, breakdown = calculate_tax(100000, "married_jointly", brackets)
     assert tax == 11828.00
     assert len(breakdown) == 3
+
+
+# ---------------------------------------------------------------------------
+# Nonrefundable credits offset income tax (line 18) only, never NIIT or
+# Additional Medicare Tax (added afterward at line 23).
+# ---------------------------------------------------------------------------
+
+import json
+import subprocess
+
+SCRIPT = os.path.join(os.path.dirname(__file__), "..", "scripts", "tax_calculator.py")
+
+
+def test_nonrefundable_credits_do_not_offset_niit_or_additional_medicare():
+    """Single 2025: wages/MAGI $300,000, net investment income $50,000 ->
+    NIIT $1,900 (3.8% x min(50,000, 300,000-200,000)); Additional Medicare
+    $900 (0.9% x (300,000-200,000)). Nonrefundable credits of $100,000 (far
+    more than income tax alone) must cap at income_tax exactly, not at
+    income_tax + niit + additional_medicare -- Form 1040's structure never
+    lets nonrefundable credits reduce the surtaxes added at line 23.
+    """
+    result = subprocess.run(
+        [sys.executable, SCRIPT,
+         "--gross-income", "300000", "--filing-status", "single", "--year", "2025",
+         "--wages", "300000", "--magi", "300000", "--net-investment-income", "50000",
+         "--nonrefundable-credits", "100000", "--output-format", "json"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    tax = json.loads(result.stdout)["tax"]
+
+    assert tax["niit"] == 1900.0
+    assert tax["additional_medicare_tax"] == 900.0
+    # The cap: applied credits equal income_tax alone, NOT
+    # income_tax + niit + additional_medicare (tax_before_credits).
+    assert tax["nonrefundable_credits_applied"] == tax["income_tax"]
+    assert tax["nonrefundable_credits_applied"] != tax["tax_before_credits"]
+    # The surtaxes survive the (fully-consumed) nonrefundable credit.
+    assert tax["tax_after_credits"] == round(tax["niit"] + tax["additional_medicare_tax"], 2)
+    assert tax["tax_after_credits"] == 2800.0

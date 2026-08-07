@@ -131,12 +131,14 @@ def test_legacy_and_canonical_twin_produce_identical_opportunities(tmp_path):
         "adjustments": {"traditional_ira": 0, "hsa_contributions": 8550},
     }
     # Canonical twin: same values the adapter maps the legacy shape onto.
-    # agi folds the interest + dividend + qualified-dividend components.
+    # agi folds interest + dividend_income only; qualified_dividends is a
+    # subset of dividend_income (not a separate canonical field) and adds
+    # nothing further.
     canonical = {
         "tax_year": 2025,
         "filing_status": "married_jointly",
         "wages": 185000,
-        "agi": 1250 + 3400 + 2800,
+        "agi": 1250 + 3400,
         "realized_st_gains": 0,
         "realized_lt_gains": 5200,
         "planned_cash_donations": 3000,
@@ -177,3 +179,40 @@ def test_canonical_example_round_trips_and_fires_expected_rules():
     hsa = next(o for o in ops if o["rule_id"] == "hsa")
     assert hsa["savings_state"] == 0
     assert hsa["state_caveat"] and "California" in hsa["state_caveat"]
+
+# ---------------------------------------------------------------------------
+# Legacy adapter: adjustments.* deductions subtract from agi; income.* adds
+# ---------------------------------------------------------------------------
+
+def test_legacy_student_loan_interest_subtracts_from_agi(tmp_path):
+    """adjustments.student_loan_interest is an above-the-line DEDUCTION and
+    must subtract from agi, not add to it. Since magi defaults to agi when
+    not explicitly given, a sign error here would silently distort every
+    MAGI-gated rule (Roth phase-out, HSA, backdoor-Roth trigger)."""
+    legacy = {
+        "filing_status": "single",
+        "income": {"w2_wages": 100000, "interest_income": 5000},
+        "adjustments": {"student_loan_interest": 2500},
+    }
+    path = tmp_path / "legacy.json"
+    path.write_text(json.dumps(legacy))
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        profile = load_profile(str(path))
+    # agi = 5000 (interest) - 2500 (student loan interest deduction) = 2500
+    assert profile["agi"] == 2500
+
+
+def test_legacy_qualified_dividends_not_double_counted(tmp_path):
+    """income.qualified_dividends is a subset of income.dividend_income
+    (1099-DIV box 1b within box 1a); it must not add a second time to agi."""
+    legacy = {
+        "filing_status": "single",
+        "income": {"dividend_income": 3400, "qualified_dividends": 2800},
+    }
+    path = tmp_path / "legacy.json"
+    path.write_text(json.dumps(legacy))
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("always")
+        profile = load_profile(str(path))
+    assert profile["agi"] == 3400

@@ -180,24 +180,27 @@ def test_q8_negative_qbi_carryforward():
     """Adjusted QBI −$30,000, REIT $1,000.
 
     QBI component $0 (negative), REIT component $200 (not netted), QBI loss
-    carryforward −$30,000 reported. Feeding the carryforward into a
-    second-year run reduces that year's QBI by $30,000 (i.e. its component
-    by $6,000 below threshold).
+    carryforward $30,000 reported (positive magnitude, matching the sign
+    convention of the qbi_loss_carryforward input). Feeding the carryforward
+    into a second-year run reduces that year's QBI by $30,000 (i.e. its
+    component by $6,000 below threshold).
     """
     y1 = dict(adjusted_qbi=-30000, reit_dividends=1000,
               taxable_income_before_qbi=50000, filing_status="single")
     r1 = qbi.compute_qbi_deduction(y1, yc(2025))
     assert r1.qbi_component == 0.0
     assert r1.reit_component == 200.0
-    assert r1.qbi_loss_carryforward == -30000.0
+    assert r1.qbi_loss_carryforward == 30000.0
     assert r1.deduction == 200.0
 
     # Second year: same Schedule C $50,000, consume the $30,000 carryforward.
+    # This is a direct round-trip of r1.qbi_loss_carryforward into next
+    # year's input, verifying the sign convention matches.
     base2 = dict(se_net_profit=50000, taxable_income_before_qbi=50000,
                  filing_status="single")
     r2_no_cf = qbi.compute_qbi_deduction(base2, yc(2025))
-    r2_cf = qbi.compute_qbi_deduction(dict(base2, qbi_loss_carryforward=30000),
-                                     yc(2025))
+    r2_cf = qbi.compute_qbi_deduction(
+        dict(base2, qbi_loss_carryforward=r1.qbi_loss_carryforward), yc(2025))
     # Carryforward reduced adjusted QBI by exactly 30,000 (half-SE-tax is
     # identical for the same net profit), and the component by 6,000.
     assert r2_cf.adjusted_qbi == round(r2_no_cf.adjusted_qbi - 30000, 2)

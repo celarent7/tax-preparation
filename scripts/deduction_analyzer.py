@@ -200,11 +200,24 @@ def analyze_charitable(
     fraternal societies) are capped at 30% of AGI for cash and 20% for
     appreciated property. The script previously modeled only the public-charity
     case (finding D4).
+
+    Beyond the per-category ceilings, Pub 526's Worksheet 2 layers the
+    categories against each other rather than letting them sum independently
+    — the exact combined ceiling depends on which category mix is present
+    (e.g. cash-only tops out at 60% of AGI; cash plus capital-gain property to
+    50%-limit orgs is bounded more tightly). This function applies a single
+    conservative aggregate cap of `cash_limit_rate` (60% of AGI by default)
+    across ALL categories combined as a simplification — NOT a full Worksheet
+    2 replication — specifically to rule out the previously-possible >100%-
+    of-AGI result (finding: per-category limits alone summed unbounded). Any
+    amount above this cap carries over; a preparer should still run Worksheet
+    2 by hand for mixed-category years near the cap.
     """
     cash_limit = agi * cash_limit_rate
     property_limit = agi * property_limit_rate
     cash_30_limit = agi * 0.30
     property_20_limit = agi * 0.20
+    overall_limit = agi * cash_limit_rate
 
     deductible_cash = min(cash_donations, cash_limit)
     deductible_property = min(appreciated_property, property_limit)
@@ -217,6 +230,11 @@ def analyze_charitable(
                  + max(0, cash_to_30_percent_orgs - cash_30_limit)
                  + max(0, property_to_30_percent_orgs - property_20_limit))
 
+    overall_limit_applied = total > overall_limit
+    if overall_limit_applied:
+        carryover += total - overall_limit
+        total = overall_limit
+
     return {
         "cash_donations": cash_donations,
         "appreciated_property": appreciated_property,
@@ -226,6 +244,8 @@ def analyze_charitable(
         "property_limit": round(property_limit, 2),
         "cash_30_percent_org_limit": round(cash_30_limit, 2),
         "property_30_percent_org_limit": round(property_20_limit, 2),
+        "overall_agi_limit": round(overall_limit, 2),
+        "overall_limit_applied": overall_limit_applied,
         "deductible_amount": round(total, 2),
         "carryover_potential": round(carryover, 2),
         "carryover_note": "Excess contributions carry forward up to 5 years (IRC 170(d))."

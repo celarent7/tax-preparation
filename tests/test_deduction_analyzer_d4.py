@@ -98,15 +98,23 @@ def test_average_balance_method_is_more_favorable():
 # ---------------------------------------------------------------------------
 
 def test_public_charity_limits_unchanged():
-    """Regression: the existing 60%/30% public-charity behavior is preserved.
+    """Per-category 60%/30% public-charity ceilings are preserved, but the
+    combined deduction is further capped at a conservative aggregate 60%-of-
+    AGI ceiling applied across all categories (a simplification, not a full
+    Pub 526 Worksheet 2 replication) — the per-category ceilings alone can
+    sum to more than AGI, which is not a legally possible deduction.
 
-    AGI 100,000 -> cash ceiling 60,000, property ceiling 30,000.
+    AGI 100,000 -> cash ceiling 60,000, property ceiling 30,000, but the two
+    together (90,000) exceed the 60,000 aggregate cap, so only 60,000 is
+    deductible this year and the remaining 30,000 carries over.
     """
     r = analyze_charitable(70000, 40000, 100000)
     assert r["cash_limit"] == 60000
     assert r["property_limit"] == 30000
-    assert r["deductible_amount"] == 90000        # 60,000 + 30,000
-    assert r["carryover_potential"] == 20000      # 10,000 + 10,000
+    assert r["overall_agi_limit"] == 60000
+    assert r["overall_limit_applied"] is True
+    assert r["deductible_amount"] == 60000        # capped at 60,000 overall
+    assert r["carryover_potential"] == 50000      # 10,000 + 10,000 + 30,000 excess
 
 
 def test_thirty_percent_organization_limits():

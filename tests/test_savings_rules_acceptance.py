@@ -349,6 +349,31 @@ def test_A7_section179_bonus_no_date_shows_both_rates():
     assert ops[0].deduction_amount == 50000.0
 
 
+def test_A7b_section179_mfs_limit_split_in_half():
+    """IRC §179(b)(4): MFS spouses are treated as one taxpayer and must split
+    the dollar limitation 50/50 absent a different election. $2,500,000 limit
+    -> $1,250,000 for an MFS filer.
+
+    $2,000,000 of purchases, well under the single-taxpayer limit but over
+    the halved MFS limit and under the (unsplit) $4,000,000 phase-out
+    threshold, so the deduction is capped at $1,250,000, not $2,000,000.
+    """
+    from savings_rules.engine import federal_ordinary_marginal_rate
+    ops = _ops("section179_bonus",
+               _base_profile(filing_status="married_separately", agi=1500000,
+                             taxable_income=1000000,
+                             se_net_profit=2000000,
+                             business_equipment_purchases=2000000,
+                             equipment_in_service_date="2025-06-01"), year=2025)
+    assert len(ops) == 1
+    assert ops[0].rule_id == "section179_bonus"
+    assert ops[0].deduction_amount == 1250000.0
+    rate = federal_ordinary_marginal_rate(TD[2025], "married_separately", 1000000)
+    assert ops[0].savings_federal == round(1250000.0 * rate, 2)
+    assert any("MFS" in a or "married filing separately" in a.lower()
+              for a in ops[0].assumptions)
+
+
 # ---------------------------------------------------------------------------
 # A8 — M9: HSA CA caveat vs TX no-caveat
 # ---------------------------------------------------------------------------

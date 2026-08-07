@@ -87,6 +87,10 @@ class ESPPPurchase:
     def fmv_total_at_purchase(self) -> float:
         return round(self.shares * self.fmv_at_purchase, 2)
 
+    @property
+    def fmv_total_at_offering(self) -> float:
+        return round(self.shares * self.fmv_at_offering, 2)
+
 
 @dataclass
 class ESPPSale:
@@ -312,11 +316,21 @@ def calculate_tax_breakdown(
     )
 
 
+def check_annual_limits_by_offering_year(purchases: List["ESPPPurchase"]) -> Dict[int, Dict]:
+    """Group purchases by offering-date calendar year and run the IRC
+    423(b)(8) $25,000 annual limit check against each year's combined total
+    (the limit accrues per calendar year of the offering date, across all
+    purchases under all plans for that year — finding F11)."""
+    totals: Dict[int, float] = {}
+    for p in purchases:
+        totals[p.offering_date.year] = totals.get(p.offering_date.year, 0.0) + p.fmv_total_at_offering
+    return {year: check_annual_limit(total) for year, total in totals.items()}
+
+
 def process_lots(lots_data: List[Dict]) -> List[Dict]:
     """Process multiple ESPP lots from JSON data."""
-    results = []
-    for lot in lots_data:
-        purchase = ESPPPurchase(
+    purchases = [
+        ESPPPurchase(
             offering_date=parse_date(lot["offering_date"]),
             purchase_date=parse_date(lot["purchase_date"]),
             shares=lot["shares"],
@@ -325,6 +339,12 @@ def process_lots(lots_data: List[Dict]) -> List[Dict]:
             fmv_at_purchase=lot["fmv_at_purchase"],
             discount_pct=lot.get("discount_pct", 0.15),
         )
+        for lot in lots_data
+    ]
+    annual_limits = check_annual_limits_by_offering_year(purchases)
+
+    results = []
+    for lot, purchase in zip(lots_data, purchases):
 
         sale_info = lot.get("sale")
         if sale_info:
@@ -359,6 +379,7 @@ def process_lots(lots_data: List[Dict]) -> List[Dict]:
                     (purchase.fmv_at_purchase - purchase.purchase_price) * purchase.shares, 2
                 ),
             },
+            "annual_limit_check": annual_limits[purchase.offering_date.year],
             "disposition": {
                 "type": disposition.disposition_type,
                 "offering_to_sale_days": disposition.offering_to_sale_days,
@@ -555,6 +576,18 @@ def format_lots_summary(results: List[Dict]) -> str:
     lines.append(f"TOTALS: Ordinary income ${total_ordinary:,.2f} | "
                 f"Capital gain/loss ${total_capgain:,.2f}")
     lines.append("=" * 70)
+
+    # Annual limit warnings are per OFFERING YEAR (the limit accrues across
+    # all lots sharing that year), not per lot — print each distinct warning
+    # once rather than repeating it under every lot in that year.
+    seen_years = set()
+    for lot in results:
+        year = lot["purchase"]["offering_date"][:4]
+        limit_check = lot.get("annual_limit_check")
+        if limit_check and limit_check.get("warning") and year not in seen_years:
+            seen_years.add(year)
+            lines.append(f"\n⚠️  Offering year {year}: {limit_check['warning']}")
+
     lines.append("")
     return "\n".join(lines)
 
@@ -661,6 +694,7 @@ ESPP Holding Period Rules:
             purchase=purchase,
         )
         breakdown = calculate_tax_breakdown(sale, args.reported_basis)
+        annual_limit = check_annual_limit(purchase.fmv_total_at_offering)
 
         if args.output_format == "json":
             print(json.dumps({
@@ -682,9 +716,12 @@ ESPP Holding Period Rules:
                     "basis_missing": breakdown.basis_missing_on_1099b,
                 } if (breakdown.form_8949_adjustment_code
                       or breakdown.basis_missing_on_1099b) else None,
+                "annual_limit_check": annual_limit,
             }, indent=2))
         else:
             print(format_tax_breakdown(breakdown))
+            if annual_limit["warning"]:
+                print(f"\nWARNING: {annual_limit['warning']}")
 
     elif args.command == "lots":
         try:

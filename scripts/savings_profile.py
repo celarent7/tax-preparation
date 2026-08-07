@@ -144,7 +144,9 @@ LEGACY_MAP: Dict[str, str] = {
     "income.w2_wages": "wages",
     "income.interest_income": "agi",          # legacy had no flat agi; approximate
     "income.dividend_income": "agi",
-    "income.qualified_dividends": "agi",
+    # income.qualified_dividends is intentionally NOT mapped: it's a subset of
+    # income.dividend_income (1099-DIV box 1b within box 1a), so folding both
+    # into agi would double-count it. It has no separate canonical field.
     "income.capital_gains_short": "realized_st_gains",
     "income.capital_gains_long": "realized_lt_gains",
     # deductions (charitable bunching path)
@@ -155,6 +157,11 @@ LEGACY_MAP: Dict[str, str] = {
     "adjustments.student_loan_interest": "agi",
     # credits / withholding carry no savings-relevant scalar
 }
+
+#: Legacy paths that map to "agi" but are above-the-line DEDUCTIONS rather
+#: than income, so their value subtracts from the running agi total instead
+#: of adding to it.
+_AGI_SUBTRACT_PATHS = {"adjustments.student_loan_interest"}
 
 
 def _is_legacy(raw: Dict[str, Any]) -> bool:
@@ -181,10 +188,12 @@ def _flatten_legacy(raw: Dict[str, Any]) -> Dict[str, Any]:
                 dropped.append(prefix)
                 return
             mapped.append(f"{prefix} -> {canon}")
-            # income.* interest/dividend contributions fold into agi additively
+            # income.* interest/dividend contributions fold into agi additively;
+            # adjustments.* deductions (e.g. student loan interest) subtract.
             value = node if isinstance(node, (int, float)) else 0
             if canon == "agi":
-                out[canon] = out.get(canon, 0) + value
+                sign = -1 if prefix in _AGI_SUBTRACT_PATHS else 1
+                out[canon] = out.get(canon, 0) + sign * value
             elif canon in ("realized_st_gains", "realized_lt_gains"):
                 out[canon] = value
             else:

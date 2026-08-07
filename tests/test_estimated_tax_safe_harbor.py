@@ -192,3 +192,45 @@ def test_gate_g3_qbi_not_subtracted_without_se_income():
     )
     payload = json.loads(result.stdout)
     assert payload["qbi"] is None
+
+
+# ---------------------------------------------------------------------------
+# SE health insurance / SE retirement are above-the-line Schedule 1
+# deductions and must reduce AGI, not just feed the QBI calc.
+# ---------------------------------------------------------------------------
+
+def test_se_health_insurance_reduces_agi():
+    """Single 2025, $100k SE income, $20k SE health insurance premiums.
+
+    Half SE tax = $7,064.77 (14,129.55 SE tax / 2). AGI = 100,000 - 7,064.77
+    - 20,000 = 72,935.23. Previously the $20,000 deduction was fed into the
+    QBI calc but never subtracted from AGI, overstating AGI (and therefore
+    projected liability) by the full $20,000.
+    """
+    result = subprocess.run(
+        [sys.executable, os.path.join(SCRIPTS, "estimated_tax_calculator.py"),
+         "--projected-se-income", "100000", "--projected-income", "100000",
+         "--se-health-insurance", "20000", "--prior-year-tax", "20000",
+         "--filing-status", "single", "--year", "2025", "--output-format", "json",
+         "--no-qbi"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["projections"]["agi"] == 72935.23
+
+
+def test_se_retirement_reduces_agi():
+    """Same base scenario, using --se-retirement instead of health insurance;
+    both are above-the-line Schedule 1 deductions and reduce AGI identically."""
+    result = subprocess.run(
+        [sys.executable, os.path.join(SCRIPTS, "estimated_tax_calculator.py"),
+         "--projected-se-income", "100000", "--projected-income", "100000",
+         "--se-retirement", "20000", "--prior-year-tax", "20000",
+         "--filing-status", "single", "--year", "2025", "--output-format", "json",
+         "--no-qbi"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["projections"]["agi"] == 72935.23

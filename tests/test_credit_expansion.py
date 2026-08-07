@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from credit_eligibility_checker import (
     calculate_llc,
     calculate_ftc_simple,
+    calculate_savers_credit,
     check_energy_credits,
     get_credit_params,
 )
@@ -58,6 +59,46 @@ def test_llc_mutual_exclusion_note_with_aotc(data_2025):
                       _llc_params(data_2025))
     assert not r.eligible
     assert any("same student" in n.lower() for n in r.notes)
+
+
+def _savers_params(tax_data):
+    return get_credit_params(tax_data)["savers_credit"]
+
+
+def test_savers_credit_hoh_bands_derive_from_mfj_not_single(data_2025):
+    """HoH Saver's Credit AGI bands are 75% of the MFJ bands per IRC 25B(b),
+    not 75% of the single bands. HoH $30,000 AGI is below the HoH 50%
+    threshold (mfj $49,000 x 0.75 = $36,750), so a $2,000 contribution earns
+    the full 50% credit ($1,000). Deriving from single x 0.75 would instead
+    put $30,000 in the 10% bracket (single $24,500 x 0.75 = $18,375 for 50%,
+    $26,500 x 0.75 = $19,875 for 20%), yielding only $200 -- a 5x
+    understatement.
+    """
+    r = calculate_savers_credit({
+        "filing_status": "head_of_household",
+        "agi": 30000,
+        "retirement_contributions": 2000,
+        "age": 40,
+    }, _savers_params(data_2025))
+    assert r.eligible
+    assert r.amount == 1000.0
+
+
+def test_savers_credit_single_and_mfj_bands_unchanged(data_2025):
+    """Regression: single and MFJ Saver's Credit bands are unaffected by the
+    HoH fix (single/MFS/QSS use the single bands unscaled; MFJ uses the MFJ
+    bands unscaled)."""
+    r_single = calculate_savers_credit({
+        "filing_status": "single", "agi": 20000,
+        "retirement_contributions": 2000, "age": 40,
+    }, _savers_params(data_2025))
+    assert r_single.amount == 1000.0  # single 50% band: $24,500
+
+    r_mfj = calculate_savers_credit({
+        "filing_status": "married_jointly", "agi": 45000,
+        "retirement_contributions": 2000, "age": 40,
+    }, _savers_params(data_2025))
+    assert r_mfj.amount == 1000.0  # mfj 50% band: $49,000
 
 
 def _ftc_params(tax_data):

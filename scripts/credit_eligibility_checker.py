@@ -419,7 +419,9 @@ def calculate_savers_credit(data: Dict, params: Dict) -> CreditResult:
 
     # Constants carry mfj/single AGI bands; HoH bands are 75% of the MFJ ones
     # per IRC 25B(b). Only mfj/single are stored, so HoH derives from MFJ.
-    status_key = "mfj" if filing_status == "married_jointly" else "single"
+    # Single, married-separately, and qualifying-surviving-spouse all use the
+    # "single" bands unscaled per the IRS Saver's Credit table.
+    status_key = "mfj" if filing_status in ("married_jointly", "head_of_household") else "single"
     bands = params["bands"][status_key]
     if any(v is None for v in bands.values()):
         raise UnverifiedConstantError(

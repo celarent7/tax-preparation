@@ -132,6 +132,21 @@ def rule_section179_bonus(profile: Dict[str, Any],
     s179_limit = s179["limit"]
     s179_phaseout = s179["phaseout_start"]
 
+    # IRC §179(b)(4)(B): MFS spouses must split the §179 DOLLAR LIMITATION
+    # (paragraph (1)) 50/50 absent a different election. This profile only
+    # sees one spouse's purchases, so the phase-out threshold (paragraph (2))
+    # is left as the full unsplit figure here rather than guessed at — §179
+    # (b)(4)(A) treats the couple as one taxpayer for the subsection as a
+    # whole, which implies the phase-out is measured against COMBINED
+    # household purchases, not a threshold apportioned per spouse. Verify
+    # against the statute if combined-spouse purchase tracking is added.
+    mfs_note = None
+    if fs == "married_separately":
+        s179_limit = s179_limit / 2
+        mfs_note = ("Married filing separately: §179 dollar limitation split "
+                    "50/50 between spouses per IRC §179(b)(4)(B) (assumes no "
+                    "alternate apportionment election).")
+
     # §179 deduction: up to the limit, reduced dollar-for-dollar by purchases
     # above the phase-out threshold.
     s179_deduction = min(purchases, s179_limit)
@@ -161,6 +176,8 @@ def rule_section179_bonus(profile: Dict[str, Any],
     savings_federal = round(s179_deduction * rate, 2)
     assumptions = [f"§179 limit ${s179_limit:,.0f}; phase-out starts at ${s179_phaseout:,.0f}.",
                   f"Marginal rate {rate:.1%} on the profile's taxable income."]
+    if mfs_note:
+        assumptions.append(mfs_note)
     if phaseout_note:
         assumptions.append(phaseout_note)
     if bonus_note:

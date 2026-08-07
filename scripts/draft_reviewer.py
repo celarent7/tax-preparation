@@ -300,15 +300,18 @@ def check_se_tax(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Findin
 
 
 def check_total_tax(draft: Dict, computed: Dict, ctx: ReviewContext) -> List[Finding]:
-    """Total tax (line 24) = tax (16) + other taxes (23)."""
-    expected = _f(draft, "line_16_tax") + _f(draft, "line_23_other_taxes")
+    """Total tax (line 24) = (tax (16) minus Child Tax Credit (19), floored at
+    zero per the line 22 instructions) plus other taxes (23)."""
+    tax_after_credits = max(0.0, _f(draft, "line_16_tax") - _f(draft, "line_19_child_tax_credit"))
+    expected = tax_after_credits + _f(draft, "line_23_other_taxes")
     stated = _f(draft, "line_24_total_tax")
     match, diff = compare_values(stated, expected, ctx.exact_tolerance)
     if not match:
         return [Finding(Severity.ERROR, "Tax", "Total tax (1040 Line 24)",
-                        "Total tax does not equal line 16 plus other taxes.",
+                        "Total tax does not equal line 16 minus Child Tax Credit "
+                        "plus other taxes.",
                         stated, round(expected, 2), round(diff, 2))]
-    return [_ok("Tax", "Total tax (Line 24)", "Line 16 plus other taxes",
+    return [_ok("Tax", "Total tax (Line 24)", "Line 16 minus CTC plus other taxes",
                 stated, round(expected, 2))]
 
 
@@ -324,20 +327,22 @@ def check_capital_gains(draft: Dict, computed: Dict, ctx: ReviewContext) -> List
     total = float(sched_d.get("total_gain_loss", 0) or 0)
     reported = _f(draft, "line_7_capital_gain_loss")
 
-    if total < 0 and reported < -limit:
+    # Expected line 7 = the Schedule D total, capped at -limit when it's a
+    # loss exceeding the annual limit (the excess carries forward instead).
+    over_limit = total < -limit
+    expected = -limit if over_limit else total
+
+    if abs(reported - expected) > ctx.exact_tolerance:
+        label = "Capital loss (1040 Line 7)" if total < 0 else "Capital gain (1040 Line 7)"
+        message = (f"Net capital loss deduction is limited to ${limit:,.0f} per year; "
+                   "the excess carries forward." if over_limit else
+                   "Line 7 does not match the Schedule D total.")
         findings.append(Finding(
-            Severity.ERROR, "Capital Gains", "Capital loss (1040 Line 7)",
-            f"Net capital loss deduction is limited to ${limit:,.0f} per year; "
-            "the excess carries forward.",
-            reported, -limit, round(reported + limit, 2)))
-    elif abs(reported - total) > ctx.exact_tolerance and total >= 0:
-        findings.append(Finding(
-            Severity.ERROR, "Capital Gains", "Capital gain (1040 Line 7)",
-            "Line 7 does not match the Schedule D total.",
-            reported, total, round(reported - total, 2)))
+            Severity.ERROR, "Capital Gains", label, message,
+            reported, expected, round(reported - expected, 2)))
     else:
         findings.append(_ok("Capital Gains", "Schedule D", "Consistent with Line 7",
-                            reported, total))
+                            reported, expected))
     return findings
 
 

@@ -611,7 +611,11 @@ def compute_qbi_deduction(
         overall_limit=overall_limit,
         deduction=deduction,
         form=form,
-        qbi_loss_carryforward=comp.carryforward,
+        # comp.carryforward is negative (it mirrors the negative adjusted QBI);
+        # qbi_loss_carryforward is reported as a positive magnitude so it
+        # round-trips directly into next year's qbi_loss_carryforward input,
+        # which subtracts it (see compute_adjusted_qbi).
+        qbi_loss_carryforward=-comp.carryforward + 0.0,  # avoid -0.0 in output
         reit_loss_carryforward=reit["carryforward"],
         min_deduction_applied=min_applied,
         adjusted_qbi=round(adjusted_qbi, 2),

@@ -91,3 +91,85 @@ def test_qualifying_tax_breakdown():
     # Capital gain = $15000 proceeds - $10000 basis = $5000
     assert breakdown.capital_gain_loss == 5000.00
     assert breakdown.capital_gain_type == "long-term"
+
+
+# ---------------------------------------------------------------------------
+# F11 — the $25,000 annual limit check is wired into the CLI (not just
+# unit-tested via check_annual_limit in isolation).
+# ---------------------------------------------------------------------------
+
+import json
+import subprocess
+
+SCRIPT = os.path.join(os.path.dirname(__file__), "..", "scripts", "espp_calculator.py")
+
+
+def _run_espp_cli(*args):
+    return subprocess.run(
+        [sys.executable, SCRIPT, *args, "--output-format", "json"],
+        capture_output=True, text=True,
+    )
+
+
+def test_cli_basis_warns_when_offering_value_exceeds_25000():
+    """A $30,000-at-offering purchase (300 shares x $100 FMV at offering)
+    must surface an IRC 423(b)(8) warning through the actual `basis`
+    subcommand, not just through the unit-tested check_annual_limit
+    function."""
+    result = _run_espp_cli(
+        "basis",
+        "--offering-date", "2024-01-01", "--purchase-date", "2024-06-30",
+        "--fmv-at-offering", "100", "--fmv-at-purchase", "110",
+        "--purchase-price", "85", "--sale-date", "2025-08-01",
+        "--sale-price", "130", "--shares", "300",
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    check = payload["annual_limit_check"]
+    assert check["within_limit"] is False
+    assert check["excess"] == 5000.0
+    assert "423(b)(8)" in check["warning"]
+
+
+def test_cli_basis_no_warning_within_limit():
+    """A purchase valued at or under $25,000 at the offering date produces no
+    warning."""
+    result = _run_espp_cli(
+        "basis",
+        "--offering-date", "2024-01-01", "--purchase-date", "2024-06-30",
+        "--fmv-at-offering", "100", "--fmv-at-purchase", "110",
+        "--purchase-price", "85", "--sale-date", "2025-08-01",
+        "--sale-price", "130", "--shares", "200",
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    check = payload["annual_limit_check"]
+    assert check["within_limit"] is True
+    assert check["warning"] is None
+
+
+def test_cli_lots_aggregates_annual_limit_by_offering_year(tmp_path):
+    """The `lots` subcommand must aggregate the offering-date FMV total
+    across ALL purchases sharing the same offering-date calendar year (the
+    limit accrues per calendar year, not per purchase) and flag the excess."""
+    lots = [
+        {"offering_date": "2024-01-01", "purchase_date": "2024-06-30",
+         "shares": 200, "purchase_price": 85, "fmv_at_offering": 100,
+         "fmv_at_purchase": 110},
+        {"offering_date": "2024-01-01", "purchase_date": "2024-12-31",
+         "shares": 100, "purchase_price": 90, "fmv_at_offering": 105,
+         "fmv_at_purchase": 115},
+    ]
+    path = tmp_path / "lots.json"
+    path.write_text(json.dumps(lots))
+    result = _run_espp_cli("lots", "--file", str(path))
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert len(payload) == 2
+    # Combined offering-date value: 200*100 + 100*105 = 30,500 -> exceeds
+    # $25,000 by $5,500 for BOTH lots (same offering year).
+    for lot in payload:
+        check = lot["annual_limit_check"]
+        assert check["within_limit"] is False
+        assert check["offering_date_value_used"] == 30500.0
+        assert check["excess"] == 5500.0

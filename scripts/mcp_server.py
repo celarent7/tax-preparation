@@ -190,7 +190,8 @@ def analyze_espp_sale(
         )
         
         breakdown = espp_calculator.calculate_tax_breakdown(sale, reported_basis)
-        
+        annual_limit = espp_calculator.check_annual_limit(purchase.fmv_total_at_offering)
+
         result = {
             "disposition_type": breakdown.disposition_type,
             "ordinary_income": breakdown.ordinary_income,
@@ -198,7 +199,8 @@ def analyze_espp_sale(
             "capital_gain_type": breakdown.capital_gain_type,
             "adjusted_basis": breakdown.adjusted_basis,
             "form_8949_code": breakdown.form_8949_adjustment_code,
-            "form_8949_adjustment": breakdown.form_8949_adjustment_amount
+            "form_8949_adjustment": breakdown.form_8949_adjustment_amount,
+            "annual_limit_check": annual_limit
         }
         return json.dumps(result, indent=2)
     except Exception as e:
