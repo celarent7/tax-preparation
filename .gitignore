@@ -42,3 +42,6 @@ license_compliance_preparation.md
 # Secrets / local config
 .env
 *.local
+
+# Playwright MCP session artifacts
+.playwright-mcp/
