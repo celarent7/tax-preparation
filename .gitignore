@@ -45,3 +45,11 @@ license_compliance_preparation.md
 
 # Playwright MCP session artifacts
 .playwright-mcp/
+
+# Audit/dev-process artifacts (kept locally, not for distribution)
+docs/plans/
+docs/audit_*.md
+docs/implementation_prompt.md
+docs/remediation_log.md
+docs/qbi_calculator_plan.md
+docs/savings_engine_plan.md
