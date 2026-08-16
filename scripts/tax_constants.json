@@ -94,7 +94,50 @@
       "2023.credits.savers_credit": "Saver's Credit AGI bands for 2023 not verified.",
       "2023.mileage_rate": "Standard mileage rate is announced in a separate IRS Notice.",
       "states.WA.capital_gains_excise.standard_deduction_2025": "WA capital gains excise standard deduction indexes annually; the 2025 figure was not verified (finding F13).",
-      "states.CA.2026": "FTB 2026 rate schedules not yet published as of 2026-08-05 (the 2026 540-ES instructions reference the 2025 tax table; FTB publishes indexed amounts in late December). Requesting CA 2026 raises — do not extrapolate from 2025 with an assumed inflation factor."
+      "states.CA.2026": "FTB 2026 rate schedules not yet published as of 2026-08-05 (the 2026 540-ES instructions reference the 2025 tax table; FTB publishes indexed amounts in late December). Requesting CA 2026 raises — do not extrapolate from 2025 with an assumed inflation factor.",
+      "fbar.penalties_by_assessment_date.2026": "31 CFR 1010.821 is adjusted annually no later than January 15. As of 2026-08-15 the current eCFR/LII text of the table still shows the January 17, 2025 column ($16,536 / $165,353) as the operative one for 31 U.S.C. 5321(a)(5); no separately verified 2026 column was located in a primary source. `fbar_penalty_maximum` therefore returns the 2025-01-17 figures and reports the assessment-date column it used. If a 2026 Federal Register adjustment exists, add it as a new key rather than editing the 2025 one — the columns are cumulative by assessment date, not replacements."
+    },
+    "cfr_1010_821_fbar_penalties": {
+      "url": "https://www.law.cornell.edu/cfr/text/31/1010.821",
+      "title": "31 CFR 1010.821 — Penalty adjustment and table (FinCEN civil monetary penalty inflation adjustment)",
+      "retrieved": "2026-08-15",
+      "backs": [
+        "fbar.penalties_by_assessment_date.2025-01-17.non_willful_max",
+        "fbar.penalties_by_assessment_date.2025-01-17.willful_max",
+        "fbar.penalty_statutory_base"
+      ],
+      "quote": "Maximum penalty amounts or range of minimum and maximum penalty amounts for penalties assessed on or after January 17, 2025",
+      "note": "31 U.S.C. 5321(a)(5)(B)(i) Foreign Financial Agency Transaction — Non-Willful Violation: adjusted maximum $16,536. 31 U.S.C. 5321(a)(5)(C)(i)(I) Willful Violation: adjusted maximum $165,353 (the willful penalty is the GREATER of that figure or 50% of the account balance at the time of the violation, per 31 U.S.C. 5321(a)(5)(D)(ii)). The statutory bases are $10,000 and $100,000; the table figures are those bases inflation-adjusted under the Federal Civil Penalties Inflation Adjustment Act. Keyed by ASSESSMENT date, not tax year. Bittner v. United States, 598 U.S. 85 (2023) fixed the non-willful penalty as per report, not per account (fbar.penalty_unit)."
+    },
+    "irs_fbar_requirements": {
+      "url": "https://www.irs.gov/businesses/small-businesses-self-employed/report-of-foreign-bank-and-financial-accounts-fbar",
+      "title": "IRS — Report of Foreign Bank and Financial Accounts (FBAR)",
+      "retrieved": "2026-08-15",
+      "backs": [
+        "fbar.threshold_usd",
+        "fbar.threshold_test",
+        "fbar.recordkeeping_years",
+        "fbar.deadline"
+      ],
+      "note": "Filing required when the aggregate value of all foreign financial accounts EXCEEDED $10,000 at any time during the calendar year (measured on each account's maximum value, not its year-end balance) — hence threshold_test 'exceeds': exactly $10,000 does not trigger. Due April 15 of the following year with an AUTOMATIC extension to October 15 (no request required). Records — name on the account, account number, name and address of the institution, type of account, maximum value — must be kept for five years from the FBAR due date. Whether the account produced taxable income is irrelevant."
+    },
+    "fincen_maximum_account_value": {
+      "url": "https://www.fincen.gov/reporting-maximum-account-value",
+      "title": "FinCEN — Reporting Maximum Account Value",
+      "retrieved": "2026-08-15",
+      "backs": [
+        "fbar.fx_rate_source"
+      ],
+      "note": "Periodic account statements may be relied on to determine the maximum value, provided they fairly reflect the maximum account value during the calendar year. Non-USD amounts are converted using the Treasury Reporting Rate of Exchange for the LAST DAY OF THE CALENDAR YEAR — not the rate on the date the account peaked, and not a commercial mid-market rate. Where the maximum cannot be determined and the filer has fewer than 25 accounts, complete the other fields and check the Item 15a 'amount unknown' box."
+    },
+    "irm_4_26_16_fbar": {
+      "url": "https://www.irs.gov/irm/part4/irm_04-026-016",
+      "title": "IRM 4.26.16 — Report of Foreign Bank and Financial Accounts (FBAR)",
+      "retrieved": "2026-08-15",
+      "backs": [
+        "fbar.aggregate_max_account_count_detail_limit"
+      ],
+      "note": "Items 14a/14b: a filer with 25 or more accounts reports the number of accounts and does not complete the per-account Parts II–V, but must retain the detail records and furnish them on request. The Item 15a 'amount unknown' election is available to filers with FEWER than 25 accounts."
     },
     "rev_proc_2024_40_ty2025": {
       "url": "https://www.irs.gov/pub/irs-drop/rp-24-40.pdf",
@@ -2759,6 +2802,38 @@
       "limit": 300,
       "limit_mfj": 600
     }
+  },
+  "fbar": {
+    "_note": "FinCEN Form 114 (FBAR). Deliberately NOT under a tax-year block: the reporting threshold and the recordkeeping period are statutory and un-indexed, the deadline is a fixed month/day of the following year, and the penalty maxima are indexed by the year the penalty is ASSESSED, not by the tax year reported on. See references/fbar_guide.md.",
+    "threshold_usd": 10000,
+    "threshold_test": "exceeds",
+    "aggregate_max_account_count_detail_limit": 25,
+    "recordkeeping_years": 5,
+    "deadline": {
+      "due_month": 4,
+      "due_day": 15,
+      "extended_month": 10,
+      "extended_day": 15,
+      "extension_is_automatic": true,
+      "offset_years": 1
+    },
+    "fx_rate_source": {
+      "required_source": "treasury",
+      "as_of": "last_day_of_calendar_year",
+      "url": "https://fiscaldata.treasury.gov/datasets/treasury-reporting-rates-exchange/"
+    },
+    "penalties_by_assessment_date": {
+      "2025-01-17": {
+        "non_willful_max": 16536,
+        "willful_max": 165353,
+        "willful_balance_percent": 0.5
+      }
+    },
+    "penalty_statutory_base": {
+      "non_willful": 10000,
+      "willful": 100000
+    },
+    "penalty_unit": "per_report"
   },
   "states": {
     "CA": {

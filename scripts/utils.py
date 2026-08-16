@@ -282,6 +282,11 @@ def load_tax_constants(year: str = "2025") -> Dict[str, Any]:
     data["_sources"] = full_data.get("_sources", {})
     # Statutory, non-inflation-indexed credit parameters shared by every year.
     data["credits_static"] = full_data.get("credits_static", {})
+    # FinCEN 114 (FBAR) parameters. Shared rather than per-year: the threshold
+    # and retention period are un-indexed, the deadline is a fixed month/day of
+    # the following year, and the penalty maxima are indexed by the year the
+    # penalty is ASSESSED — not by the tax year being reported on.
+    data["fbar"] = full_data.get("fbar", {})
 
     return data
 
