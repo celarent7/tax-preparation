@@ -1,0 +1,414 @@
+# FBAR (FinCEN Form 114) — Domain Reference
+
+Foreign bank account reporting: who files, what counts, how the maximum value is
+determined, and — the part this plugin actually automates — how each year's
+accounts reconcile against the prior year's filing.
+
+FBAR is **not** part of the income tax return. It is filed separately through
+FinCEN's BSA E-Filing system. This plugin produces **worksheets and findings**,
+never a transmittable form; see §9.
+
+> **Scope.** `scripts/fbar_reconciler.py` covers Part II (separately owned) and
+> Part III (jointly owned) accounts. Part IV (signature authority, no financial
+> interest) and Part V (consolidated) are out of scope — the schema records such
+> accounts and the reconciler says so rather than appearing to have handled them.
+> Form 8938 (FATCA) is a different regime; see §8.
+
+---
+
+## 1. The rules
+
+<!-- FBAR_RULES -->
+
+| Rule | Statement | Source |
+|---|---|---|
+| Who files | Any U.S. person — citizen, resident, corporation, partnership, LLC, trust or estate — with a financial interest in, or signature authority over, foreign financial accounts. | [IRS FBAR page](https://www.irs.gov/businesses/small-businesses-self-employed/report-of-foreign-bank-and-financial-accounts-fbar) |
+| Threshold | The aggregate value of all foreign financial accounts **exceeded $10,000 at any time** during the calendar year. Measured on each account's **maximum** value, not its year-end balance. Exactly $10,000 does not trip it. Once tripped, **every** account is reported, including trivial ones. | IRS FBAR page |
+| Taxability is irrelevant | Whether the account produced taxable income has no effect on whether it is a foreign financial account for FBAR purposes. | IRS FBAR page |
+| Deadline | Due **April 15** following the calendar year, with an **automatic extension to October 15** — no request required. | IRS FBAR page |
+| Maximum value method | **Periodic account statements may be relied on**, provided they fairly reflect the maximum account value during the calendar year. | [FinCEN, Reporting Maximum Account Value](https://www.fincen.gov/reporting-maximum-account-value) |
+| FX conversion | Convert to USD using the **Treasury Reporting Rate of Exchange for the last day of the calendar year** — *not* the rate on the date the account peaked, and not a commercial mid-market rate. | [FinCEN](https://www.fincen.gov/reporting-maximum-account-value) |
+| Amount unknown | Item 15a carries an *amount unknown* checkbox. A filer with **fewer than 25 accounts** who cannot determine whether the maximum exceeded $10,000 completes every other field for the account and checks 15a. **This is a legitimate filing position, not a defect.** | [IRM 4.26.16](https://www.irs.gov/irm/part4/irm_04-026-016), [FinCEN](https://www.fincen.gov/reporting-maximum-account-value) |
+| 25 or more accounts | Items 14a/14b: report the **number** of accounts and skip the per-account parts — **but retain the detail records** and produce them on request. | IRM 4.26.16 |
+| Spouses | Separate FBARs are required **unless all accounts are jointly owned** and both spouses sign **FinCEN Form 114a**. Any separately-owned account forces separate filings. | IRS FBAR page |
+| Recordkeeping | Retain the name on the account, account number, institution name and address, account type, and maximum value for **five years from the FBAR due date**. | IRS FBAR page |
+| Non-willful penalty | Statutory $10,000, inflation-adjusted to **$16,536** for penalties assessed on or after January 17, 2025. *Bittner v. United States*, 598 U.S. 85 (2023) fixed this as **per report, not per account**. | [31 CFR 1010.821](https://www.law.cornell.edu/cfr/text/31/1010.821) |
+| Willful penalty | The **greater of** the inflation-adjusted statutory figure — **$165,353** for penalties assessed on or after January 17, 2025 — **or 50%** of the account balance at the time of the violation. | [31 CFR 1010.821](https://www.law.cornell.edu/cfr/text/31/1010.821) |
+
+<!-- /FBAR_RULES -->
+
+Every figure above lives in the shared `fbar` block of
+`scripts/tax_constants.json` and is asserted against this table by
+`tests/test_reference_consistency.py`. Do not restate a number here that is not
+in the constants.
+
+### Two things the penalty figures are easy to get wrong
+
+- **They index by assessment date, not tax year.** 31 CFR 1010.821 is adjusted
+  annually and the table is cumulative: a TY2025 FBAR assessed in 2027 takes the
+  2027 column, not the 2025 one. `fbar_penalty_maximum()` selects the latest
+  column effective on or before the assessment date and reports which one it
+  used.
+- **"~$100,000" is the statutory base, not the willful maximum.** The operative
+  figure is the adjusted one.
+
+### Delinquent filings
+
+A filer who was required to file and did not, is not under civil examination or
+criminal investigation, and has not been contacted by the IRS about the missing
+report, should look at the **Delinquent FBAR Submission Procedures** on the
+[IRS FBAR page](https://www.irs.gov/businesses/small-businesses-self-employed/report-of-foreign-bank-and-financial-accounts-fbar).
+The reconciler points at this whenever an account lands on
+`NEW_PREVIOUSLY_UNREPORTED` or a filing runs past the extended deadline.
+Reference only — this plugin implements no delinquent-filing workflow.
+
+---
+
+## 2. Why this module exists
+
+The rules above are the easy part. The failure mode that motivated the module is
+procedural: **the year-over-year reconciliation was being done by memory and
+inconsistently.** One filer's roster carried a prior-year column beside the
+current one; the other's had no prior-year column at all, so nothing guaranteed
+that every account on the previous filing had been carried forward, closed out,
+or consciously dropped.
+
+Nothing about that is visible on the form. It only shows up as an account that
+quietly stops being reported.
+
+The minimum bar this module enforces is one sentence:
+
+> **For every prior-year FBAR record there is a clear answer.**
+
+An account that disappears between filings without a disposition is a blocking
+finding, not a silent omission.
+
+---
+
+## 3. The roster
+
+One JSON file per filer per year: `fbar_roster_<filer_slug>_<year>.json`.
+Full field list and validation rules in `scripts/fbar_schema.py`; a worked
+synthetic pair is in `examples/fbar/`.
+
+The three fields that carry the design:
+
+**`account_key`** — a stable, human-assigned slug that is the join key across
+years. `account_number` is *not* a usable join key: institutions renumber, split
+multi-currency wallets into per-currency IDs, merge them back, and workpapers
+transcribe them inconsistently. It is required on every record; the schema does
+not derive one, because a derived key churns when ordering changes and a key
+that churns is not a join key. Assign it once when the account is first rostered
+— `<institution-slug>-<type>-<ordinal>` is a serviceable pattern — and never
+regenerate it.
+
+**`aliases[]`** — every identifier the account has ever been filed or recorded
+under. This is the audit trail that lets next year's run match on either
+rendering without re-reading this year's `identity_changes`.
+
+**`conventions_applied[]`** — which of the filer-adopted treatments in §5 were
+used to produce this account's figures. A year-over-year *change* here is a
+finding (V9), because these treatments are unconfirmed and changing one silently
+changes the reported number.
+
+### Multi-currency accounts
+
+An account whose reported maximum is the sum of several currency balances at the
+combined-peak instant uses `max_value_components` instead of
+`max_value_local`/`max_value_currency`:
+
+```jsonc
+"max_value_components": [
+  {"currency": "GEL", "amount": 2700.0},
+  {"currency": "EUR", "amount": 852.2},
+  {"currency": "USD", "amount": 1000.0}
+]
+```
+
+V3 recomputes each component separately and sums the USD results. Setting both
+`max_value_components` and `max_value_local` is rejected at load — a single
+local amount is ambiguous on a multi-currency account.
+
+### Exchange rates
+
+`fx_rates[].units_per_usd` is **foreign currency units per one US dollar** —
+Treasury's convention. USD is always `local ÷ units_per_usd`. The conversion is
+never attempted in the other direction to make a stated figure agree: the defect
+this guards against is a rate recorded once as itself and once as its own
+reciprocal, under conflicting provenance labels. A validator that quietly
+accepted either direction would erase exactly the finding it exists to produce.
+
+---
+
+## 4. Account-number normalization
+
+Matching account numbers across years cannot be byte equality. The motivating
+case is one brokerage account rendered with a trailing Latin `M` on the filed
+form and a Cyrillic `м` in the workpaper, with different punctuation — which a
+naive match reports as *one closed account plus one new account*.
+
+`normalize_account_number()` applies, in order: Unicode NFKC → drop format
+(zero-width) characters → upper-case → fold Cyrillic/Greek capitals that are
+homoglyphs of Latin capitals → strip separators. So `12345678M` and
+`123456/78-м` both normalize to `12345678M`.
+
+Two deliberate limits:
+
+- **Letter-to-letter folds only.** Cyrillic `З` looks like `3` but is not
+  folded. A false *split* surfaces as a reviewable finding; a false *merge*
+  makes two accounts look like one and drops a reportable account off the
+  filing. The asymmetry is intentional.
+- **Never for display.** Item 18 takes the account number as the institution
+  states it. `assert_display_safe()` makes emitting a normalized number onto a
+  worksheet a hard failure rather than something a future edit can quietly
+  break.
+
+### Matching order, and one thing it does not handle
+
+Matching resolves in this order: exact `account_key` → the normalized number
+appears in the other record's `aliases[]` → normalized number equality → same
+institution and the same trailing four digits, which **suggests and never
+auto-accepts** → no match. Step four is a suggestion because a fuzzy match that
+silently linked two accounts would defeat the point: the module exists to make
+unmatched accounts visible, not to make them disappear.
+
+Matching is greedy in prior-roster order, and each current account can be
+claimed only once. If two prior records share an alias, the one processed first
+takes the current account and the second lands on `UNRESOLVED` — which reads as
+if the first carried forward cleanly and the second vanished. That is a
+reviewable finding rather than a silent error, but if you see an `UNRESOLVED`
+you did not expect, check whether a sibling record is holding the alias it
+needed. Keep `aliases[]` unambiguous: an identifier should appear on exactly one
+account, except where an `identity_change` deliberately links several to one
+predecessor.
+
+---
+
+## 5. Filer-adopted conventions (not settled law)
+
+These treatments are load-bearing for the current filings but **could not be
+confirmed against FinCEN guidance**. The module carries them as conventions with
+a recorded rationale, prints them in the reconciliation report, and flags a
+year-over-year change (V9). Flagging them is a feature, not a caveat.
+
+<!-- FBAR_CONVENTIONS -->
+
+| Convention id | Statement | Status |
+|---|---|---|
+| `multi_currency_single_account` | Currency sub-wallets sharing one account number are reported as a single account; the currencies are summed at each point in time to find the combined maximum. | **unconfirmed** — FinCEN guidance addresses aggregation *for the threshold*, not per-entry granularity for sub-accounts. Plausible and internally consistent, but the opposite treatment has been applied to the same institution family in an adjacent year. |
+| `credit_card_positive_balance_only` | A credit card account is reportable only if it carried a positive balance (the bank owes the holder); negative or zero is not reportable. | **unconfirmed** as phrased. Directionally consistent with a credit card not being a financial account absent a credit balance owed to the holder. |
+| `negative_balance_is_zero` | A negative balance is treated as $0 rather than a negative maximum. | **conservative** — reasonable; recorded as a convention, not a rule. |
+
+<!-- /FBAR_CONVENTIONS -->
+
+The registry lives in `scripts/fbar_schema.py::CONVENTIONS`. A roster naming a
+convention that is not registered gets a "record the rationale" warning in the
+report rather than silent acceptance.
+
+**Keep the conventions file with the year it governs.** A conventions document
+that physically sits in the prior year's folder while describing the current
+cycle will eventually be silently inherited or silently lost.
+
+---
+
+## 6. Dispositions
+
+Every prior-year account resolves to exactly one of these. Precedence when
+several could apply: a declared identity change wins (it is the filer's own
+written statement about the account), then closure, then a changed identifier,
+then non-reportability, then plain carry-forward.
+
+| Disposition | Meaning | Evidence required | Severity |
+|---|---|---|---|
+| `CARRIED_FORWARD` | Matched, open, current-year maximum determined | `max_value_usd` **or** `max_value_unknown` | ok |
+| `CLOSED` | Closed during the year | `account_status: closed` + `closed_date` in the year | ok |
+| `CLOSED_PRIOR_YEAR` | Closed before the year began; correctly absent | `closed_date` before Jan 1 of the tax year | ok |
+| `DORMANT_ZERO` | Open, zero or negative throughout → not reportable | `reportable: false` + `not_reportable_reason` | ok |
+| `RENUMBERED` | Same account, new identifier | Current record lists the prior ID in `aliases[]` | warn |
+| `SPLIT` | One prior account → N current accounts | `identity_change` record; each current record lists the prior ID | warn |
+| `MERGED` | N prior accounts → one current account | `identity_change` record; current record lists all prior IDs | warn |
+| `UNRESOLVED` | No match, no disposition | — | **BLOCKING** |
+
+Current-year accounts with no prior-year antecedent:
+
+| Disposition | Meaning | Evidence required | Severity |
+|---|---|---|---|
+| `NEW_OPENED` | Opened during the year | `opened_date` within the tax year | ok |
+| `NEW_PREVIOUSLY_UNREPORTED` | Existed earlier, absent from the prior filing | Explicit `notes` justification | warn — possible prior-year omission; consider the Delinquent FBAR Submission Procedures |
+| `NEW_UNEXPLAINED` | Neither | — | **BLOCKING** |
+
+### Reporting-model changes
+
+Filing one account in one year and two the next, for the same underlying
+relationship, is a **reporting-model change**. It needs an `identity_change`
+record with `reporting_model_changed: true` and a written `justification`.
+Missing justification is blocking — the governing convention (§5) is
+unconfirmed, so the reasoning has to be written down contemporaneously and
+retained with the five-year records.
+
+```jsonc
+{
+  "type": "split",
+  "prior_account_keys": ["wallet-profile"],
+  "current_account_keys": ["wallet-eur", "wallet-usd"],
+  "reason": "Institution now issues a per-currency balance ID.",
+  "reporting_model_changed": true,
+  "justification": "Statements and the year-end summary are now issued per balance ID, so a profile-level maximum can no longer be tied to a statement."
+}
+```
+
+---
+
+## 7. Validators
+
+| ID | Check | Severity |
+|---|---|---|
+| V1 | Every FX rate is sourced `treasury`; anything else warns with the fiscaldata URL | warn |
+| V2 | Every FX rate `as_of` is Dec 31 of the tax year | error |
+| V3 | `max_value_usd` recomputes within $1 — from `max_value_local ÷ units_per_usd`, or from the USD sum of `max_value_components` | error |
+| V4 | Aggregate maximum vs the $10,000 threshold, with the arithmetic printed | info (warns when an undetermined maximum undercuts a "no filing" conclusion) |
+| V5 | Threshold tripped → every account reportable unless a `not_reportable_reason` is recorded | error |
+| V6 | 25 or more reportable accounts → Item 14a path, detail retained but not filed | info |
+| V7 | Each reportable account has a complete institution address (Items 17, 19, 20, 22, 23; Item 21 State is optional) | warn |
+| V8 | Prior-year `max_value_unknown` accounts are resolved, or carry a re-justification | warn — **never blocking**, Item 15a is a valid position |
+| V9 | `conventions_applied` changed from the prior year for the same `account_key` | warn |
+| V10 | Any separately-owned account → separate FBARs required, so `form_114a_spousal` must be false | error |
+| V11 | Filing date against April 15 / October 15; retention horizon; delinquency relief pointer | info (warn past the extended deadline) |
+| V12 | Reportable account asserting a determined maximum on a basis weaker than full-year statements, without electing Item 15a | warn |
+| V13 | Every `source_documents[]` path exists in the workspace | warn |
+
+**Severity contract:** `blocking` and `error` exit non-zero with
+`"isError": true` in the payload. `warn`, `info` and `ok` do not. Warnings never
+block — Item 15a elections and a Treasury rate not yet substituted are
+legitimate interim states, and a tool that refused to run on them would be
+worked around instead of used.
+
+### V10: the two uses of Form 114a
+
+Form 114a has two independent uses and the roster carries them as separate
+flags:
+
+- `form_114a_spousal` — one spouse authorized to file on the other's behalf.
+  Available **only** when all accounts are jointly owned.
+- `form_114a_preparer` — a third-party preparer authorized to file (Form 114
+  box 44a). Unrelated to ownership, and entirely compatible with separate
+  filings.
+
+V10 looks only at the first. Conflating them hard-errors on the correct, normal
+pattern: separate FBARs plus a paid preparer.
+
+---
+
+## 8. FBAR vs Form 8938 (FATCA)
+
+Related, frequently confused, **not** interchangeable — different thresholds,
+different agency, different form, and filing one does not satisfy the other. An
+account can easily be reportable on both.
+
+| | FBAR (FinCEN 114) | Form 8938 |
+|---|---|---|
+| Filed with | FinCEN, via BSA E-Filing — separate from the return | The Form 1040 |
+| Threshold | Aggregate over $10,000 at any time | Higher, and varies by filing status and residence |
+| Deadline | April 15, automatic extension to October 15 | The return's due date, including extensions |
+
+Form 8938 is **out of scope** for this plugin. See `docs/limitations.md`.
+
+---
+
+## 9. Workflow
+
+Phase 1 (Claude) extracts; Phase 3 (Python) does the arithmetic and rule
+enforcement — the same split as every other tool here.
+
+```
+Phase 1  (Claude)   Read statements + the prior-year filed 114 PDF
+                    -> emit fbar_roster_<filer>_<year>.json
+                    -> USER CONFIRMATION GATE (SOP Phase 2)
+                            |
+Phase 3  (Python)   fbar_reconciler.py
+                    |-- normalize + match         -> identity resolution
+                    |-- disposition state machine -> every prior account resolved
+                    |-- validators V1-V13
+                    '-- reconciliation.md + worksheet.md + roster.json
+```
+
+```bash
+# Reconcile the current year against the prior year
+python ./scripts/fbar_reconciler.py reconcile \
+    --current ./fbar_roster_primary_2025.json \
+    --prior   ./fbar_roster_primary_2024.json \
+    --output-dir ./out
+
+# First cycle: validate one roster with no prior year
+python ./scripts/fbar_reconciler.py validate --roster ./fbar_roster_primary_2025.json
+
+# Keying worksheet only
+python ./scripts/fbar_reconciler.py worksheet --roster ./fbar_roster_primary_2025.json
+```
+
+Outputs: `fbar_reconciliation_<filer>_<year>.md` (dispositions, findings,
+conventions, threshold arithmetic), `fbar_worksheet_<filer>_<year>.md` (one
+block per reportable account, labelled with live Form 114 item numbers), the
+machine-readable findings JSON, and the normalized roster — which becomes next
+year's `--prior` input. That round trip is what makes the reconciliation
+self-sustaining after the first cycle.
+
+The emitted roster deliberately carries **no `identity_changes`**. Those
+describe the transition *into* the year just reconciled; a split's
+`prior_account_keys` name accounts that no longer exist on the roster they would
+be carried into, so keeping them would fail the very next run. The declarations
+and their justifications live in the reconciliation report and findings JSON
+written beside it — which is what the five-year recordkeeping rule needs — and
+the account-level link survives in each record's `aliases[]`.
+
+### Reading the prior-year filing
+
+The filed Form 114 **Part II Continuation Statement** is a clean tabular PDF —
+institution and address, account number, maximum value, the amount-unknown flag,
+account type — and reads reliably with the `Read` tool. Direct extraction at
+those tables and the typed value overlays; the form-body boilerplate text layer
+is font-obfuscated. Field mapping is in `references/form_processing.md`.
+
+**Take prior-year values from the filed form, never re-quoted from workpaper
+prose.** Workpapers that restate last year's maxima drift by a dollar or two
+through rounding. Harmless in isolation, and exactly the copy error the
+roster-to-roster pipeline eliminates.
+
+Record honestly what the workspace actually holds. `prior_year.source`
+distinguishes a BSA acknowledgment copy (`form_114_filed`) from a preparer
+review copy (`form_114_review_copy_pdf`) — they are not the same evidence.
+
+---
+
+## 10. Manual checklist
+
+Things no script can check. Run these before filing.
+
+- [ ] **Every institution named anywhere in the workpapers resolves to a roster
+      entry.** Free text in an action item or a note is not machine-reconcilable;
+      a bank that appears in prose but on no roster is either a stray word or an
+      entirely unrostered institution.
+- [ ] Every account the taxpayer *holds* is on the roster, not merely every
+      account with a statement. The threshold aggregates all foreign financial
+      accounts, including ones that produced no income and ones that are trivial.
+- [ ] Signature-authority-only accounts (Part IV) are handled by hand — the
+      reconciler carries them but does not reconcile or emit worksheets for them.
+- [ ] Each spouse's filing obligation was decided separately. Any
+      separately-owned account means two FBARs.
+- [ ] The Item 15a election, where used, has a contemporaneous note saying why
+      the maximum could not be determined.
+- [ ] Supporting records for every account are actually in the workspace and
+      will still be there five years from the due date.
+- [ ] Figures were confirmed against final bank records before transmission.
+
+---
+
+## 11. Limits
+
+This module produces **worksheets and findings, not a filed form.** It does not
+generate BSA E-Filing XML or a transmittable PDF; it does not parse bank
+statements; it does not handle Form 8938, Part IV or Part V. FinCEN 114 is
+transmitted through BSA E-Filing by the taxpayer or their preparer, and every
+figure must be confirmed against final bank records first.
+
+This is not tax or legal advice. See `DISCLAIMER.md` and `docs/limitations.md`.
