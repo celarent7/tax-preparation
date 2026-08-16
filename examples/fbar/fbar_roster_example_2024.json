@@ -1,0 +1,127 @@
+{
+  "schema_version": "1.0",
+  "tax_year": 2024,
+  "filer": {
+    "slug": "example",
+    "name": "Example Filer",
+    "filing_capacity": "individual",
+    "files_separately_from_spouse": true,
+    "form_114a_spousal": false,
+    "form_114a_preparer": true
+  },
+  "fx_rates": [
+    {
+      "currency": "EUR",
+      "units_per_usd": 0.9,
+      "as_of": "2024-12-31",
+      "source": "treasury",
+      "source_url": "https://fiscaldata.treasury.gov/datasets/treasury-reporting-rates-exchange/"
+    },
+    {
+      "currency": "GEL",
+      "units_per_usd": 2.8,
+      "as_of": "2024-12-31",
+      "source": "treasury"
+    }
+  ],
+  "accounts": [
+    {
+      "account_key": "example-bank-brokerage",
+      "aliases": ["12345678M"],
+      "institution": {
+        "name": "Example Bank",
+        "country": "GE",
+        "address": {
+          "street": "1 Example Street",
+          "city": "Tbilisi",
+          "postal_code": "0100"
+        }
+      },
+      "account_number": "12345678M",
+      "account_type": "securities",
+      "ownership": "separate",
+      "currencies": ["GEL"],
+      "max_value_local": 28000.0,
+      "max_value_currency": "GEL",
+      "max_value_date": "2024-06-30",
+      "max_value_usd": 10000.0,
+      "max_value_basis": "statement_full_year",
+      "year_end_balance_usd": 9000.0,
+      "reportable": true,
+      "account_status": "open",
+      "source_documents": ["statements/example-bank-2024.md"]
+    },
+    {
+      "account_key": "wallet-profile",
+      "aliases": ["PROFILE-9001"],
+      "institution": {
+        "name": "Example Wallet",
+        "country": "BE",
+        "address": {
+          "street": "2 Wallet Avenue",
+          "city": "Brussels",
+          "postal_code": "1000"
+        }
+      },
+      "account_number": "PROFILE-9001",
+      "account_type": "other",
+      "account_type_other_desc": "E-money wallet",
+      "ownership": "separate",
+      "currencies": ["EUR", "USD"],
+      "max_value_unknown": true,
+      "max_value_basis": "unknown",
+      "reportable": true,
+      "account_status": "open",
+      "conventions_applied": ["multi_currency_single_account"],
+      "notes": "Item 15a elected on the 2024 filing: statements not received."
+    },
+    {
+      "account_key": "example-bank-savings-closed",
+      "institution": {
+        "name": "Example Bank",
+        "country": "GE",
+        "address": {
+          "street": "1 Example Street",
+          "city": "Tbilisi",
+          "postal_code": "0100"
+        }
+      },
+      "account_number": "55550001",
+      "account_type": "bank",
+      "ownership": "separate",
+      "currencies": ["GEL"],
+      "max_value_local": 5600.0,
+      "max_value_currency": "GEL",
+      "max_value_usd": 2000.0,
+      "max_value_basis": "statement_full_year",
+      "reportable": true,
+      "account_status": "open",
+      "source_documents": ["statements/example-bank-2024.md"]
+    },
+    {
+      "account_key": "example-bank-legacy",
+      "institution": {
+        "name": "Example Bank",
+        "country": "GE",
+        "address": {
+          "street": "1 Example Street",
+          "city": "Tbilisi",
+          "postal_code": "0100"
+        }
+      },
+      "account_number": "55550002",
+      "account_type": "bank",
+      "ownership": "separate",
+      "currencies": ["GEL"],
+      "max_value_unknown": true,
+      "max_value_basis": "unknown",
+      "reportable": true,
+      "account_status": "dormant",
+      "notes": "Item 15a elected: institution stopped issuing statements in 2019."
+    }
+  ],
+  "prior_year": {
+    "tax_year": 2023,
+    "source": "none"
+  }
+}

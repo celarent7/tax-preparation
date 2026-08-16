@@ -1,0 +1,230 @@
+{
+  "_comment": "SYNTHETIC fixture. Carries the shapes of the real defects the module was built for (docs/fbar_module_plan.md D1-D5, D7) with invented institutions, numbers and amounts. No taxpayer data.",
+  "schema_version": "1.0",
+  "tax_year": 2025,
+  "filer": {
+    "slug": "example",
+    "name": "Example Filer",
+    "filing_capacity": "individual",
+    "files_separately_from_spouse": true,
+    "form_114a_spousal": false,
+    "form_114a_preparer": true
+  },
+  "fx_rates": [
+    {
+      "currency": "EUR",
+      "units_per_usd": 0.8522,
+      "as_of": "2025-12-31",
+      "source": "xe",
+      "source_url": "https://www.xe.com/",
+      "_comment": "D4 shape: a mid-market rate standing in for the Treasury rate. Fires V1."
+    },
+    {
+      "currency": "GEL",
+      "units_per_usd": 2.7,
+      "as_of": "2025-12-31",
+      "source": "treasury",
+      "source_url": "https://fiscaldata.treasury.gov/datasets/treasury-reporting-rates-exchange/"
+    }
+  ],
+  "accounts": [
+    {
+      "account_key": "example-bank-brokerage",
+      "aliases": ["12345678M", "123456/78-м"],
+      "institution": {
+        "name": "Example Bank",
+        "country": "GE",
+        "address": {
+          "street": "1 Example Street",
+          "city": "Tbilisi",
+          "postal_code": "0100"
+        }
+      },
+      "account_number": "123456/78-м",
+      "_comment": "D5 shape: the same identifier as 2024's 12345678M, rendered with a Cyrillic м and different punctuation. Naive matching would call this one closed plus one new account.",
+      "account_type": "securities",
+      "ownership": "separate",
+      "currencies": ["GEL"],
+      "max_value_local": 32400.0,
+      "max_value_currency": "GEL",
+      "max_value_date": "2025-07-15",
+      "max_value_usd": 12000.0,
+      "max_value_basis": "statement_full_year",
+      "year_end_balance_usd": 11000.0,
+      "reportable": true,
+      "account_status": "open",
+      "source_documents": ["statements/example-bank-2025.md"]
+    },
+    {
+      "account_key": "wallet-eur",
+      "aliases": ["PROFILE-9001", "WALLET-EUR-77"],
+      "institution": {
+        "name": "Example Wallet",
+        "country": "BE",
+        "address": {
+          "street": "2 Wallet Avenue",
+          "city": "Brussels",
+          "postal_code": "1000"
+        }
+      },
+      "account_number": "WALLET-EUR-77",
+      "account_type": "other",
+      "account_type_other_desc": "E-money wallet",
+      "ownership": "separate",
+      "currencies": ["EUR"],
+      "max_value_local": 1704.4,
+      "max_value_currency": "EUR",
+      "max_value_date": "2025-03-02",
+      "max_value_usd": 2000.0,
+      "max_value_basis": "statement_full_year",
+      "reportable": true,
+      "account_status": "open",
+      "source_documents": ["statements/example-wallet-2025.md"]
+    },
+    {
+      "account_key": "wallet-usd",
+      "aliases": ["PROFILE-9001", "WALLET-USD-78"],
+      "institution": {
+        "name": "Example Wallet",
+        "country": "BE",
+        "address": {
+          "street": "2 Wallet Avenue",
+          "city": "Brussels",
+          "postal_code": "1000"
+        }
+      },
+      "account_number": "WALLET-USD-78",
+      "account_type": "other",
+      "account_type_other_desc": "E-money wallet",
+      "ownership": "separate",
+      "currencies": ["USD"],
+      "max_value_local": 500.0,
+      "max_value_currency": "USD",
+      "max_value_date": "2025-03-02",
+      "max_value_usd": 500.0,
+      "max_value_basis": "statement_full_year",
+      "reportable": true,
+      "account_status": "open",
+      "source_documents": ["statements/example-wallet-2025.md"]
+    },
+    {
+      "account_key": "example-bank-savings-closed",
+      "institution": {
+        "name": "Example Bank",
+        "country": "GE",
+        "address": {
+          "street": "1 Example Street",
+          "city": "Tbilisi",
+          "postal_code": "0100"
+        }
+      },
+      "account_number": "55550001",
+      "account_type": "bank",
+      "ownership": "separate",
+      "currencies": ["GEL"],
+      "max_value_local": 2700.0,
+      "max_value_currency": "GEL",
+      "max_value_usd": 1000.0,
+      "max_value_basis": "statement_partial",
+      "_comment": "V12 shape: a determined maximum resting on part-year statements, with Item 15a not elected.",
+      "reportable": true,
+      "account_status": "closed",
+      "closed_date": "2025-03-01",
+      "source_documents": ["statements/example-bank-2025.md"]
+    },
+    {
+      "account_key": "example-bank-legacy",
+      "institution": {
+        "name": "Example Bank",
+        "country": "GE",
+        "address": {
+          "street": "1 Example Street",
+          "city": "Tbilisi",
+          "postal_code": "0100"
+        }
+      },
+      "account_number": "55550002",
+      "account_type": "bank",
+      "ownership": "separate",
+      "currencies": ["GEL"],
+      "max_value_unknown": true,
+      "max_value_basis": "unknown",
+      "_comment": "D3 shape: Item 15a carried forward from 2024 with no contemporaneous re-justification. Fires V8 as a warning — Item 15a is a valid position, so this must never block.",
+      "reportable": true,
+      "account_status": "dormant"
+    },
+    {
+      "account_key": "example-card",
+      "institution": {
+        "name": "Example Card Issuer",
+        "country": "CO",
+        "address": {
+          "street": "3 Card Road",
+          "city": "Medellin",
+          "postal_code": "050001"
+        }
+      },
+      "account_number": "4000-0000-0000-1234",
+      "account_type": "other",
+      "account_type_other_desc": "Credit card",
+      "ownership": "separate",
+      "currencies": ["COP"],
+      "max_value_usd": 0.0,
+      "max_value_basis": "statement_full_year",
+      "year_end_balance_usd": 0.0,
+      "reportable": false,
+      "not_reportable_reason": "Never carried a positive balance; the holder owed the issuer throughout.",
+      "account_status": "open",
+      "conventions_applied": ["credit_card_positive_balance_only", "negative_balance_is_zero"],
+      "notes": "D2 shape: the card existed before 2025 but was absent from the 2024 filing. Rostered now so the omission is on the record rather than repeated silently.",
+      "source_documents": ["statements/example-card-2025.pdf"],
+      "_comment": "D7 shape: the cited statement is not present in the workspace. Fires V13."
+    },
+    {
+      "account_key": "multicurrency-iban",
+      "aliases": ["GE00EX0000000000000001"],
+      "institution": {
+        "name": "Example Multicurrency Bank",
+        "country": "GE",
+        "address": {
+          "street": "4 Rustaveli Avenue",
+          "city": "Tbilisi",
+          "postal_code": "0108"
+        }
+      },
+      "account_number": "GE00EX0000000000000001",
+      "account_type": "bank",
+      "ownership": "separate",
+      "currencies": ["GEL", "EUR", "USD"],
+      "max_value_components": [
+        {"currency": "GEL", "amount": 2700.0},
+        {"currency": "EUR", "amount": 852.2},
+        {"currency": "USD", "amount": 1000.0}
+      ],
+      "max_value_date": "2025-09-10",
+      "max_value_usd": 3000.0,
+      "max_value_basis": "statement_full_year",
+      "reportable": true,
+      "account_status": "open",
+      "opened_date": "2025-02-14",
+      "conventions_applied": ["multi_currency_single_account"],
+      "notes": "Three currency sub-wallets under one IBAN, summed at the combined-peak instant per the multi_currency_single_account convention (unconfirmed — see references/fbar_guide.md).",
+      "source_documents": ["statements/example-multicurrency-2025.md"]
+    }
+  ],
+  "identity_changes": [
+    {
+      "type": "split",
+      "prior_account_keys": ["wallet-profile"],
+      "current_account_keys": ["wallet-eur", "wallet-usd"],
+      "reason": "The institution now issues a per-currency balance ID; the 2024 filing used the profile-level ID.",
+      "reporting_model_changed": true,
+      "justification": "D1 shape. The 2024 filing reported one account at the profile level; 2025 reports two, one per currency balance. Adopted because the institution's own statements and its year-end summary are now issued per balance ID, so a profile-level maximum can no longer be tied to a statement. The multi_currency_single_account convention is unconfirmed against FinCEN guidance, so this reasoning is recorded contemporaneously and retained with the five-year records."
+    }
+  ],
+  "prior_year": {
+    "tax_year": 2024,
+    "roster_file": "fbar_roster_example_2024.json",
+    "source": "form_114_review_copy_pdf"
+  }
+}
