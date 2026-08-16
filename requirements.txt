@@ -1,5 +1,5 @@
-pandas==2.2.2
-pdfplumber==0.11.0
 pytest==8.2.1
 mcp==1.2.0
-# PyPDF2==3.0.1 (Alternative to pdfplumber)
+# PDF reading is done by the agent's Read tool in Phase 1, not by a library —
+# `pdfplumber` and `pandas` were listed here but imported nowhere in scripts/,
+# tests/ or evals/, so they were removed rather than installed unused.

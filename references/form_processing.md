@@ -70,6 +70,54 @@ Detailed field-mapping tables for extracting data from tax documents via the Rea
 
 ---
 
+## Prior-Year FinCEN 114 (FBAR)
+
+Used to build the prior-year roster that `scripts/fbar_reconciler.py` reconciles
+against. Extract from the **Part II Continuation Statement**, not the form body:
+the body's boilerplate text layer is font-obfuscated in these PDFs, while the
+continuation tables and the typed value overlays extract cleanly with the `Read`
+tool. Part III (jointly owned) uses the same item numbers plus Item 24.
+
+Take every figure from the filed form itself. Workpapers that restate last
+year's maxima drift by a dollar or two through rounding, and re-quoting them
+propagates the drift into the reconciliation.
+
+### Part II / Part III Extraction Fields
+
+| Item | Field on the form | Record As (roster field) |
+|------|-------------------|--------------------------|
+| 15 | Maximum Account Value (US $) | `max_value_usd` |
+| 15 | Foreign Currency amount | `max_value_local` + `max_value_currency` |
+| 15a | Max Acct Value Unknown (checkbox) | `max_value_unknown` |
+| 16 | Type of Account (BANK / SECURITIES / OTHER) | `account_type` (`bank` / `securities` / `other`) |
+| 16 | OTHER description | `account_type_other_desc` |
+| 17 | Financial Institution's Name | `institution.name` |
+| 18 | Account Number or Other Designation | `account_number` — **verbatim**, including punctuation and any non-Latin characters |
+| 19 | Mailing Address | `institution.address.street` |
+| 20 | City | `institution.address.city` |
+| 21 | State | `institution.address.state_province` (often blank; not required) |
+| 22 | Foreign Postal Code | `institution.address.postal_code` |
+| 23 | Country | `institution.country` (ISO-2) |
+| 24 | Number of Joint Owners (Part III only) | length of `joint_owners` |
+
+### Extraction Notes
+
+- **Item 18 verbatim.** Do not tidy the account number — no punctuation
+  normalization, no transliteration of Cyrillic or Greek characters. The
+  reconciler normalizes internally for matching; the recorded value must stay as
+  the institution rendered it.
+- **Which part the account came from** determines `ownership`: Part II →
+  `separate`, Part III → `joint`, Part IV → `signature_authority`.
+- **Item 15a checked** means the maximum was not determined. Record
+  `max_value_unknown: true` and leave `max_value_usd` unset — supplying both is
+  rejected by the schema.
+- **Assign a stable `account_key`** per account and put the Item 18 value into
+  `aliases[]`. That pair is what lets next year's run survive a renumbering.
+- Note whether the PDF is a BSA E-Filing acknowledgment copy or a preparer
+  review copy, and record it in `prior_year.source`.
+
+---
+
 ## RSU and Stock Compensation Documents
 
 **CRITICAL: RSU cost basis is the #1 source of tax errors. Always verify basis.**

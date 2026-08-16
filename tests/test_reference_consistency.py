@@ -234,6 +234,133 @@ def test_every_script_referenced_in_docs_exists():
 
 
 # ---------------------------------------------------------------------------
+# FBAR — fbar_guide.md figures must match the constants and the code registry
+# ---------------------------------------------------------------------------
+
+
+def test_fbar_guide_figures_match_constants():
+    """Every dollar figure and period in the rules table comes from the constants.
+
+    The guide is the human-readable face of the `fbar` block; a number restated
+    here that drifts from `tax_constants.json` would send an agent to the wrong
+    threshold or the wrong penalty ceiling.
+    """
+    from fbar_schema import fbar_penalty_maximum  # noqa: E402
+
+    fbar = TAX_2025["fbar"]
+    rows = "\n".join(rows_between(read_ref("fbar_guide.md"),
+                                  "<!-- FBAR_RULES -->", "<!-- /FBAR_RULES -->"))
+
+    # Prose spells small counts out; accept either rendering so the test binds
+    # to the constant rather than to a house style.
+    words = {5: "five", 25: "twenty-five"}
+
+    def stated(value, unit):
+        return (f"{value} {unit}" in rows) or (f"{words.get(value, value)} {unit}" in rows)
+
+    assert f"${fbar['threshold_usd']:,}" in rows
+    assert stated(fbar["recordkeeping_years"], "years")
+    assert stated(fbar["aggregate_max_account_count_detail_limit"], "or more accounts")
+
+    penalty = fbar_penalty_maximum(fbar, __import__("datetime").date(2025, 6, 1))
+    assert f"${penalty['non_willful_max']:,}" in rows
+    assert f"${penalty['willful_max']:,}" in rows
+    assert f"{int(penalty['willful_balance_percent'] * 100)}%" in rows
+
+    deadline = fbar["deadline"]
+    assert f"April {deadline['due_day']}" in rows
+    assert f"October {deadline['extended_day']}" in rows
+
+
+def test_fbar_guide_threshold_boundary_is_stated_as_exceeds():
+    """`threshold_test` is 'exceeds'; the guide must not read as >=."""
+    fbar = TAX_2025["fbar"]
+    assert fbar["threshold_test"] == "exceeds"
+    text = read_ref("fbar_guide.md")
+    assert "exceeded $10,000 at any time" in text
+    assert "Exactly $10,000 does not trip it" in text
+
+
+def test_fbar_guide_conventions_match_the_code_registry():
+    """The published convention table and CONVENTIONS cannot drift apart.
+
+    These are unconfirmed, filer-adopted treatments. A convention applied by the
+    engine but undocumented (or documented but unimplemented) is exactly the gap
+    that makes them look like settled rules.
+    """
+    from fbar_schema import CONVENTIONS  # noqa: E402
+
+    rows = rows_between(read_ref("fbar_guide.md"),
+                        "<!-- FBAR_CONVENTIONS -->", "<!-- /FBAR_CONVENTIONS -->")
+    published = {c.strip().strip("`")
+                 for row in rows
+                 for c in [row.strip().strip("|").split("|")[0]]
+                 if c.strip().startswith("`")}
+    assert published == set(CONVENTIONS), (
+        f"fbar_guide.md documents {sorted(published)}, "
+        f"fbar_schema.CONVENTIONS has {sorted(CONVENTIONS)}"
+    )
+
+
+def test_fbar_guide_validator_table_covers_every_implemented_validator():
+    import fbar_reconciler as fr  # noqa: E402
+
+    text = read_ref("fbar_guide.md")
+    implemented = sorted(
+        (name.split("_")[0].upper() for name in dir(fr)
+         if re.fullmatch(r"v\d+_\w+", name)),
+        key=lambda v: int(v[1:]),
+    )
+    missing = [v for v in implemented if f"| {v} |" not in text]
+    assert not missing, f"fbar_guide.md validator table is missing {missing}"
+
+
+def test_fbar_guide_dispositions_match_the_engine():
+    import fbar_reconciler as fr  # noqa: E402
+
+    text = read_ref("fbar_guide.md")
+    missing = [d for d in fr.DISPOSITION_SEVERITY if f"`{d}`" not in text]
+    assert not missing, f"fbar_guide.md is missing dispositions {missing}"
+
+
+def test_fbar_guide_does_not_claim_to_file():
+    """The plugin emits worksheets, never a transmittable form."""
+    text = read_ref("fbar_guide.md")
+    assert "worksheets and findings, not a filed form" in text
+    assert "BSA E-Filing" in text
+
+
+def test_limitations_no_longer_claims_an_fbar_tracker():
+    """docs/limitations.md asserted 'we provide an FBAR tracker' when none existed."""
+    with open(os.path.join(ROOT, "docs", "limitations.md")) as f:
+        text = f.read()
+    assert "we provide an FBAR tracker" not in text
+    assert "fbar_reconciler.py" in text
+    assert "Form 8938" in text
+
+
+def test_requirements_lists_no_unimported_third_party_package():
+    """`pdfplumber` and `pandas` sat in requirements.txt imported by nothing."""
+    import glob
+
+    with open(os.path.join(ROOT, "requirements.txt")) as f:
+        declared = [line.split("==")[0].split(">=")[0].strip()
+                    for line in f
+                    if line.strip() and not line.strip().startswith("#")]
+
+    sources = "\n".join(
+        open(p).read()
+        for folder in ("scripts", "tests", "evals")
+        for p in glob.glob(os.path.join(ROOT, folder, "**", "*.py"), recursive=True)
+    )
+
+    unused = [pkg for pkg in declared
+              if pkg != "pytest"
+              and not re.search(rf"^\s*(?:import|from)\s+{re.escape(pkg)}\b", sources, re.M)]
+    assert not unused, f"requirements.txt declares packages nothing imports: {unused}"
+
+
+# ---------------------------------------------------------------------------
 # Y6 — plugin.json and SKILL.md metadata versions must stay in sync
 # ---------------------------------------------------------------------------
 

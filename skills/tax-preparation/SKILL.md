@@ -14,8 +14,8 @@ description: >
   results than general knowledge alone.
 allowed-tools: Read, Bash, WebSearch, WebFetch, Grep, Glob, Task, Skill, Write, AskUserQuestion
 metadata:
-  version: 3.2.0
-  last-updated: 2026-07-30
+  version: 3.3.0
+  last-updated: 2026-08-15
   target-users: individuals, families, self-employed
   tax-year: 2025
   supported-tax-years: "2023-2026"
@@ -166,6 +166,56 @@ python ./scripts/rsu_calculator.py basis --shares-vested <shares> --fmv <fmv>
 > wage cap) the credit cannot arise — do not flag a missing line 74. The
 > reviewer's `check_excess_sdi` handles this automatically for CA returns.
 
+### Step 6: FBAR (foreign accounts)
+
+**Trigger**: any foreign financial account — bank, brokerage, e-money wallet or
+credit card held outside the US — regardless of whether it produced taxable
+income. Schedule B Part III answering "Yes" is a trigger, not the test.
+
+FBAR is filed **separately from the return**, through FinCEN's BSA E-Filing
+system, and is due April 15 with an automatic extension to October 15.
+
+**Workflow:**
+1. **Build the roster** (Phase 1): read each account's statements and the
+   prior-year filed Form 114 PDF, and emit
+   `fbar_roster_<filer_slug>_<year>.json` per the schema in
+   `./scripts/fbar_schema.py`. Extract prior-year values from the filed form's
+   Part II Continuation Statement, never re-quoted from workpaper prose. Confirm
+   the roster with the user (Phase 2 gate) before running anything.
+2. **Reconcile against the prior year** (Phase 3):
+   ```bash
+   python ./scripts/fbar_reconciler.py reconcile \
+       --current ./fbar_roster_primary_2025.json \
+       --prior   ./fbar_roster_primary_2024.json \
+       --output-dir ./out
+   ```
+   First cycle, with no prior roster: `validate --roster <file>`.
+3. **Resolve blocking findings.** The tool exits non-zero with `isError: true`
+   when a prior-year account has no disposition (`UNRESOLVED`), a current-year
+   account has no explanation (`NEW_UNEXPLAINED`), or a reporting-model change
+   carries no written justification. Each is a question only the taxpayer can
+   answer — surface it, do not guess.
+4. **Manual checklist**: work through §10 of `./references/fbar_guide.md`.
+
+> **Separate FBARs.** Spouses file one FBAR only when **all** accounts are
+> jointly owned and both sign Form 114a. Any separately-owned account forces two
+> filings. Note that Form 114a's *third-party preparer* authorization (Form 114
+> box 44a) is a different, unrelated use of the same form and does not affect
+> this.
+
+> **Item 15a "amount unknown" is a legitimate filing position**, not a defect —
+> available to filers with fewer than 25 accounts. The tool warns so it does not
+> ride along unresolved for years; it never blocks.
+
+> **Exchange rates**: the Treasury Reporting Rate of Exchange for the **last day
+> of the calendar year** — not the rate on the date the account peaked, and not a
+> commercial mid-market rate.
+
+**This produces a keying worksheet, never a filed form.** Transmission goes
+through the taxpayer or their preparer. Form 8938 (FATCA), Part IV
+(signature-authority-only) and Part V (consolidated) are out of scope — see
+`./docs/limitations.md`.
+
 ---
 
 ## Scripts Reference
@@ -180,6 +230,8 @@ python ./scripts/rsu_calculator.py basis --shares-vested <shares> --fmv <fmv>
 | `./scripts/draft_reviewer.py` | Cross-check draft returns against verified data |
 | `./scripts/credit_eligibility_checker.py` | Tax-credit eligibility & amount checker (CTC, EITC, CDCC, AOTC, Saver's) incl. LLC, no-1116 FTC, and 2023–2025 clean-energy credits (30D/25E/25C/25D). `--year` switches the constants; vehicle credits enforce the OBBBA 2025-09-30 cut-off by purchase date and the §30D/§25E lesser-of-current/prior-MAGI rule; 2026 returns "not available" for energy credits rather than raising. |
 | `./scripts/qbi_calculator.py` | §199A QBI deduction (Form 8995/8995-A): adjusted QBI, SSTB phase-out, wage/UBIA limit, REIT/PTP component, overall taxable-income limit, negative-QBI carryforward, and the 2026 OBBBA $400 minimum. Sole-prop/Schedule-C + 1099-DIV Box 5 only — K-1 pass-throughs are rejected (see `./docs/limitations.md`). |
+| `./scripts/fbar_reconciler.py` | FinCEN 114 (FBAR) year-over-year reconciliation: matches accounts across years through renumbering, splits, merges and Cyrillic/Latin homoglyph drift; forces every prior-year account to an explicit disposition; runs validators V1–V13 (Treasury FX provenance, USD recomputation, $10,000 threshold arithmetic, 25-account rule, addresses, Item 15a carry-forward, Form 114a spousal scope, retention); emits a reconciliation report, a Form 114 keying worksheet, and next year's roster. Part II/III only. See `./references/fbar_guide.md`. |
+| `./scripts/fbar_schema.py` | FBAR roster schema, enums, loader and the account-number normalizer (matching only — never for display) |
 | `./scripts/tax_savings_finder.py` | Proactive savings engine — reads a flat taxpayer profile and emits ranked opportunities (M1–M12: 401(k) headroom, backdoor Roth + pro-rata, mega backdoor, tax-loss harvesting, appreciated-stock donation, QCD, SE health insurance, §179/bonus, HSA, OBBBA senior bonus, tips/overtime, home office (M12)) with dollar estimates, deadlines, and CA nonconformity caveats. See `./references/tax_planning.md`. |
 
 ---
@@ -196,6 +248,7 @@ Load these when specific technical guidance is needed beyond built-in knowledge.
 | `./references/form_processing.md` | **Mandatory field-mapping** for extraction |
 | `./references/few_shots.md` | **Few-shot examples** for ambiguous form extraction |
 | `./references/draft_review_checklist.md` | Validation rules for draft returns |
+| `./references/fbar_guide.md` | FinCEN 114 rules, roster schema, dispositions, validators, and the manual pre-filing checklist |
 | `./docs/limitations.md` | **Out-of-scope scenarios** (AMT, K-1s, international) |
 
 ### Optional Employer-Specific References

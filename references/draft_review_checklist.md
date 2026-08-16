@@ -105,7 +105,12 @@ Comprehensive validation rules for reviewing a draft tax return before filing. U
 - Verify every 1099-INT and 1099-DIV is listed
 - Check for missing accounts (compare to prior year)
 - If total exceeds $1,500, Part III (foreign accounts) questions must be answered
-- FBAR/FATCA: If "Yes" to foreign accounts, verify FBAR filing requirement
+- FBAR/FATCA: If "Yes" to foreign accounts, verify FBAR filing requirement. This
+  is an *existence* check only — to actually produce the filing, build the
+  account roster and run `scripts/fbar_reconciler.py`. See
+  `references/fbar_guide.md`. Note the trigger is the aggregate **maximum**
+  value exceeding $10,000 at any time, not the year-end balances and not whether
+  the accounts produced income, so a "No" here is not proof no FBAR is due.
 
 ---
 
@@ -364,7 +369,10 @@ The following items were cross-checked and confirmed correct:
 ## Informational Notes
 
 <For each INFO finding, include a brief note, e.g.:>
-- FBAR: Foreign accounts indicated on Schedule B. Verify FinCEN 114 is filed separately.
+- FBAR: Foreign accounts indicated on Schedule B. FinCEN 114 is filed separately
+  through BSA E-Filing (April 15, automatic extension to October 15) and is not
+  part of this return. Run `scripts/fbar_reconciler.py` against the account
+  roster to reconcile it against the prior year; see `references/fbar_guide.md`.
 - RSU income: $<AMOUNT> in vesting income verified against W-2 Box 1.
 
 ---

@@ -99,6 +99,45 @@ Always request these from the user:
 - [ ] Investment interest expense carryforward
 - [ ] Form 8606 (IRA basis tracking)
 - [ ] Prior depreciation schedules
+- [ ] **Prior year filed FinCEN 114 (FBAR)** — if any foreign account exists.
+      This is the reconciliation baseline; without it there is no mechanical
+      guarantee that every account on last year's filing was carried forward,
+      closed out, or consciously dropped. Note whether it is a BSA E-Filing
+      acknowledgment copy or a preparer review copy — they are not the same
+      evidence.
+
+---
+
+## Foreign Accounts (FBAR / FinCEN 114)
+
+Collect these whenever the taxpayer holds **any** account outside the US — bank,
+brokerage, e-money wallet or credit card — regardless of whether it produced
+taxable income. The filing test is the aggregate **maximum** value across all
+such accounts exceeding $10,000 at any point in the year, so a single account
+that looks trivial can still be the one that trips it.
+
+- [ ] Statements for each account covering the **whole calendar year** — the
+      maximum can only be relied on from statements that fairly reflect it.
+      Period-end summaries alone hide intra-period peaks.
+- [ ] Account number **as the institution states it** (Item 18 takes it
+      verbatim, including punctuation and non-Latin characters)
+- [ ] Institution name, full mailing address, city, postal code and country
+      (Items 17, 19–23)
+- [ ] Account type: bank, securities, or other (with a description)
+- [ ] Ownership: separately owned, jointly owned (with the number of joint
+      owners), or signature authority only
+- [ ] Opening date for any account opened during the year; closing date for any
+      account closed during the year
+- [ ] **Form 114a** if a spouse or a third-party preparer will file on the
+      taxpayer's behalf — the two authorizations are independent
+- [ ] Treasury Reporting Rate of Exchange for **December 31** of the tax year,
+      for every non-USD currency held
+      (<https://fiscaldata.treasury.gov/datasets/treasury-reporting-rates-exchange/>)
+- [ ] Prior year's roster or filed Form 114 (see above)
+
+> Supporting records must be retained for **five years from the FBAR due date**.
+> Collect them into the workspace now — `fbar_reconciler.py` warns on any cited
+> source document that is not actually there.
 
 ---
 

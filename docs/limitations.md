@@ -11,7 +11,8 @@ The Tax Preparation Plugin is designed for standard US individual and family tax
 
 ## 2. International Situations
 - **Foreign Earned Income**: Form 2555 (FEIE) or complex housing exclusions.
-- **FATCA/FBAR Depth**: While we provide an FBAR tracker, complex offshore trust reporting (Form 3520) is not supported.
+- **FBAR (FinCEN 114)**: `scripts/fbar_reconciler.py` produces **worksheets and findings, not a filed form**. It reconciles a year's foreign-account roster against the prior year, forces every prior-year account to an explicit disposition, and emits a keying worksheet labelled with Form 114 item numbers. It does **not** generate BSA E-Filing XML or a transmittable PDF (transmission goes through the taxpayer or their preparer), does **not** parse bank statements into maxima (that is a Phase 1 extraction task), and covers **Part II (separately owned) and Part III (jointly owned) only** — Part IV (signature authority, no financial interest) and Part V (consolidated) are recorded in the roster but reconciled by hand. Several treatments it applies are **filer-adopted conventions unconfirmed against FinCEN guidance** (multi-currency sub-accounts, credit cards with no positive balance, negative balances as zero); they are surfaced in every report rather than presented as settled law. See `references/fbar_guide.md`.
+- **FATCA / Form 8938**: Not implemented. It is a separate regime from FBAR with different thresholds, a different agency and a different form, and filing one does not satisfy the other. Complex offshore trust reporting (Form 3520) is also not supported.
 - **Non-Resident Aliens**: Form 1040-NR and treaty-based position claims.
 
 ## 3. Advanced Investment Logic

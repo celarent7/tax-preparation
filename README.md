@@ -26,7 +26,7 @@ This plugin empowers individuals and families to take control of their US tax pr
 
 ### 🛡️ Quality & Verification
 - **Draft Reviewer**: Cross-check your draft tax return (PDF or manual) against computed data to catch errors before you file.
-- **FBAR Workflow**: Step-by-step guidance for tracking and reporting foreign bank accounts (FinCEN Form 114).
+- **FBAR Reconciler**: Reconciles a year's foreign-account roster against the prior year's FinCEN 114 filing, forcing every prior-year account to an explicit disposition, and emits a Form 114 keying worksheet. Worksheets and findings only — it does not file.
 
 ---
 
@@ -55,7 +55,7 @@ The plugin is structured for both direct execution and as a toolset for AI agent
     ```
 2.  Install dependencies:
     ```bash
-    pip install pandas pdfplumber pytest
+    pip install -r requirements.txt
     ```
 
 ### MCP Integration (for Claude)
