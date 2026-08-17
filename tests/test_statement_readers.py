@@ -647,3 +647,77 @@ def test_a_single_balance_line_cannot_establish_a_period(tmp_path):
                     "Balance on 21.12.2025: +1 500,00 ₽\n", encoding="utf-8")
     with pytest.raises(StatementParseError, match="bounded by two"):
         read_text_period_summary(str(path), TBANK_TEXT, currency="RUB")
+
+
+# ===========================================================================
+# xlsx_two_sheet_card — Shape D (plan §4.4)
+# ===========================================================================
+
+from statement_fixtures import bancolombia_card_workbook  # noqa: E402
+from statement_parser import read_xlsx_two_sheet_card  # noqa: E402
+from statement_profiles import BANCOLOMBIA_CARD  # noqa: E402
+
+
+def card_file(tmp_path, pesos=None, dolares=None, name="card_jan.xlsx"):
+    return bancolombia_card_workbook(
+        tmp_path / name, "30/12/2024", "30/01/2025",
+        pesos=pesos if pesos is not None else [
+            ("30/12", "Compra", "-100,000.00", "-100,000.00"),
+            ("5/01", "Pago", "150,000.00", "50,000.00"),
+        ],
+        dolares=dolares if dolares is not None else [
+            ("10/01", "Compra", "-50.00", "-50.00"),
+        ])
+
+
+def test_both_currency_sheets_of_one_card_are_read(tmp_path):
+    result = read_xlsx_two_sheet_card(card_file(tmp_path), BANCOLOMBIA_CARD)
+    assert sorted(result.currencies) == ["COP", "USD"]
+    assert sorted(result.sheets_read) == ["DOLARES", "PESOS"]
+    assert result.is_liability is True
+
+
+def test_the_january_card_period_opens_in_the_prior_calendar_year(tmp_path):
+    """The billing period runs ~30th -> ~30th, so `30/12` in the January file
+    is December 2024 — the concrete case, not a hypothetical one."""
+    result = read_xlsx_two_sheet_card(card_file(tmp_path), BANCOLOMBIA_CARD)
+    assert result.periods[0].start == date(2024, 12, 30)
+    cop = [m for m in result.movements if m.currency == "COP"]
+    assert cop[0].date == date(2024, 12, 30)
+
+
+def test_row_order_is_unique_across_the_two_sheets(tmp_path):
+    """Two sheets restarting at zero would tie on the merged event axis and
+    make the ordering non-deterministic."""
+    result = read_xlsx_two_sheet_card(card_file(tmp_path), BANCOLOMBIA_CARD)
+    orders = [m.row_order for m in result.movements]
+    assert len(orders) == len(set(orders))
+
+
+def test_the_sign_is_reported_per_currency_and_no_convention_applied(tmp_path):
+    result = read_xlsx_two_sheet_card(card_file(tmp_path), BANCOLOMBIA_CARD)
+    cop_note = next(w for w in result.warnings if "[COP]" in w)
+    usd_note = next(w for w in result.warnings if "[USD]" in w)
+    assert "1 of 2 positive" in cop_note      # the overpayment after the Pago
+    assert "0 of 1 positive" in usd_note
+    assert "does not apply" in cop_note
+
+
+def test_a_card_arriving_with_one_sheet_is_named_not_read_silently(tmp_path):
+    path = write_xlsx(tmp_path / "half.xlsx", {"PESOS": [
+        ["Período Facturado Desde:", "30/12/2024"],
+        ["Período Facturado Hasta:", "30/01/2025"],
+        ["FECHA", "DESCRIPCIÓN", "VALOR", "SALDO"],
+        ["5/01", "Compra", "-100.00", "-100.00"],
+    ]})
+    result = read_xlsx_two_sheet_card(path, BANCOLOMBIA_CARD)
+    assert any("DOLARES not present" in w for w in result.warnings)
+    assert any("understates" in w for w in result.warnings)
+
+
+def test_a_card_profile_that_forgot_the_liability_flag_is_refused(tmp_path):
+    from dataclasses import replace as dataclass_replace
+
+    asset_shaped = dataclass_replace(BANCOLOMBIA_CARD, is_liability=False)
+    with pytest.raises(StatementParseError, match="not marked is_liability"):
+        read_xlsx_two_sheet_card(card_file(tmp_path), asset_shaped)

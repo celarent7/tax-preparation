@@ -454,6 +454,9 @@ class ReadResult:
     #: basis. `running_balance` can in principle support a full year;
     #: `period_end_summaries` never can, however many files there are.
     evidence_kind: str = EVIDENCE_NONE
+    #: Names of the sheets actually read, so a caller can tell that a
+    #: two-sheet source arrived with one sheet.
+    sheets_read: List[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -776,6 +779,8 @@ def _read_one_sheet(worksheet, sheet_name: str, profile, source_file: str,
     """Append one sheet's movements to `result`. See `read_xlsx_running_balance`."""
     where = f"{source_file}[{sheet_name}]"
     rows = read_sheet_rows(worksheet)
+
+    result.sheets_read.append(sheet_name)
 
     header = find_header_row(rows, profile)
     if header is None:
@@ -1507,3 +1512,68 @@ def _check_summary_totals(lines, profile, result: ReadResult, source_file: str,
             f"{observed - stated}. Either a total was misread or a sign was "
             "lost — the Expenses line carries U+2212, not an ASCII hyphen. "
             f"Totals read: {', '.join(f'{k}={v}' for k, v in sorted(totals.items()))}.")
+
+
+# ---------------------------------------------------------------------------
+# Reader: xlsx_two_sheet_card (plan §4.4, step 6)
+# ---------------------------------------------------------------------------
+
+
+def read_xlsx_two_sheet_card(path: str,
+                             profile,
+                             period_start: Optional[Any] = None,
+                             period_end: Optional[Any] = None) -> ReadResult:
+    """Read a credit-card statement carrying one sheet per currency.
+
+    Extraction is the running-balance reader's job — a card statement is the
+    same shape with two sheets. What this adds is the two things that are
+    specific to a LIABILITY source and would otherwise be forgotten:
+
+      * **The sign is reported, and reported per currency.** Credit-card
+        balances are liabilities; only an overpayment (positive) balance is an
+        asset. That is the existing `credit_card_positive_balance_only`
+        convention, and applying it is Claude's call — so the reader states
+        what the signs were and stops there (hazard 9.7).
+      * **A missing sheet is named.** Two sheets describe one card. A file that
+        arrives with one has half the card's activity, and silently reading the
+        half would understate every figure derived from it.
+
+    Refuses a profile that is not marked `is_liability`: without the flag the
+    timeline would emit a bare `max_usd`, and the maximum of a mostly-negative
+    series is its least-negative point — a number with no filing meaning.
+    """
+    if not getattr(profile, "is_liability", False):
+        raise StatementParseError(
+            f"Profile {profile.name!r} is being read as a credit card but is not "
+            "marked is_liability. Without that flag the timeline emits a bare "
+            "max_usd, and the maximum of a mostly-negative series is its "
+            "least-negative point — a figure with no filing meaning until "
+            "`credit_card_positive_balance_only` is applied."
+        )
+
+    result = read_xlsx_running_balance(path, profile,
+                                       period_start=period_start,
+                                       period_end=period_end)
+
+    declared = {name.upper() for name in getattr(profile, "sheet_currencies", {})}
+    missing = sorted(declared - {name.upper() for name in result.sheets_read})
+    if declared and missing:
+        result.warnings.append(
+            f"{result.source_file}: {', '.join(missing)} not present — this "
+            f"source declares {len(declared)} sheets for one card and only "
+            f"{len(result.sheets_read)} was read. Half a card's activity is "
+            "missing, so every figure derived from it understates.")
+
+    for currency in sorted(result.currencies):
+        balances = [m.balance_after for m in result.movements
+                    if m.currency == currency and m.balance_after is not None]
+        if not balances:
+            continue
+        positive = [b for b in balances if b > 0]
+        result.warnings.append(
+            f"{result.source_file} [{currency}]: liability balances, "
+            f"{len(positive)} of {len(balances)} positive. Only an overpayment "
+            "balance is an asset — whether that makes the account reportable is "
+            "the `credit_card_positive_balance_only` convention, which the "
+            "parser records but does not apply.")
+    return result

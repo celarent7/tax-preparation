@@ -205,12 +205,56 @@ TBANK_TEXT = TextSummaryProfile(
 
 
 # ---------------------------------------------------------------------------
+# Shape D — credit cards, dual-currency sheets
+# ---------------------------------------------------------------------------
+
+#: Bancolombia Mastercard. Twenty files across two cards, each with TWO sheets
+#: — `DOLARES` and `PESOS` — for the same card, plus a metadata block carrying
+#: `Cupo Total`, the billing period and the masked card number.
+#:
+#: Neither card has a full year: one lacks December, the other October through
+#: December. December is the month that would establish the year-end balance,
+#: so this profile cannot produce a `statement_full_year` account no matter how
+#: well it is written — which is the correct behaviour, not a defect.
+#:
+#: The billing period runs ~30th to ~30th, so the January file OPENS IN THE
+#: PRIOR CALENDAR YEAR (`30/12/2024 -> 30/01/2025`).
+BANCOLOMBIA_CARD = SheetProfile(
+    name="bancolombia_card",
+    sheet_pattern=r"^(DOLARES|PESOS)$",
+    columns={
+        "date": "FECHA",
+        "description": "DESCRIPCIÓN",
+        "amount": "VALOR",
+        "balance": "SALDO",
+    },
+    required_columns=("date", "amount"),
+    numbers=COLOMBIAN_EXPORT_NUMBERS,
+    date_kind="partial",
+    currency_from=CURRENCY_FROM_SHEET_NAME,
+    sheet_currencies={"DOLARES": "USD", "PESOS": "COP"},
+    period=PeriodSpec(
+        start_labels=(r"per[ií]odo\s+facturado\s+desde", r"desde"),
+        end_labels=(r"per[ií]odo\s+facturado\s+hasta", r"hasta"),
+    ),
+    is_liability=True,
+    notes=(
+        "Credit-card balances are LIABILITIES. The parser reports the signed "
+        "balance and flags the sign; whether an overpayment makes the account "
+        "reportable is the `credit_card_positive_balance_only` convention, and "
+        "that is Claude's call, not the parser's."
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
 PROFILES: Dict[str, object] = {
     TBC.name: TBC,
     BANCOLOMBIA_SAVINGS.name: BANCOLOMBIA_SAVINGS,
+    BANCOLOMBIA_CARD.name: BANCOLOMBIA_CARD,
     TBANK_TEXT.name: TBANK_TEXT,
 }
 
