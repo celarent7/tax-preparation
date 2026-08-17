@@ -1273,6 +1273,11 @@ def build_combined_series(movements: List[MovementRecord],
             # and so did the levels entering the day.
             closing = _combined_point(when, level, rates, same_day[-1])
             observed = _combined_point(when, entering, rates, same_day[-1])
+            # The OBSERVED point is appended before any ceiling, and the order
+            # is load-bearing: `derive_max` breaks a tie on the earliest point
+            # in the series, so an observed instant beats a ceiling of equal
+            # value and the maximum stays a determined figure rather than
+            # becoming a bound. Reversing these two would silently flip that.
             points.append(closing)
 
             # The ordering only MATTERS when the ceiling beats both instants
@@ -1328,7 +1333,12 @@ def derive_max(points: List[CombinedPoint], is_liability: bool
     **`date_of_maximum` breaks ties to the EARLIEST date.** A maximum touched
     on several dates is common on a flat account, and an unspecified tie-break
     makes the output non-deterministic — which silently defeats both the golden
-    diff and any year-over-year comparison.
+    diff and any year-over-year comparison. Ties on the same date then break to
+    the earliest point in the series, which is why `build_combined_series`
+    appends an observed point before any ceiling for that date: an observed
+    instant of equal value must win, or a determined figure would become a
+    bound. A same-code comparison of two runs cannot catch a deterministic but
+    wrong tie-break, so the rule is stated rather than inferred from a test.
 
     **Components are signed and no convention is applied.** `negative_balance_is_zero`
     applied per currency would floor one component while the merged series that

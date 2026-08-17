@@ -264,3 +264,34 @@ def test_the_emitted_payload_is_stable_across_runs(timelines):
     again = run_sources(config, GOLDEN)["example"]
     assert [timeline_to_json(t) for t in again] == \
         [timeline_to_json(timelines[t.account_key]) for t in again]
+
+
+# ---------------------------------------------------------------------------
+# §10.2 — the metadata block is not a movement, checked on the ARTIFACT
+# ---------------------------------------------------------------------------
+
+def test_no_report_leaks_the_metadata_block(tmp_path, capsys):
+    """The rendered markdown is what actually leaves the machine.
+
+    `test_client_name_and_address_never_reach_a_movement_record` checks a
+    dataclass; this checks the file. `render_parse_report` interpolates
+    `parser_warnings` wholesale, and those now come from three places — the
+    readers, the year-end caveat and the account-group note — so a warning that
+    quoted a cell would put the client's name into a published artifact without
+    any MovementRecord being involved.
+
+    The savings fixture puts an invented client name and street address in rows
+    2-3 of every file, so this is a check against real bytes.
+    """
+    from statement_fixtures import FAKE_ADDRESS, FAKE_CARD, FAKE_CLIENT
+
+    main(["parse", "--sources", SOURCES, "--output-dir", str(tmp_path)])
+    capsys.readouterr()
+
+    reports = list(tmp_path.glob("*.md")) + list(tmp_path.glob("*.json"))
+    assert reports
+    for artifact in reports:
+        text = artifact.read_text(encoding="utf-8")
+        assert FAKE_CLIENT not in text, artifact.name
+        assert FAKE_ADDRESS not in text, artifact.name
+        assert FAKE_CARD not in text, artifact.name
