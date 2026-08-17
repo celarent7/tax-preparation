@@ -39,7 +39,7 @@ import re
 import sys
 import unicodedata
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -913,3 +913,194 @@ def _row_amount(row, columns, profile, where, number) -> Optional[Decimal]:
     if paid_in is None and paid_out is None:
         return None
     return (paid_in or Decimal("0")) - abs(paid_out or Decimal("0"))
+
+
+# ---------------------------------------------------------------------------
+# Continuity and gap detection (plan §9.5, §9.8, step 3)
+# ---------------------------------------------------------------------------
+
+#: ISO-4217 currencies with no minor unit. Everything else is assumed to have
+#: two decimal places, which is what the continuity tolerance is built from.
+_ZERO_DECIMAL_CURRENCIES = frozenset((
+    "BIF", "CLP", "DJF", "GNF", "ISK", "JPY", "KMF", "KRW",
+    "PYG", "RWF", "UGX", "UYI", "VND", "VUV", "XAF", "XOF", "XPF",
+))
+
+
+def minor_unit(currency: str) -> Decimal:
+    """One unit of the currency's smallest denomination — the break tolerance.
+
+    **Exact equality is the wrong test** for continuity (hazard 9.8). Displayed
+    balances are rounded to the minor unit and interest can post between one
+    statement's close and the next one's open, so a bare `!=` fires on noise
+    and then gets ignored — which is how a real break slips through. Anything
+    above one minor unit is a break; anything at or below it is a
+    reconciliation note.
+    """
+    return Decimal("1") if str(currency).upper() in _ZERO_DECIMAL_CURRENCIES else Decimal("0.01")
+
+
+def clip_periods(periods: List[StatementPeriod], tax_year: int) -> List[Tuple[date, date]]:
+    """Trim each period to the calendar year and drop the ones that fall outside.
+
+    The January card statement opens **30/12 of the prior year** and the savings
+    Q1 statement opens **2024/12/31**, so clipping is the normal case here, not
+    a defensive one. Coverage is a question about the calendar year FBAR asks
+    about; evidence from outside it is read, but it does not count as coverage.
+    """
+    first, last = date(tax_year, 1, 1), date(tax_year, 12, 31)
+    clipped = []
+    for period in periods:
+        start, end = max(period.start, first), min(period.end, last)
+        if start <= end:
+            clipped.append((start, end))
+    return sorted(clipped)
+
+
+def merge_spans(spans: List[Tuple[date, date]]) -> List[Tuple[date, date]]:
+    """Union overlapping and day-adjacent spans into contiguous coverage."""
+    merged: List[Tuple[date, date]] = []
+    for start, end in sorted(spans):
+        if merged and (start - merged[-1][1]).days <= 1:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def detect_gaps(periods: List[StatementPeriod], tax_year: int) -> List[Dict[str, Any]]:
+    """Stretches of the calendar year no statement covers.
+
+    Two of these are live in the corpus, not hypothetical. T-Bank's periods run
+    the **22nd to the 21st**, so twelve monthly files end at December 21 and
+    **December 22-31 is uncovered**. Bancolombia's cards are worse: one lacks
+    December, the other October through December — and December is the month
+    that would establish the year-end balance.
+
+    Detected and reported. **Never extrapolated**: a gap is a fact about the
+    evidence, and filling it would be the parser deciding what the filing
+    claims.
+    """
+    covered = merge_spans(clip_periods(periods, tax_year))
+    first, last = date(tax_year, 1, 1), date(tax_year, 12, 31)
+
+    def gap(start: date, end: date, where: str) -> Dict[str, Any]:
+        return {"start": start.isoformat(), "end": end.isoformat(),
+                "days": (end - start).days + 1, "position": where}
+
+    if not covered:
+        return [gap(first, last, "whole_year")]
+
+    gaps = []
+    if covered[0][0] > first:
+        gaps.append(gap(first, covered[0][0] - timedelta(days=1), "year_start"))
+    for (_, prev_end), (next_start, _) in zip(covered, covered[1:]):
+        gaps.append(gap(prev_end + timedelta(days=1),
+                        next_start - timedelta(days=1), "between_periods"))
+    if covered[-1][1] < last:
+        gaps.append(gap(covered[-1][1] + timedelta(days=1), last, "year_end"))
+    return gaps
+
+
+def period_endpoints(movements: List[MovementRecord],
+                     period: StatementPeriod,
+                     currency: str) -> Optional[Dict[str, Any]]:
+    """The opening and closing balance one file states for one currency.
+
+    Movements are matched to their period by `source_file`, not by date: one
+    file is one period, and periods can overlap across institutions.
+
+    The **opening** balance is not the first row's `balance_after` — that is the
+    level *after* the first movement. Where the row states its amount, the
+    opening level is `balance_after - amount`; where it does not (a period-end
+    summary states a balance and no flow), the stated balance IS the opening.
+    """
+    rows = sorted((m for m in movements
+                   if m.source_file == period.source_file
+                   and m.currency == currency
+                   and m.balance_after is not None),
+                  key=MovementRecord.order_key)
+    if not rows:
+        return None
+    first, last = rows[0], rows[-1]
+    opening = first.balance_after
+    if first.amount is not None:
+        opening = first.balance_after - first.amount
+    return {
+        "opening": opening,
+        "closing": last.balance_after,
+        "opening_row": first.source_row,
+        "closing_row": last.source_row,
+        "source_file": period.source_file,
+    }
+
+
+def detect_continuity_breaks(movements: List[MovementRecord],
+                             periods: List[StatementPeriod]) -> List[Dict[str, Any]]:
+    """Check that each period's closing balance is the next one's opening.
+
+    `closing[n] != opening[n+1]` means a missing statement or a mis-parse. The
+    protocol is written down in one of the hand workpapers — *"If January's
+    Ending Balance != February's Beginning Balance, log a warning and stop"* —
+    and this makes it mechanical.
+
+    Three outcomes, because collapsing them is what makes the check useless:
+
+      * **`warn` — break.** The periods are contiguous and the balances differ
+        by more than one minor unit. A statement is missing, or a column was
+        read wrongly.
+      * **`info` — not comparable.** There is a gap between the periods, so the
+        balance was free to move unobserved. Reported, not silenced: it is the
+        gap that is the finding.
+      * **`info` — reconciles.** The difference is within one minor unit, which
+        is rounding or an interest posting, not evidence of a missing file.
+    """
+    by_currency: Dict[str, List[Tuple[StatementPeriod, Dict[str, Any]]]] = {}
+    for period in periods:
+        for currency in sorted({m.currency for m in movements
+                                if m.source_file == period.source_file}):
+            endpoints = period_endpoints(movements, period, currency)
+            if endpoints is not None:
+                by_currency.setdefault(currency, []).append((period, endpoints))
+
+    findings = []
+    for currency, entries in sorted(by_currency.items()):
+        entries.sort(key=lambda item: (item[0].start, item[0].end))
+        tolerance = minor_unit(currency)
+        for (prev, prev_ends), (nxt, next_ends) in zip(entries, entries[1:]):
+            delta = next_ends["opening"] - prev_ends["closing"]
+            gap_days = (nxt.start - prev.end).days - 1
+            finding = {
+                "currency": currency,
+                "prior_period_end": prev.end.isoformat(),
+                "next_period_start": nxt.start.isoformat(),
+                "prior_closing": str(prev_ends["closing"]),
+                "next_opening": str(next_ends["opening"]),
+                "delta": str(delta),
+                "tolerance": str(tolerance),
+                "gap_days": max(gap_days, 0),
+                "source_files": [prev.source_file, nxt.source_file],
+            }
+            if abs(delta) <= tolerance:
+                finding.update(severity="info", kind="reconciles", message=(
+                    f"{currency}: {prev.source_file} closes at "
+                    f"{prev_ends['closing']} and {nxt.source_file} opens at "
+                    f"{next_ends['opening']} — within one minor unit "
+                    f"({tolerance}), so rounding or an interest posting rather "
+                    "than a missing statement."))
+            elif gap_days > 0:
+                finding.update(severity="info", kind="not_comparable", message=(
+                    f"{currency}: {gap_days} uncovered day(s) sit between "
+                    f"{prev.source_file} and {nxt.source_file}, so the balance "
+                    f"was free to move from {prev_ends['closing']} to "
+                    f"{next_ends['opening']} unobserved. The GAP is the finding, "
+                    "not the difference."))
+            else:
+                finding.update(severity="warn", kind="break", message=(
+                    f"{currency}: {prev.source_file} closes at "
+                    f"{prev_ends['closing']} but the contiguous "
+                    f"{nxt.source_file} opens at {next_ends['opening']} — off by "
+                    f"{delta}, more than one minor unit ({tolerance}). A "
+                    "statement is missing, or a column was read wrongly."))
+            findings.append(finding)
+    return findings
