@@ -188,18 +188,34 @@ def test_period_end_before_start_is_rejected():
 # 9.10 / §8.1 — row order is the only intraday clock
 # ---------------------------------------------------------------------------
 
-def test_order_key_is_date_then_file_then_row():
+def test_order_key_is_date_then_file_then_time_order():
     """A running-balance file gives one balance per ROW, so the sequence within
     a day lives in row order. TBC's every timestamp is 00:00:00, and same-date
     rows are real: Bancolombia savings has two `9/01` rows in Q1 alone."""
     first = MovementRecord(date=date(2025, 1, 9), description="a", currency="COP",
-                           source_file="q1.xlsx", source_row=12,
+                           source_file="q1.xlsx", source_row=12, row_order=0,
                            amount=Decimal("10"), balance_after=Decimal("110"))
     second = MovementRecord(date=date(2025, 1, 9), description="b", currency="COP",
-                            source_file="q1.xlsx", source_row=13,
+                            source_file="q1.xlsx", source_row=13, row_order=1,
                             amount=Decimal("-10"), balance_after=Decimal("100"))
     assert first.order_key() < second.order_key()
     assert sorted([second, first], key=MovementRecord.order_key) == [first, second]
+
+
+def test_row_order_is_time_order_not_the_spreadsheet_row():
+    """A newest-first file has its spreadsheet rows inverted relative to time.
+    Ordering on `source_row` would preserve exactly the wrong sequence, so
+    `row_order` is what the sort key reads and `source_row` stays traceable."""
+    newest_first = MovementRecord(date=date(2025, 1, 9), description="later",
+                                  currency="COP", source_file="d.xlsx",
+                                  source_row=2, row_order=1,
+                                  balance_after=Decimal("100"))
+    oldest_last = MovementRecord(date=date(2025, 1, 9), description="earlier",
+                                 currency="COP", source_file="d.xlsx",
+                                 source_row=3, row_order=0,
+                                 balance_after=Decimal("110"))
+    assert oldest_last.order_key() < newest_first.order_key()
+    assert oldest_last.source_row > newest_first.source_row
 
 
 # ---------------------------------------------------------------------------
@@ -225,3 +241,302 @@ def test_parser_bases_are_exactly_the_schema_vocabulary():
     from statement_parser import BASIS_STRENGTH
 
     assert set(BASIS_STRENGTH) == set(MAX_VALUE_BASES)
+
+
+# ===========================================================================
+# xlsx_running_balance — the readers, against synthetic files of each shape
+# ===========================================================================
+
+from statement_fixtures import (  # noqa: E402
+    FAKE_ADDRESS,
+    FAKE_CLIENT,
+    bancolombia_savings_workbook,
+    tbc_sheet_name,
+    tbc_workbook,
+    write_xlsx,
+)
+from statement_parser import read_xlsx_running_balance  # noqa: E402
+from statement_profiles import (  # noqa: E402
+    BANCOLOMBIA_SAVINGS,
+    TBC,
+    UNWRITABLE_PROFILES,
+    get_profile,
+)
+
+SAVINGS_ROWS = [
+    ("31/12", "Saldo inicial", "0.00", "1,000.00"),
+    ("9/01", "Consignación", "500.00", "1,500.00"),
+    ("9/01", "Retiro", "-200.00", "1,300.00"),
+    ("15/02", "Consignación", "2,000.00", "3,300.00"),
+]
+
+
+def savings_file(tmp_path, rows=None, **kwargs):
+    return bancolombia_savings_workbook(
+        tmp_path / "extracto_q1.xlsx", "2024/12/31", "2025/03/31",
+        SAVINGS_ROWS if rows is None else rows, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# 9.1 — sparse columns shift values (the highest-severity hazard here)
+# ---------------------------------------------------------------------------
+
+def test_two_absent_adjacent_columns_do_not_slide_valor_into_saldo(tmp_path):
+    """Both SUCURSAL and DCTO. are None on every movement row in the corpus, so
+    the six-column header consistently yields four values. Compacting the row
+    would put VALOR where SALDO belongs — a plausible wrong number, on the very
+    first file, not on an edge case."""
+    result = read_xlsx_running_balance(savings_file(tmp_path),
+                                       BANCOLOMBIA_SAVINGS, currency="COP")
+    assert [m.amount for m in result.movements] == [
+        Decimal("0.00"), Decimal("500.00"), Decimal("-200.00"), Decimal("2000.00")]
+    assert [m.balance_after for m in result.movements] == [
+        Decimal("1000.00"), Decimal("1500.00"), Decimal("1300.00"), Decimal("3300.00")]
+    # The two empty columns sit BETWEEN the ones that matter, so a compacted
+    # row would put VALOR where SALDO belongs — here, 500.00 as the balance.
+    assert result.movements[1].balance_after != result.movements[1].amount
+
+
+def test_a_row_shorter_than_the_header_is_short_not_shifted(tmp_path):
+    """A trailing empty cell may simply be absent from the row tuple."""
+    path = write_xlsx(tmp_path / "short.xlsx", {"Extracto": [
+        ["Período Desde:", "2025/01/01"],
+        ["Período Hasta:", "2025/03/31"],
+        ["Movimientos:"],
+        ["FECHA", "DESCRIPCIÓN", "SUCURSAL", "DCTO.", "VALOR", "SALDO"],
+        ["1/01", "Apertura", None, None, "100.00", "100.00"],
+        ["2/01", "Sin saldo", None, None, "50.00"],
+    ]})
+    result = read_xlsx_running_balance(path, BANCOLOMBIA_SAVINGS, currency="COP")
+    assert result.movements[1].amount == Decimal("50.00")
+    # The absent balance is absent, not zero.
+    assert result.movements[1].balance_after is None
+
+
+# ---------------------------------------------------------------------------
+# 9.9 — dual header rows
+# ---------------------------------------------------------------------------
+
+def test_english_header_row_is_bound_not_the_georgian_one(tmp_path):
+    """TBC row 1 is Georgian, row 2 English, data from row 3. Binding to row 1
+    yields untranslatable keys. The header is found by MATCHING the profile's
+    column texts, so row 2 wins without anyone counting rows."""
+    path = tbc_workbook(tmp_path / "tbc_usd.xlsx", "USD", [
+        ("2025-01-05", "Incoming", "", "1000.00", "1000.00"),
+        ("2025-06-10", "Outgoing", "250.00", "", "750.00"),
+    ])
+    result = read_xlsx_running_balance(path, TBC,
+                                       period_start="2025-01-01",
+                                       period_end="2025-12-31")
+    assert [m.description for m in result.movements] == ["Incoming", "Outgoing"]
+    assert result.movements[0].source_row == 3
+    assert result.currencies == ["USD"]
+
+
+def test_currency_comes_from_the_sheet_name_not_the_filename(tmp_path):
+    """A filename is a naming convention someone chose; a sheet name is the
+    export's own statement about what the sheet holds."""
+    path = tbc_workbook(tmp_path / "account_statement_misleading_USD.xlsx", "GEL",
+                        [("2025-11-02", "Sole GEL movement", "", "300.00", "300.00")])
+    result = read_xlsx_running_balance(path, TBC,
+                                       period_start="2025-01-01",
+                                       period_end="2025-12-31")
+    assert result.currencies == ["GEL"]
+    assert result.movements[0].currency == "GEL"
+
+
+# ---------------------------------------------------------------------------
+# 9.12 — '' vs None vs 0 in a balance cell, at reader level
+# ---------------------------------------------------------------------------
+
+def test_empty_string_none_and_zero_in_a_balance_cell(tmp_path):
+    """TBC writes '' into the unused side of Paid Out / Paid In and '0' as a
+    balance. A row with neither side written has NO amount, not an amount of
+    zero; a balance of '0' is a level, an empty balance cell is not."""
+    path = tbc_workbook(tmp_path / "tbc_states.xlsx", "USD", [
+        ("2025-01-05", "written zero balance", "", "0", "0"),
+        ("2025-02-05", "empty balance", "", "10.00", ""),
+        ("2025-03-05", "no amount at all", "", "", "10.00"),
+    ])
+    result = read_xlsx_running_balance(path, TBC,
+                                       period_start="2025-01-01",
+                                       period_end="2025-12-31")
+    zero, empty, no_amount = result.movements
+    assert zero.balance_after == Decimal("0")
+    assert empty.balance_after is None
+    assert no_amount.amount is None
+    assert no_amount.balance_after == Decimal("10.00")
+
+
+# ---------------------------------------------------------------------------
+# 9.11 — ws.max_row is None
+# ---------------------------------------------------------------------------
+
+def test_sheet_with_no_dimension_record_still_reads(tmp_path):
+    """Under read_only=True both Bancolombia shapes report no dimensions, so
+    code that ranges over `max_row` silently reads nothing."""
+    import openpyxl
+
+    path = savings_file(tmp_path, strip_dimensions=True)
+    workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    try:
+        # The fixture must actually exercise the hazard: openpyxl always emits
+        # a <dimension> record, so a fixture saved normally would pass this
+        # test without testing anything.
+        assert workbook["Extracto"].max_row is None
+    finally:
+        workbook.close()
+
+    result = read_xlsx_running_balance(path, BANCOLOMBIA_SAVINGS, currency="COP")
+    assert len(result.movements) == 4
+
+
+# ---------------------------------------------------------------------------
+# 9.6 — empty statement is not a zero balance
+# ---------------------------------------------------------------------------
+
+def test_single_cell_sheet_yields_no_data_not_zero_and_not_an_error(tmp_path):
+    """Wise's `All transactions` sheet is a 1x1 cell containing `ID` — not a
+    header row. Emitting $0 would assert a determined maximum the evidence
+    cannot support; an empty export is equally consistent with a FAILED
+    export."""
+    path = write_xlsx(tmp_path / "empty.xlsx", {
+        "Summary": [["Account", "GE00"]],
+        tbc_sheet_name("USD"): [["ID"]],
+    })
+    result = read_xlsx_running_balance(path, TBC,
+                                       period_start="2025-01-01",
+                                       period_end="2025-12-31")
+    assert result.no_data is True
+    assert result.movements == []
+    assert any("NO DATA" in w for w in result.warnings)
+
+
+def test_rows_present_but_no_matching_header_is_an_error_not_no_data(tmp_path):
+    """The two halves of hazard 9.6 must not be confused: a sheet full of real
+    rows with no matching header means the PROFILE is wrong."""
+    path = write_xlsx(tmp_path / "wrong.xlsx", {"Extracto": [
+        ["Período Desde:", "2025/01/01"],
+        ["Período Hasta:", "2025/03/31"],
+        ["DATE", "MEMO", "AMOUNT", "RUNNING"],
+        ["1/01", "something", "10.00", "10.00"],
+    ]})
+    with pytest.raises(StatementParseError, match="does not match this file"):
+        read_xlsx_running_balance(path, BANCOLOMBIA_SAVINGS, currency="COP")
+
+
+def test_no_matching_sheet_names_the_sheets_that_are_there(tmp_path):
+    path = write_xlsx(tmp_path / "othersheet.xlsx", {"Hoja1": [["a", "b"]]})
+    with pytest.raises(StatementParseError, match="no sheet matches profile"):
+        read_xlsx_running_balance(path, BANCOLOMBIA_SAVINGS, currency="COP")
+
+
+# ---------------------------------------------------------------------------
+# 9.2 — period discovery, and two date formats in one file
+# ---------------------------------------------------------------------------
+
+def test_period_is_read_from_the_metadata_block(tmp_path):
+    """The savings header states the period as `YYYY/MM/DD` while the movement
+    rows are `D/MM`, and Q1 opens in the PRIOR calendar year."""
+    result = read_xlsx_running_balance(savings_file(tmp_path),
+                                       BANCOLOMBIA_SAVINGS, currency="COP")
+    period = result.periods[0]
+    assert (period.start, period.end) == (date(2024, 12, 31), date(2025, 3, 31))
+    assert result.period_inferred_from_rows is False
+    assert result.movements[0].date == date(2024, 12, 31)
+    assert result.movements[1].date == date(2025, 1, 9)
+
+
+def test_configured_period_wins_over_the_metadata_block(tmp_path):
+    result = read_xlsx_running_balance(savings_file(tmp_path), BANCOLOMBIA_SAVINGS,
+                                       currency="COP",
+                                       period_start="2024-12-01",
+                                       period_end="2025-03-31")
+    assert result.periods[0].start == date(2024, 12, 1)
+
+
+def test_partial_dates_with_no_period_anywhere_is_an_error(tmp_path):
+    """`D/MM` cannot be dated without a period, and a year may not be guessed:
+    the January card period opens 30/12 of the prior year."""
+    path = write_xlsx(tmp_path / "noperiod.xlsx", {"Extracto": [
+        ["Movimientos:"],
+        ["FECHA", "DESCRIPCIÓN", "SUCURSAL", "DCTO.", "VALOR", "SALDO"],
+        ["1/01", "Apertura", None, None, "100.00", "100.00"],
+    ]})
+    with pytest.raises(StatementParseError, match="cannot be guessed|A year cannot"):
+        read_xlsx_running_balance(path, BANCOLOMBIA_SAVINGS, currency="COP")
+
+
+def test_a_period_derived_from_its_own_rows_is_flagged(tmp_path):
+    """TBC states no period the profile can read, so without one in
+    sources.json the span comes from the rows — which can never show that a
+    statement is missing from either end."""
+    path = tbc_workbook(tmp_path / "tbc_norange.xlsx", "USD", [
+        ("2025-03-05", "first", "", "100.00", "100.00"),
+        ("2025-09-05", "last", "", "100.00", "200.00"),
+    ])
+    result = read_xlsx_running_balance(path, TBC)
+    assert result.period_inferred_from_rows is True
+    assert result.periods[0].start == date(2025, 3, 5)
+    assert any("derived from the rows themselves" in w for w in result.warnings)
+
+
+# ---------------------------------------------------------------------------
+# §8.1 — a descending-order file
+# ---------------------------------------------------------------------------
+
+def test_newest_first_file_is_resequenced_into_time_order(tmp_path):
+    """Sorting a newest-first file "stably" on the spreadsheet row preserves
+    exactly the wrong sequence. Detection is mechanical: compare the first and
+    last parsed dates."""
+    path = tbc_workbook(tmp_path / "tbc_desc.xlsx", "USD", [
+        ("2025-09-05", "third", "", "100.00", "300.00"),
+        ("2025-06-05", "second", "", "100.00", "200.00"),
+        ("2025-03-05", "first", "", "100.00", "100.00"),
+    ])
+    result = read_xlsx_running_balance(path, TBC,
+                                       period_start="2025-01-01",
+                                       period_end="2025-12-31")
+    assert [m.description for m in result.movements] == ["first", "second", "third"]
+    assert [m.row_order for m in result.movements] == [0, 1, 2]
+    # `source_row` still points at the original spreadsheet row.
+    assert [m.source_row for m in result.movements] == [5, 4, 3]
+    assert any("newest-first" in w for w in result.warnings)
+
+
+# ---------------------------------------------------------------------------
+# §10.2 — the metadata block is not a movement
+# ---------------------------------------------------------------------------
+
+def test_client_name_and_address_never_reach_a_movement_record(tmp_path):
+    """Bancolombia sheets carry the client name and full street address in the
+    metadata block of every file. Readers take the period and the account
+    identifier from it and discard the rest."""
+    result = read_xlsx_running_balance(savings_file(tmp_path),
+                                       BANCOLOMBIA_SAVINGS, currency="COP")
+    rendered = " ".join(m.description for m in result.movements)
+    assert FAKE_CLIENT not in rendered
+    assert FAKE_ADDRESS not in rendered
+    assert all(FAKE_CLIENT not in w and FAKE_ADDRESS not in w
+               for w in result.warnings)
+
+
+# ---------------------------------------------------------------------------
+# §4.1 — the profile the corpus cannot specify is not written
+# ---------------------------------------------------------------------------
+
+def test_no_wise_profile_exists_and_asking_says_why():
+    """Both Wise exports are a single cell. Any column map would be written
+    from expectation rather than evidence, which is the one thing the profile
+    module exists to prevent."""
+    from statement_profiles import PROFILES
+
+    assert "wise" not in PROFILES
+    with pytest.raises(StatementParseError, match="deliberately"):
+        get_profile("wise")
+    assert "expectation" in UNWRITABLE_PROFILES["wise"]
+
+
+def test_unknown_profile_names_the_ones_that_exist():
+    with pytest.raises(StatementParseError, match="Unknown profile"):
+        get_profile("banco_imaginario")

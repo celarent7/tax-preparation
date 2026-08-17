@@ -34,12 +34,16 @@ All money is `Decimal`. Never `float`: these figures are compared for
 continuity equality and rounded into a filing.
 """
 
+import os
 import re
+import sys
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 
 class StatementParseError(ValueError):
@@ -391,9 +395,16 @@ class MovementRecord:
     source_row: int
     amount: Optional[Decimal] = None
     balance_after: Optional[Decimal] = None
+    #: Position in TIME order within its file, assigned by the reader.
+    #: Distinct from `source_row`, which stays the spreadsheet row so a figure
+    #: can be traced back to its cell. They differ on a descending-order file:
+    #: one written newest-first has its row order inverted relative to time,
+    #: and sorting it "stably" on the spreadsheet row preserves exactly the
+    #: wrong sequence (plan §8.1).
+    row_order: int = 0
 
     def order_key(self) -> Tuple[date, str, int]:
-        """Stable sort key: `(date, source_file, source_row)`, never date alone.
+        """Stable sort key: `(date, source_file, row_order)`, never date alone.
 
         A running-balance file gives one `balance_after` per ROW, so the true
         sequence within a day lives in row order. TBC carries a time component
@@ -403,7 +414,7 @@ class MovementRecord:
         that never existed, taking the day's last discards a real intraday peak
         (plan §8.1, §9.10).
         """
-        return (self.date, self.source_file, self.source_row)
+        return (self.date, self.source_file, self.row_order)
 
 
 @dataclass
@@ -420,6 +431,16 @@ class ReadResult:
     warnings: List[str] = field(default_factory=list)
     source_file: str = ""
     currencies: List[str] = field(default_factory=list)
+    #: True when no period could be found and the span was derived from the
+    #: rows themselves. Such a period cannot show that a statement is missing
+    #: from either end, so it caps the derived basis at `statement_partial`.
+    period_inferred_from_rows: bool = False
+    #: True when the source describes a liability (a credit card).
+    is_liability: bool = False
+    #: True when the file is readable but states nothing — an empty export.
+    #: NOT a zero balance: emitting `$0` would assert a determined maximum the
+    #: evidence cannot support (plan §9.6).
+    no_data: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -537,3 +558,358 @@ class AccountTimeline:
     max_value_basis: str = "unknown"
     source_files: List[str] = field(default_factory=list)
     movement_count: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Reader: xlsx_running_balance (plan §5.1, step 2)
+# ---------------------------------------------------------------------------
+
+#: How many rows to scan for a header before concluding the file does not have
+#: one. Bancolombia's savings sheet carries a metadata block and a `Resumen:`
+#: totals block above `Movimientos:`, so the header is not near the top.
+_HEADER_SCAN_ROWS = 200
+
+
+def _cell_text(value: Any) -> str:
+    """Normalize a cell to comparable header text. Empty for a blank cell."""
+    if value is None:
+        return ""
+    return " ".join(unicodedata.normalize("NFKC", str(value)).split()).strip()
+
+
+def _header_key(value: Any) -> str:
+    return _cell_text(value).casefold().rstrip(":.")
+
+
+def read_sheet_rows(worksheet) -> List[Tuple[int, Tuple[Any, ...]]]:
+    """Materialize a worksheet as `(row_number, values)`, positions preserved.
+
+    Iterates rows directly and never consults `ws.max_row`. Under
+    `read_only=True` both Bancolombia shapes report no dimensions — `max_row`
+    and `max_column` are `None` because the sheets carry no dimension record —
+    so code that ranges over `max_row` silently reads nothing (hazard 9.11).
+
+    Values are returned as the sheet's own tuples. They are NEVER compacted:
+    dropping the `None`s in a row would slide `VALOR` into `SALDO` (hazard 9.1).
+    """
+    return [(number, row)
+            for number, row in enumerate(worksheet.iter_rows(values_only=True), start=1)]
+
+
+def _at(row: Tuple[Any, ...], index: Optional[int]) -> Any:
+    """Read a column by POSITION, tolerating a row shorter than the header.
+
+    A trailing empty cell may simply be absent from the row tuple; that is a
+    short row, not a shifted one.
+    """
+    if index is None or index >= len(row):
+        return None
+    return row[index]
+
+
+def _looks_like_a_table(rows: List[Tuple[int, Tuple[Any, ...]]]) -> bool:
+    """True when at least one row holds two or more non-empty cells.
+
+    Separates the two failure modes hazard 9.6 puts together. Wise's
+    `All transactions` sheet is a single cell containing `ID` — there is no
+    table there, so "no header found" means *no data*. A sheet full of real
+    rows with no matching header means the PROFILE is wrong, which is an error.
+    """
+    return any(sum(1 for cell in row if _cell_text(cell)) >= 2 for _, row in rows)
+
+
+def find_header_row(rows: List[Tuple[int, Tuple[Any, ...]]],
+                    profile) -> Optional[Tuple[int, Dict[str, Optional[int]]]]:
+    """Locate the header by MATCHING the profile's column texts.
+
+    Matching rather than counting is what handles hazard 9.9 for free: TBC's
+    row 1 is Georgian and row 2 English, and looking for `Balance` finds row 2
+    without anyone hard-coding an index. Binding to row 1 would yield
+    untranslatable keys.
+
+    Returns `(row_number, {logical: column_index})`, with `None` for a declared
+    column the file does not carry. Returns `None` when no row matches.
+    """
+    wanted = {logical: _header_key(text) for logical, text in profile.columns.items()}
+    for number, row in rows[:_HEADER_SCAN_ROWS]:
+        present = {}
+        for position, cell in enumerate(row):
+            key = _header_key(cell)
+            if not key:
+                continue
+            for logical, expected in wanted.items():
+                if key == expected and logical not in present:
+                    present[logical] = position
+        if all(logical in present for logical in profile.required_columns):
+            return number, {logical: present.get(logical) for logical in profile.columns}
+    return None
+
+
+def _find_labelled_date(rows: List[Tuple[int, Tuple[Any, ...]]],
+                        labels: Tuple[str, ...],
+                        source_file: str) -> Optional[date]:
+    """Find a date sitting beside one of `labels` in the metadata block.
+
+    The label and its value may share a cell (`Desde: 30/12/2024`) or occupy
+    adjacent cells, so both are tried. Only the metadata block is searched —
+    the client name and street address that live there are read past and never
+    retained (plan §10.2).
+    """
+    patterns = [re.compile(pattern, re.IGNORECASE) for pattern in labels]
+    for _, row in rows:
+        for position, cell in enumerate(row):
+            text = _cell_text(cell)
+            if not text or not any(p.search(text) for p in patterns):
+                continue
+            remainder = re.split(r"[:=]", text, maxsplit=1)
+            tail = remainder[1].strip() if len(remainder) > 1 else ""
+            for candidate in [tail] + [row[i] for i in range(position + 1, len(row))]:
+                if candidate in (None, ""):
+                    continue
+                try:
+                    found = parse_full_date(candidate, f"{source_file}: period label")
+                except StatementParseError:
+                    continue
+                if found is not None:
+                    return found
+    return None
+
+
+def resolve_period(rows: List[Tuple[int, Tuple[Any, ...]]],
+                   profile,
+                   source_file: str,
+                   configured_start: Optional[Any] = None,
+                   configured_end: Optional[Any] = None,
+                   header_row: Optional[int] = None) -> Tuple[Optional[StatementPeriod], bool]:
+    """Find the span the statement covers. Returns `(period, was_inferred)`.
+
+    Order: what `sources.json` states, then a label in the metadata block, then
+    nothing. Never the filename — `text 3.txt` is October and `text 12.txt` is
+    January (hazard 9.3) — and never the file count: Bancolombia's cards are
+    11 and 9 monthly files, not 12 and 12 (§4.5).
+
+    Returning `(None, ...)` means the caller must derive the span from the rows
+    and cap the basis; a period that came from its own rows cannot show that a
+    statement is missing from either end.
+    """
+    start = parse_full_date(configured_start, f"{source_file}: configured period_start")
+    end = parse_full_date(configured_end, f"{source_file}: configured period_end")
+    if start and end:
+        return StatementPeriod(start, end, source_file), False
+
+    metadata = [r for r in rows if header_row is None or r[0] < header_row]
+    metadata = metadata[:profile.period.search_rows]
+    if profile.period.start_labels and profile.period.end_labels:
+        start = start or _find_labelled_date(metadata, profile.period.start_labels, source_file)
+        end = end or _find_labelled_date(metadata, profile.period.end_labels, source_file)
+        if start and end:
+            return StatementPeriod(start, end, source_file), False
+    return None, True
+
+
+def read_xlsx_running_balance(path: str,
+                              profile,
+                              currency: Optional[str] = None,
+                              period_start: Optional[Any] = None,
+                              period_end: Optional[Any] = None) -> ReadResult:
+    """Read a spreadsheet whose rows carry a running balance (Shape A / D).
+
+    The good case: a per-transaction row carries a balance column, so the
+    intra-year maximum is directly observable. This reader turns the file into
+    `MovementRecord`s and a `StatementPeriod` and stops there — it performs no
+    arithmetic and makes no judgment (plan §5.1).
+    """
+    import openpyxl
+
+    from statement_profiles import currency_for_sheet
+
+    source_file = os.path.basename(path)
+    result = ReadResult(source_file=source_file, is_liability=profile.is_liability)
+
+    try:
+        workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    except Exception as exc:  # openpyxl raises a wide family on a bad file
+        raise StatementParseError(f"{source_file}: cannot open as .xlsx — {exc}") from exc
+
+    try:
+        pattern = re.compile(profile.sheet_pattern)
+        sheet_names = [name for name in workbook.sheetnames if pattern.match(name)]
+        if not sheet_names:
+            raise StatementParseError(
+                f"{source_file}: no sheet matches profile {profile.name!r} "
+                f"({profile.sheet_pattern!r}). Sheets present: "
+                f"{', '.join(workbook.sheetnames) or '(none)'}."
+            )
+        for name in sheet_names:
+            _read_one_sheet(workbook[name], name, profile, source_file, result,
+                            currency, period_start, period_end, currency_for_sheet)
+    finally:
+        workbook.close()
+
+    if not result.movements and not result.no_data:
+        result.no_data = True
+    return result
+
+
+def _read_one_sheet(worksheet, sheet_name: str, profile, source_file: str,
+                    result: ReadResult, configured_currency: Optional[str],
+                    period_start: Optional[Any], period_end: Optional[Any],
+                    currency_for_sheet) -> None:
+    """Append one sheet's movements to `result`. See `read_xlsx_running_balance`."""
+    where = f"{source_file}[{sheet_name}]"
+    rows = read_sheet_rows(worksheet)
+
+    header = find_header_row(rows, profile)
+    if header is None:
+        if not _looks_like_a_table(rows):
+            # An empty export is a NO-DATA finding, never a zero balance.
+            # Emitting $0 would assert a determined maximum the evidence cannot
+            # support — and an empty export is equally consistent with a failed
+            # one. Dormancy is Phase 1 knowledge, not something the parser may
+            # infer from an empty sheet (plan §9.6).
+            result.no_data = True
+            result.warnings.append(
+                f"{where}: no header row and no table — the sheet states nothing. "
+                "Reported as NO DATA, not as a zero balance: an empty export is "
+                "equally consistent with a failed export, and only Phase 1 can "
+                "say the account was dormant."
+            )
+            return
+        raise StatementParseError(
+            f"{where}: rows are present but no row carries the headers profile "
+            f"{profile.name!r} expects "
+            f"({', '.join(profile.columns[c] for c in profile.required_columns)}). "
+            "The profile does not match this file."
+        )
+
+    header_row, columns = header
+    currency = currency_for_sheet(profile, sheet_name, configured_currency)
+    if currency not in result.currencies:
+        result.currencies.append(currency)
+
+    period, inferred = resolve_period(rows, profile, source_file,
+                                      period_start, period_end, header_row)
+    if period is None and profile.date_kind == "partial":
+        # `D/MM` cannot be dated without a period, and a year may not be
+        # guessed: the savings Q1 statement opens in the PRIOR calendar year.
+        raise StatementParseError(
+            f"{where}: rows are dated `D/MM` with no year, and no statement "
+            "period was found in the metadata block or supplied by sources.json. "
+            "A year cannot be guessed — the January card period opens 30/12 of "
+            "the prior year. Set period_start/period_end on the source entry."
+        )
+
+    parsed = _parse_data_rows(rows, header_row, columns, profile, period,
+                              currency, source_file, where, result)
+    if not parsed:
+        result.warnings.append(f"{where}: header found but no dated rows below it.")
+        return
+
+    # A file written newest-first has its row order inverted relative to time.
+    # Sorting it "stably" on the spreadsheet row preserves exactly the wrong
+    # sequence, so the direction is detected before any ordering happens.
+    # Detection is mechanical: compare the first and last parsed dates.
+    descending = parsed[0][1].date > parsed[-1][1].date
+    if descending:
+        parsed = list(reversed(parsed))
+        result.warnings.append(
+            f"{where}: rows are newest-first; re-sequenced into time order. "
+            "`source_row` still points at the original spreadsheet row."
+        )
+
+    # The counter continues across sheets so `row_order` is unique within the
+    # file. A card carries `DOLARES` and `PESOS` for the SAME card, and two
+    # sheets restarting at zero would tie on the merged event axis and make the
+    # ordering non-deterministic.
+    offset = len(result.movements)
+    for order, (_, record) in enumerate(parsed):
+        result.movements.append(replace(record, row_order=offset + order))
+
+    if period is None:
+        period = StatementPeriod(parsed[0][1].date, parsed[-1][1].date, source_file)
+        result.period_inferred_from_rows = True
+        result.warnings.append(
+            f"{where}: no statement period stated, so the span "
+            f"{period.start}..{period.end} was derived from the rows themselves. "
+            "Such a period cannot show that a statement is missing from either "
+            "end, so the derived basis is capped at 'statement_partial'."
+        )
+    if period not in result.periods:
+        result.periods.append(period)
+
+
+def _parse_data_rows(rows, header_row, columns, profile, period, currency,
+                     source_file, where, result):
+    """Turn the rows below the header into `(row_number, MovementRecord)`.
+
+    Every value is read by column POSITION. A row is never compacted: on the
+    savings sheet both `SUCURSAL` and `DCTO.` are `None` on every movement row,
+    so a 6-column header consistently yields 4 values, and filtering the `None`s
+    would slide `VALOR` into `SALDO` on the very first file (hazard 9.1).
+    """
+    parsed = []
+    skipped_undated = 0
+    outside_period = 0
+
+    for number, row in rows:
+        if number <= header_row:
+            continue
+        raw_date = _at(row, columns.get("date"))
+        if not _cell_text(raw_date):
+            skipped_undated += 1
+            continue
+        if profile.date_kind == "partial":
+            when = resolve_partial_date(raw_date, period, f"{where} row {number} date")
+        else:
+            when = parse_full_date(raw_date, f"{where} row {number} date")
+        if when is None:
+            skipped_undated += 1
+            continue
+        if period is not None and not period.contains(when):
+            outside_period += 1
+
+        amount = _row_amount(row, columns, profile, where, number)
+        balance = parse_decimal(_at(row, columns.get("balance")), profile.numbers,
+                                f"{where} row {number} balance")
+        parsed.append((number, MovementRecord(
+            date=when,
+            description=_cell_text(_at(row, columns.get("description"))),
+            currency=currency,
+            source_file=source_file,
+            source_row=number,
+            amount=amount,
+            balance_after=balance,
+        )))
+
+    if skipped_undated:
+        result.warnings.append(
+            f"{where}: {skipped_undated} row(s) below the header carry no readable "
+            "date and were not read (totals and spacer rows look like this)."
+        )
+    if outside_period:
+        result.warnings.append(
+            f"{where}: {outside_period} row(s) fall outside the stated statement "
+            "period. Read as dated, not discarded — but check the period."
+        )
+    return parsed
+
+
+def _row_amount(row, columns, profile, where, number) -> Optional[Decimal]:
+    """The signed movement for one row. `paid_in` is positive.
+
+    A profile declares either a single signed `amount` column or the
+    `paid_out`/`paid_in` pair. TBC writes `''` into the unused side of the
+    pair, which is absent and not zero — so a row with neither side written
+    has no amount at all rather than an amount of zero (hazard 9.12).
+    """
+    if columns.get("amount") is not None:
+        return parse_decimal(_at(row, columns["amount"]), profile.numbers,
+                             f"{where} row {number} amount")
+
+    paid_in = parse_decimal(_at(row, columns.get("paid_in")), profile.numbers,
+                            f"{where} row {number} paid in")
+    paid_out = parse_decimal(_at(row, columns.get("paid_out")), profile.numbers,
+                             f"{where} row {number} paid out")
+    if paid_in is None and paid_out is None:
+        return None
+    return (paid_in or Decimal("0")) - abs(paid_out or Decimal("0"))
