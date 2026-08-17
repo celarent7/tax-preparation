@@ -22,6 +22,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from statement_parser import (  # noqa: E402
     COLOMBIAN_EXPORT_NUMBERS,
     PLAIN_NUMBERS,
+    RUSSIAN_NUMBERS,
     NumberFormat,
     StatementParseError,
 )
@@ -164,12 +165,53 @@ BANCOLOMBIA_SAVINGS = SheetProfile(
 
 
 # ---------------------------------------------------------------------------
+# Shape B — period-end summaries only
+# ---------------------------------------------------------------------------
+
+#: T-Bank. Twelve ~179-byte `.txt` files, each two bounding balances and four
+#: totals. THERE IS NO TRANSACTION DETAIL: an account that peaked mid-period
+#: and returned looks flat, which is why this shape must never yield a
+#: determined maximum (plan §6.3).
+#:
+#: Not a `SheetProfile` — there is no sheet. The reader is driven by the label
+#: patterns below, and the numbers carry a space thousands separator, a comma
+#: decimal, U+2212 for minus and `₽` (hazard 9.4).
+@dataclass(frozen=True)
+class TextSummaryProfile:
+    name: str
+    #: Regex with a `date` and a `balance` group, matched per line.
+    balance_line: str
+    numbers: NumberFormat = RUSSIAN_NUMBERS
+    #: Regexes for the totals lines. Read so a warning can say what was
+    #: DISCARDED — they are not movements and never become balance points.
+    total_lines: Tuple[str, ...] = ()
+    notes: str = ""
+
+
+TBANK_TEXT = TextSummaryProfile(
+    name="tbank_text",
+    balance_line=r"^\s*Balance\s+on\s+(?P<date>\d{1,2}\.\d{1,2}\.\d{4})\s*:\s*(?P<balance>.+?)\s*$",
+    numbers=RUSSIAN_NUMBERS,
+    total_lines=(
+        r"^\s*(?P<label>Income|Expenses|Interest|Cashback)\s*:\s*(?P<amount>.+?)\s*$",
+    ),
+    notes=(
+        "Periods run the 22nd to the 21st, so twelve files end at December 21 "
+        "and December 22-31 is uncovered (hazard 9.5). The period comes from "
+        "the two balance lines — NEVER from the filename: `text 3.txt` is "
+        "October and `text 12.txt` is January (hazard 9.3)."
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
 PROFILES: Dict[str, object] = {
     TBC.name: TBC,
     BANCOLOMBIA_SAVINGS.name: BANCOLOMBIA_SAVINGS,
+    TBANK_TEXT.name: TBANK_TEXT,
 }
 
 #: Institutions in the corpus for which NO profile may be written, with the

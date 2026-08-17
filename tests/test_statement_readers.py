@@ -540,3 +540,110 @@ def test_no_wise_profile_exists_and_asking_says_why():
 def test_unknown_profile_names_the_ones_that_exist():
     with pytest.raises(StatementParseError, match="Unknown profile"):
         get_profile("banco_imaginario")
+
+
+# ===========================================================================
+# text_period_summary — Shape B (plan §4.2)
+# ===========================================================================
+
+from statement_fixtures import tbank_summary_text  # noqa: E402
+from statement_parser import (  # noqa: E402
+    EVIDENCE_PERIOD_END_SUMMARIES,
+    read_text_period_summary,
+)
+from statement_profiles import TBANK_TEXT  # noqa: E402
+
+
+def summary_file(tmp_path, name="text.txt", **kwargs):
+    path = tmp_path / name
+    path.write_text(tbank_summary_text(**kwargs), encoding="utf-8")
+    return str(path)
+
+
+DECEMBER = dict(month="December", year="2025",
+                open_date="22.11.2025", open_balance="+1 000,00 ₽",
+                close_date="21.12.2025", close_balance="+1 500,00 ₽",
+                income="+700,00 ₽", expenses="−200,00 ₽")
+
+
+def test_two_bounding_balances_become_two_balance_observations(tmp_path):
+    """There is no transaction detail: two balances bound the period and
+    everything between them is invisible."""
+    result = read_text_period_summary(summary_file(tmp_path, **DECEMBER),
+                                      TBANK_TEXT, currency="RUB")
+    opening, closing = result.movements
+    assert opening.balance_after == Decimal("1000.00")
+    assert closing.balance_after == Decimal("1500.00")
+    assert opening.date == date(2025, 11, 22)
+    assert closing.date == date(2025, 12, 21)
+    # No flow is asserted between them — inventing one would claim a movement
+    # the file never records.
+    assert opening.amount is None and closing.amount is None
+
+
+def test_the_evidence_kind_can_never_support_a_full_year(tmp_path):
+    result = read_text_period_summary(summary_file(tmp_path, **DECEMBER),
+                                      TBANK_TEXT, currency="RUB")
+    assert result.evidence_kind == EVIDENCE_PERIOD_END_SUMMARIES
+    assert any("peaked between them and returned looks flat" in w
+               for w in result.warnings)
+
+
+def test_the_period_comes_from_the_balance_lines_not_the_filename(tmp_path):
+    """`text 3.txt` is October and `text 12.txt` is January, so sorting these
+    by name shuffles the year."""
+    october = read_text_period_summary(
+        summary_file(tmp_path, name="text 3.txt", month="October", year="2025",
+                     open_date="22.09.2025", open_balance="+1 000,00 ₽",
+                     close_date="21.10.2025", close_balance="+1 000,00 ₽"),
+        TBANK_TEXT, currency="RUB")
+    january = read_text_period_summary(
+        summary_file(tmp_path, name="text 12.txt", month="January", year="2025",
+                     open_date="22.12.2024", open_balance="+1 000,00 ₽",
+                     close_date="21.01.2025", close_balance="+1 000,00 ₽"),
+        TBANK_TEXT, currency="RUB")
+    assert october.periods[0].start == date(2025, 9, 22)
+    assert january.periods[0].start == date(2024, 12, 22)
+    # The higher-numbered filename holds the EARLIER period.
+    assert january.periods[0].start < october.periods[0].start
+
+
+def test_the_totals_reconcile_against_the_balance_movement(tmp_path):
+    """+700 income and −200 expenses move 1000 to 1500."""
+    result = read_text_period_summary(summary_file(tmp_path, **DECEMBER),
+                                      TBANK_TEXT, currency="RUB")
+    assert not any("a sign was lost" in w for w in result.warnings)
+
+
+def test_a_lost_unicode_minus_shows_up_as_totals_that_do_not_reconcile(tmp_path):
+    """Written with an ASCII-positive Expenses line, the totals sum to +900
+    while the balances move by +500. The balances still parse and the timeline
+    still builds — only this arithmetic notices."""
+    broken = dict(DECEMBER, expenses="+200,00 ₽")
+    result = read_text_period_summary(summary_file(tmp_path, **broken),
+                                      TBANK_TEXT, currency="RUB")
+    assert any("a sign was lost" in w for w in result.warnings)
+
+
+def test_totals_never_become_balance_points(tmp_path):
+    result = read_text_period_summary(summary_file(tmp_path, **DECEMBER),
+                                      TBANK_TEXT, currency="RUB")
+    assert len(result.movements) == 2
+    assert all(m.description.startswith("Period ") for m in result.movements)
+
+
+def test_a_file_with_no_balance_line_is_no_data_not_zero(tmp_path):
+    path = tmp_path / "empty.txt"
+    path.write_text("Statement for December 2025\n", encoding="utf-8")
+    result = read_text_period_summary(str(path), TBANK_TEXT, currency="RUB")
+    assert result.no_data is True
+    assert result.movements == []
+    assert any("NO DATA" in w for w in result.warnings)
+
+
+def test_a_single_balance_line_cannot_establish_a_period(tmp_path):
+    path = tmp_path / "half.txt"
+    path.write_text("Statement for December 2025\n"
+                    "Balance on 21.12.2025: +1 500,00 ₽\n", encoding="utf-8")
+    with pytest.raises(StatementParseError, match="bounded by two"):
+        read_text_period_summary(str(path), TBANK_TEXT, currency="RUB")

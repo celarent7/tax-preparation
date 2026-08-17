@@ -370,6 +370,15 @@ def resolve_partial_date(value: Any, period: StatementPeriod,
 # What a reader emits (plan §6.1)
 # ---------------------------------------------------------------------------
 
+#: What a source file is capable of showing. A running balance can, in
+#: principle, evidence a full year. Two bounding balances per period NEVER can,
+#: however many periods there are: an account that peaked mid-period and
+#: returned looks flat (plan §4.2, §6.3).
+EVIDENCE_RUNNING_BALANCE = "running_balance"
+EVIDENCE_PERIOD_END_SUMMARIES = "period_end_summaries"
+EVIDENCE_NONE = "none"
+
+
 
 @dataclass(frozen=True)
 class MovementRecord:
@@ -441,6 +450,10 @@ class ReadResult:
     #: NOT a zero balance: emitting `$0` would assert a determined maximum the
     #: evidence cannot support (plan §9.6).
     no_data: bool = False
+    #: What KIND of evidence this file is, which is what caps the derived
+    #: basis. `running_balance` can in principle support a full year;
+    #: `period_end_summaries` never can, however many files there are.
+    evidence_kind: str = EVIDENCE_NONE
 
 
 # ---------------------------------------------------------------------------
@@ -728,7 +741,8 @@ def read_xlsx_running_balance(path: str,
     from statement_profiles import currency_for_sheet
 
     source_file = os.path.basename(path)
-    result = ReadResult(source_file=source_file, is_liability=profile.is_liability)
+    result = ReadResult(source_file=source_file, is_liability=profile.is_liability,
+                        evidence_kind=EVIDENCE_RUNNING_BALANCE)
 
     try:
         workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
@@ -1356,3 +1370,140 @@ def balance_at_year_end(points: List[CombinedPoint], tax_year: int
             f"{last.date.isoformat()} to {year_end.isoformat()}, so this is the "
             "last observed level, not an observed December 31 balance.")
     return last.usd, None
+
+
+# ---------------------------------------------------------------------------
+# Reader: text_period_summary (plan §4.2, step 5)
+# ---------------------------------------------------------------------------
+
+
+def read_text_period_summary(path: str,
+                             profile,
+                             currency: str) -> ReadResult:
+    """Read a period-end summary: two bounding balances and four totals.
+
+    **There is no transaction detail.** Two balances bound each period and
+    everything between them is invisible — an account that peaked mid-period
+    and returned looks flat. This is the shape that must NEVER yield a
+    determined maximum, so the result is stamped
+    `EVIDENCE_PERIOD_END_SUMMARIES` and the basis derivation caps it at
+    `period_end_summaries_only` however many files there are.
+
+    The period comes from the two balance lines, which carry full dates.
+    **Never from the filename**: `text 3.txt` is October and `text 12.txt` is
+    January, so sorting these by name shuffles the year (hazard 9.3).
+
+    The four totals are read but never become movements. They are used for one
+    thing: checking that `closing - opening` equals their signed sum. That
+    catches the U+2212 hazard directly — drop the Unicode minus on the
+    `Expenses` line and the arithmetic stops balancing, where otherwise an
+    expense would silently read as income (hazard 9.4).
+    """
+    source_file = os.path.basename(path)
+    result = ReadResult(source_file=source_file, currencies=[currency.strip().upper()],
+                        evidence_kind=EVIDENCE_PERIOD_END_SUMMARIES)
+    currency = currency.strip().upper()
+
+    try:
+        with open(path, "r", encoding="utf-8-sig") as handle:
+            lines = handle.read().splitlines()
+    except OSError as exc:
+        raise StatementParseError(f"{source_file}: cannot read — {exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise StatementParseError(
+            f"{source_file}: is not UTF-8 text — {exc}. The summary files carry "
+            "U+2212 and the ruble sign, so the encoding is load-bearing."
+        ) from exc
+
+    balance_pattern = re.compile(profile.balance_line)
+    balances = []
+    for number, line in enumerate(lines, start=1):
+        match = balance_pattern.match(unicodedata.normalize("NFKC", line))
+        if match is None:
+            continue
+        when = parse_full_date(match.group("date"), f"{source_file} line {number}")
+        amount = parse_decimal(match.group("balance"), profile.numbers,
+                               f"{source_file} line {number} balance")
+        if when is None or amount is None:
+            continue
+        balances.append((number, when, amount))
+
+    if len(balances) < 2:
+        if not balances:
+            result.no_data = True
+            result.warnings.append(
+                f"{source_file}: no balance line matched, so the file states "
+                "nothing this reader can use. Reported as NO DATA, not as a "
+                "zero balance.")
+            return result
+        raise StatementParseError(
+            f"{source_file}: found only one balance line. A period summary is "
+            "bounded by two — an opening and a closing — and one alone cannot "
+            "establish a period."
+        )
+    if len(balances) > 2:
+        result.warnings.append(
+            f"{source_file}: {len(balances)} balance lines found; the earliest "
+            "is read as the period opening and the latest as its closing.")
+
+    balances.sort(key=lambda item: (item[1], item[0]))
+    (open_row, open_date, open_balance) = balances[0]
+    (close_row, close_date, close_balance) = balances[-1]
+
+    result.periods.append(StatementPeriod(open_date, close_date, source_file))
+    result.movements.extend([
+        MovementRecord(date=open_date, description="Period opening balance",
+                       currency=currency, source_file=source_file,
+                       source_row=open_row, row_order=0,
+                       amount=None, balance_after=open_balance),
+        MovementRecord(date=close_date, description="Period closing balance",
+                       currency=currency, source_file=source_file,
+                       source_row=close_row, row_order=1,
+                       amount=None, balance_after=close_balance),
+    ])
+    result.warnings.append(
+        f"{source_file}: period-end summary only — two bounding balances "
+        f"({open_date.isoformat()} to {close_date.isoformat()}) and no "
+        "transaction detail. An account that peaked between them and returned "
+        "looks flat here.")
+
+    _check_summary_totals(lines, profile, result, source_file,
+                          open_balance, close_balance, currency)
+    return result
+
+
+def _check_summary_totals(lines, profile, result: ReadResult, source_file: str,
+                          opening: Decimal, closing: Decimal, currency: str) -> None:
+    """Verify `closing - opening` against the signed sum of the stated totals.
+
+    The totals are NOT movements and never become balance points. They are read
+    for this check alone, and the check earns its place by catching a specific
+    silent failure: `Expenses` is written with U+2212, and a normalizer that
+    dropped it would turn an expense into income. The balances would still
+    parse, the timeline would still build, and only this arithmetic would
+    notice.
+    """
+    totals: Dict[str, Decimal] = {}
+    for pattern in profile.total_lines:
+        compiled = re.compile(pattern)
+        for number, line in enumerate(lines, start=1):
+            match = compiled.match(unicodedata.normalize("NFKC", line))
+            if match is None:
+                continue
+            amount = parse_decimal(match.group("amount"), profile.numbers,
+                                   f"{source_file} line {number}")
+            if amount is not None:
+                totals[match.group("label")] = amount
+    if not totals:
+        return
+
+    stated = sum(totals.values(), Decimal("0"))
+    observed = closing - opening
+    tolerance = minor_unit(currency)
+    if abs(stated - observed) > tolerance:
+        result.warnings.append(
+            f"{source_file}: the stated totals sum to {stated} but the balances "
+            f"move by {observed} ({closing} - {opening}), a difference of "
+            f"{observed - stated}. Either a total was misread or a sign was "
+            "lost — the Expenses line carries U+2212, not an ASCII hyphen. "
+            f"Totals read: {', '.join(f'{k}={v}' for k, v in sorted(totals.items()))}.")
