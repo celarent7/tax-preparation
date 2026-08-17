@@ -318,10 +318,17 @@ Form 8938 is **out of scope** for this plugin. See `docs/limitations.md`.
 ## 9. Workflow
 
 Phase 1 (Claude) extracts; Phase 3 (Python) does the arithmetic and rule
-enforcement — the same split as every other tool here.
+enforcement — the same split as every other tool here. Phase 0 (Python) is an
+optional pre-processor that feeds Phase 1 where machine-readable statements
+exist.
 
 ```
-Phase 1  (Claude)   Read statements + the prior-year filed 114 PDF
+Phase 0  (Python)   statement_parser.py  -> account_timelines_<filer>_<year>.json
+                    |-- per-source readers -> normalized movement records
+                    |-- continuity + gap detection
+                    '-- timeline + derived max_value_basis
+                            |
+Phase 1  (Claude)   Read timelines + statements + the prior-year filed 114 PDF
                     -> emit fbar_roster_<filer>_<year>.json
                     -> USER CONFIRMATION GATE (SOP Phase 2)
                             |
@@ -332,7 +339,31 @@ Phase 3  (Python)   fbar_reconciler.py
                     '-- reconciliation.md + worksheet.md + roster.json
 ```
 
+**Phase 0 reports what the file says; it never decides what the filing claims.**
+It opens the statements, normalizes numbers and dates, merges multi-currency
+sub-accounts onto one axis at the December 31 rate, detects coverage gaps and
+continuity breaks, and **derives** `max_value_basis` from what it found.
+Reportability, ownership, which convention applies, the Item 15a election and
+which FX source to record all stay with Phase 1. A figure the parser cannot
+support from the file is emitted as absent with a reason, never as a default —
+an empty export is reported as "no data", not as a zero balance.
+
+That derivation is the point. If a human types `statement_full_year` into a
+roster by hand, V12 warns only when someone has already admitted the evidence is
+weak; derived from gap and continuity analysis, V12 fires honestly.
+
+Phase 0 is optional and file-format-bound: it reads `.xlsx` and plain-text
+statements. **PDF statements are read by the agent's `Read` tool in Phase 1**,
+as they always were.
+
 ```bash
+# Phase 0: parse statements into balance timelines (where .xlsx/.txt exist)
+python ./scripts/statement_parser.py parse \
+    --sources    ./sources.json \
+    --filer      primary \
+    --output-dir ./out
+
+
 # Reconcile the current year against the prior year
 python ./scripts/fbar_reconciler.py reconcile \
     --current ./fbar_roster_primary_2025.json \
@@ -406,9 +437,17 @@ Things no script can check. Run these before filing.
 ## 11. Limits
 
 This module produces **worksheets and findings, not a filed form.** It does not
-generate BSA E-Filing XML or a transmittable PDF; it does not parse bank
-statements; it does not handle Form 8938, Part IV or Part V. FinCEN 114 is
+generate BSA E-Filing XML or a transmittable PDF; it does not handle Form 8938,
+Part IV or Part V. FinCEN 114 is
 transmitted through BSA E-Filing by the taxpayer or their preparer, and every
 figure must be confirmed against final bank records first.
+
+Statement parsing is a **separate upstream tool** (Phase 0,
+`scripts/statement_parser.py`), and it is narrower than it sounds. It reads
+`.xlsx` and plain-text statements only — **PDF statements stay with the agent's
+`Read` tool**, so a PDF-only institution gets no timeline. It never decides
+reportability, ownership, conventions or the Item 15a election, and it never
+reconstructs a balance it cannot evidence. The reconciler itself still takes
+only normalized JSON.
 
 This is not tax or legal advice. See `DISCLAIMER.md` and `docs/limitations.md`.

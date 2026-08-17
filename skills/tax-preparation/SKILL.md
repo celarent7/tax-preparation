@@ -14,7 +14,7 @@ description: >
   results than general knowledge alone.
 allowed-tools: Read, Bash, WebSearch, WebFetch, Grep, Glob, Task, Skill, Write, AskUserQuestion
 metadata:
-  version: 3.3.0
+  version: 3.4.0
   last-updated: 2026-08-15
   target-users: individuals, families, self-employed
   tax-year: 2025
@@ -176,7 +176,24 @@ FBAR is filed **separately from the return**, through FinCEN's BSA E-Filing
 system, and is due April 15 with an automatic extension to October 15.
 
 **Workflow:**
-1. **Build the roster** (Phase 1): read each account's statements and the
+0. **Parse the statements** (Phase 0, optional): where the account has `.xlsx`
+   or plain-text statements, run them through the parser first rather than
+   reading balances by hand. It emits balance timelines with a **derived**
+   `max_value_basis`, so V12 in step 3 warns about the evidence rather than
+   about someone's typing.
+   ```bash
+   python ./scripts/statement_parser.py parse \
+       --sources ./sources.json --filer primary --output-dir ./out
+   ```
+   `sources.json` maps files to readers and account keys and lives at the
+   **workspace root beside the data**, never in this repo — see
+   `./examples/statements/` for a worked corpus and `sources.json`. **PDF
+   statements are not parsed**; read those with `Read` in step 1. The parser
+   reports what the files say and nothing more: reportability, ownership,
+   conventions and the Item 15a election are all step 1. Treat an empty export
+   as "no data", not as a zero balance.
+1. **Build the roster** (Phase 1): read the Phase 0 timelines (where they
+   exist), each account's remaining statements and the
    prior-year filed Form 114 PDF, and emit
    `fbar_roster_<filer_slug>_<year>.json` per the schema in
    `./scripts/fbar_schema.py`. Extract prior-year values from the filed form's
@@ -231,6 +248,8 @@ through the taxpayer or their preparer. Form 8938 (FATCA), Part IV
 | `./scripts/credit_eligibility_checker.py` | Tax-credit eligibility & amount checker (CTC, EITC, CDCC, AOTC, Saver's) incl. LLC, no-1116 FTC, and 2023–2025 clean-energy credits (30D/25E/25C/25D). `--year` switches the constants; vehicle credits enforce the OBBBA 2025-09-30 cut-off by purchase date and the §30D/§25E lesser-of-current/prior-MAGI rule; 2026 returns "not available" for energy credits rather than raising. |
 | `./scripts/qbi_calculator.py` | §199A QBI deduction (Form 8995/8995-A): adjusted QBI, SSTB phase-out, wage/UBIA limit, REIT/PTP component, overall taxable-income limit, negative-QBI carryforward, and the 2026 OBBBA $400 minimum. Sole-prop/Schedule-C + 1099-DIV Box 5 only — K-1 pass-throughs are rejected (see `./docs/limitations.md`). |
 | `./scripts/fbar_reconciler.py` | FinCEN 114 (FBAR) year-over-year reconciliation: matches accounts across years through renumbering, splits, merges and Cyrillic/Latin homoglyph drift; forces every prior-year account to an explicit disposition; runs validators V1–V13 (Treasury FX provenance, USD recomputation, $10,000 threshold arithmetic, 25-account rule, addresses, Item 15a carry-forward, Form 114a spousal scope, retention); emits a reconciliation report, a Form 114 keying worksheet, and next year's roster. Part II/III only. See `./references/fbar_guide.md`. |
+| `./scripts/statement_parser.py` | FBAR **Phase 0**: parses `.xlsx` and plain-text bank statements into per-account balance timelines. Per-source readers (running balance, two-sheet credit card, period-end summary) driven by declarative profiles and an explicit `sources.json` — never by sniffing file contents. Merges multi-currency sub-accounts onto one time axis and converts at the December 31 Treasury rate, so the maximum is the peak of the *combined* series rather than the sum of per-currency maxima. Detects coverage gaps and continuity breaks, reports an unknowable intraday order or an unobserved currency as a *bound* rather than a figure, and **derives** `max_value_basis` from the evidence found. Emits signed per-currency components with no convention applied, and no bare maximum for a liability. **No PDF parsing** (that stays with `Read`); decides nothing about reportability, ownership, conventions or Item 15a. See `./examples/statements/README.md`. |
+| `./scripts/statement_profiles.py` | Declarative column maps for the statement parser, plus the institutions the corpus cannot specify a profile for and why |
 | `./scripts/fbar_schema.py` | FBAR roster schema, enums, loader and the account-number normalizer (matching only — never for display) |
 | `./scripts/tax_savings_finder.py` | Proactive savings engine — reads a flat taxpayer profile and emits ranked opportunities (M1–M12: 401(k) headroom, backdoor Roth + pro-rata, mega backdoor, tax-loss harvesting, appreciated-stock donation, QCD, SE health insurance, §179/bonus, HSA, OBBBA senior bonus, tips/overtime, home office (M12)) with dollar estimates, deadlines, and CA nonconformity caveats. See `./references/tax_planning.md`. |
 

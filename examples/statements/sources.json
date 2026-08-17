@@ -1,0 +1,55 @@
+{
+  "tax_year": 2025,
+  "fx_rates": [
+    {"currency": "EUR", "units_per_usd": 2.0, "as_of": "2025-12-31", "source": "other"},
+    {"currency": "COP", "units_per_usd": 4000.0, "as_of": "2025-12-31", "source": "other"},
+    {"currency": "RUB", "units_per_usd": 100.0, "as_of": "2025-12-31", "source": "other"}
+  ],
+  "sources": [
+    {
+      "filer": "example",
+      "institution": "multicurrency-bank",
+      "path": "multicurrency",
+      "glob": "account_statement_*.xlsx",
+      "reader": "xlsx_running_balance",
+      "profile": "tbc",
+      "account_key": "example-multicurrency-0002",
+      "account_group": "example-multicurrency-0002",
+      "period_start": "2025-01-01",
+      "period_end": "2025-12-31",
+      "notes": "One file per currency under a single account number, grouped into one FBAR entry. The grouping is a RECORDED DECISION, not something the parser inferred."
+    },
+    {
+      "filer": "example",
+      "institution": "savings-bank",
+      "path": "savings",
+      "glob": "Extracto_*.xlsx",
+      "reader": "xlsx_running_balance",
+      "profile": "bancolombia_savings",
+      "account_key": "example-savings-0003",
+      "currency": "COP",
+      "notes": "Quarterly cadence; the first period opens on December 31 of the PRIOR calendar year, and the movement rows are non-padded D/MM."
+    },
+    {
+      "filer": "example",
+      "institution": "summary-bank",
+      "path": "summaries",
+      "glob": "text*.txt",
+      "reader": "text_period_summary",
+      "profile": "tbank_text",
+      "account_key": "example-summary-0004",
+      "currency": "RUB",
+      "notes": "Period-end summaries only. The filenames do not sort into period order, which is why the period comes from the balance lines."
+    },
+    {
+      "filer": "example",
+      "institution": "card-bank",
+      "path": "cards",
+      "glob": "Extracto_*_Mastercard_Detallado_*.xlsx",
+      "reader": "xlsx_two_sheet_card",
+      "profile": "bancolombia_card",
+      "account_key_pattern": "Detallado_(?P<key>\\d+)\\.xlsx$",
+      "notes": "One directory, several cards, distinguished only by the filename suffix — which is why account_key_pattern exists. Balances are liabilities."
+    }
+  ]
+}

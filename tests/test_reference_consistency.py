@@ -413,3 +413,140 @@ def test_skill_safe_harbor_note_includes_mfs_threshold():
     with open(os.path.join(ROOT, "skills", "tax-preparation", "SKILL.md")) as f:
         text = f.read()
     assert "$75,000" in text and "$150,000" in text
+
+
+# ---------------------------------------------------------------------------
+# Phase 0 — the "does not parse statements" claim must not go stale again
+# ---------------------------------------------------------------------------
+
+#: Distributed files that a reader takes as a statement of what the plugin can
+#: do. `docs/*_plan.md` are excluded here for the same reason
+#: `test_every_script_referenced_in_docs_exists` excludes them: a plan is a
+#: roadmap, not a published capability claim.
+def _distributed_docs():
+    import glob
+
+    return (glob.glob(os.path.join(REFS, "**", "*.md"), recursive=True)
+            + [p for p in glob.glob(os.path.join(ROOT, "docs", "*.md"))
+               if not p.endswith("_plan.md")]
+            + [os.path.join(ROOT, "skills", "tax-preparation", "SKILL.md"),
+               os.path.join(ROOT, "README.md")])
+
+
+#: The general denial. Deliberately narrow: `fbar_guide.md` and
+#: `limitations.md` both state the TRUE narrower limit — PDF statements are not
+#: parsed and stay with the `Read` tool — and that must not trip this.
+#:
+#: Matched against text with markdown emphasis STRIPPED. The claim is written
+#: as "does **not** parse bank statements", so a pattern anchored on plain
+#: words never fires and the test silently passes on the very string it exists
+#: to catch.
+_NO_PARSING_CLAIMS = (
+    r"not parse bank statements",
+    r"does not parse statements",
+    r"no bank statement parsing",
+)
+
+
+def _plain(text):
+    """Strip markdown emphasis and collapse whitespace, for phrase matching."""
+    return " ".join(re.sub(r"[*_`]", "", text).split())
+
+
+def test_no_distributed_doc_claims_the_plugin_cannot_parse_statements():
+    """F6: the claim appeared in THREE distributed files, and §12 of the plan
+    listed one. Amending one and shipping the tool would leave two published
+    false statements.
+
+    The claim went stale silently once; this makes a second time a test
+    failure rather than a discovery.
+    """
+    if not os.path.exists(os.path.join(ROOT, "scripts", "statement_parser.py")):
+        pytest.skip("Phase 0 tool not present, so the claim is still true")
+
+    stale = []
+    for doc in _distributed_docs():
+        with open(doc) as f:
+            text = _plain(f.read())
+        for pattern in _NO_PARSING_CLAIMS:
+            if re.search(pattern, text, re.IGNORECASE):
+                stale.append(f"{os.path.relpath(doc, ROOT)} matches {pattern!r}")
+
+    assert not stale, (
+        "scripts/statement_parser.py exists, so these published claims are "
+        "false: " + "; ".join(sorted(stale))
+    )
+
+
+def test_the_staleness_check_actually_fires_on_the_claim_it_guards():
+    """The patterns are matched against emphasis-stripped text, and this is why.
+
+    Written as `does **not** parse bank statements` — the form the claim
+    actually took in `docs/limitations.md` — a pattern anchored on plain words
+    never fires, and the guard passes on the one string it exists to catch.
+    """
+    withdrawn = ("It does **not** generate BSA E-Filing XML or a transmittable "
+                 "PDF, does **not** parse bank statements into maxima, and "
+                 "covers Part II only.")
+    assert any(re.search(pattern, _plain(withdrawn), re.IGNORECASE)
+               for pattern in _NO_PARSING_CLAIMS)
+
+    # The narrower limit that replaced it is still sayable.
+    kept = "**PDF statements are not parsed** and stay with the `Read` tool."
+    assert not any(re.search(pattern, _plain(kept), re.IGNORECASE)
+                   for pattern in _NO_PARSING_CLAIMS)
+
+
+def test_the_reconciler_docstring_points_at_the_phase_0_tool():
+    """The bullet is AMENDED, not deleted: the reconciler still takes only
+    normalized JSON, and statement parsing is now a separate upstream tool."""
+    with open(os.path.join(ROOT, "scripts", "fbar_reconciler.py")) as f:
+        text = f.read()
+    # Collapse the wrapping so the assertions bind to the words, not the
+    # column the docstring happens to break at.
+    docstring = " ".join(text.split('"""')[1].split())
+
+    assert "No statement parsing" in docstring
+    assert "statement_parser.py" in docstring
+    assert "SEPARATE UPSTREAM TOOL" in docstring
+    assert "still takes only normalized JSON" in docstring
+
+
+def test_fbar_guide_documents_phase_0_in_the_workflow():
+    text = read_ref("fbar_guide.md")
+    workflow = text.split("## 9. Workflow", 1)[1].split("## 10.", 1)[0]
+
+    assert "Phase 0" in workflow
+    assert "statement_parser.py" in workflow
+    assert "account_timelines_" in workflow
+    # The boundary travels with the tool, or the tool reads as doing more.
+    assert "never decides what the filing claims" in workflow
+    assert "PDF statements are read by the agent's `Read` tool" in workflow
+
+
+def test_limitations_states_the_phase_0_boundary():
+    with open(os.path.join(ROOT, "docs", "limitations.md")) as f:
+        text = f.read()
+    fbar_bullet = next(line for line in text.splitlines()
+                       if "FBAR (FinCEN 114)" in line)
+
+    assert "statement_parser.py" in fbar_bullet
+    assert "Phase 0" in fbar_bullet
+    # The narrower limits that replaced the withdrawn one.
+    assert "PDF statements are not parsed" in fbar_bullet
+    assert "Item 15a" in fbar_bullet
+
+
+def test_skill_registers_the_phase_0_tool_so_the_agent_can_reach_it():
+    """A Phase 0 tool that is not in the script table never runs — no amount of
+    correct Python fixes that."""
+    with open(os.path.join(ROOT, "skills", "tax-preparation", "SKILL.md")) as f:
+        text = f.read()
+
+    assert "| `./scripts/statement_parser.py` |" in text
+    assert "| `./scripts/statement_profiles.py` |" in text
+
+    fbar_step = text.split("### Step 6: FBAR", 1)[1].split("## Scripts Reference", 1)[0]
+    assert "Phase 0" in fbar_step
+    assert "statement_parser.py parse" in fbar_step
+    assert "sources.json" in fbar_step

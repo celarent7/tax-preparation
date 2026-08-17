@@ -29,6 +29,14 @@ scripts/verified_data.json
 local_data/
 .antigravitycli/
 
+# FBAR Phase 0 output. Both artifacts carry taxpayer PII by design: statement
+# descriptions are kept verbatim and embed counterparty names, and the source
+# file paths are retained for V13 and the five-year record. They belong beside
+# the statements they describe, in the workspace — never here. The workspace
+# needs the same two lines; this pair only guards against a run inside the repo.
+account_timelines_*.json
+statement_parse_*.md
+
 # Dev artifacts
 tax-preparation-workspace/
 .integrity-sha256.txt
@@ -54,3 +62,4 @@ docs/remediation_log.md
 docs/qbi_calculator_plan.md
 docs/savings_engine_plan.md
 docs/fbar_module_plan.md
+docs/statement_parser_plan.md

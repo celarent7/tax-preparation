@@ -15,7 +15,12 @@ What it does NOT do (plan §2, and deliberately):
   * No BSA E-Filing XML or PDF. The worksheet is a keying aid; transmission
     goes through the taxpayer or their preparer.
   * No statement parsing. Maxima arrive as normalized JSON from Phase 1,
-    consistent with every other tool in this plugin.
+    consistent with every other tool in this plugin. Statement parsing is a
+    SEPARATE UPSTREAM TOOL — `scripts/statement_parser.py` (Phase 0) turns
+    statements into balance timelines and derives `max_value_basis` from the
+    coverage it actually found. This reconciler still takes only normalized
+    JSON, and Phase 1 still decides reportability, ownership, conventions and
+    the Item 15a election before a roster reaches it.
   * No Form 8938/FATCA, no Part IV (signature authority only), no Part V
     (consolidated). The schema reserves the fields; v1 reconciles Part II
     (separately owned) and Part III (jointly owned).
