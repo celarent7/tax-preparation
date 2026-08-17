@@ -40,7 +40,7 @@ import sys
 import unicodedata
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -1577,3 +1577,241 @@ def read_xlsx_two_sheet_card(path: str,
             "the `credit_card_positive_balance_only` convention, which the "
             "parser records but does not apply.")
     return result
+
+
+# ---------------------------------------------------------------------------
+# Basis derivation and timeline assembly (plan §6.2, §6.3, step 7)
+# ---------------------------------------------------------------------------
+
+#: The strongest basis each kind of evidence could ever support. A cap, not a
+#: verdict: gaps, breaks and bounded intervals weaken it further.
+_EVIDENCE_CEILING = {
+    EVIDENCE_RUNNING_BALANCE: "statement_full_year",
+    EVIDENCE_PERIOD_END_SUMMARIES: "period_end_summaries_only",
+    EVIDENCE_NONE: "unknown",
+}
+
+
+def derive_basis(read_results: List[ReadResult],
+                 gaps: List[Dict[str, Any]],
+                 continuity_breaks: List[Dict[str, Any]],
+                 interval_uncertainty: List[Dict[str, Any]],
+                 has_balances: bool) -> Tuple[str, List[str]]:
+    """Derive `max_value_basis` from what the files actually contain.
+
+    **This is the single most important output.** `fbar_schema.MAX_VALUE_BASES`
+    already defines the vocabulary; the point of deriving rather than asserting
+    it is validator V12. If a human types `statement_full_year` into a roster by
+    hand, V12 is decorative — it warns only when someone has already admitted
+    the evidence is weak. Derived from gap and continuity analysis, **V12 fires
+    honestly**, and the existing validator becomes worth having.
+
+    Evidence is only ever capped, never promoted (`weaken_basis`):
+
+    | Evidence found | Basis |
+    |---|---|
+    | Running balance, no gaps, continuity holds | `statement_full_year` |
+    | Running balance, period gap or break | `statement_partial` |
+    | Two bounding balances per period only | `period_end_summaries_only` |
+    | Movements with no balances anywhere | `estimate` |
+    | No files, or nothing readable in them | `unknown` |
+
+    Returns `(basis, reasons)` — the reasons are what the workpaper prints, and
+    the five-year recordkeeping rule wants the derivation, not just the answer.
+    """
+    reasons: List[str] = []
+    contributing = [r for r in read_results if r.movements]
+    if not contributing:
+        return "unknown", [
+            "No file yielded a readable balance, so the evidence cannot support "
+            "any maximum. This is the Item 15a decision, and it is Claude's."]
+
+    basis = "statement_full_year"
+    for result in contributing:
+        ceiling = _EVIDENCE_CEILING.get(result.evidence_kind, "unknown")
+        if BASIS_STRENGTH.index(ceiling) > BASIS_STRENGTH.index(basis):
+            reasons.append(
+                f"{result.source_file} is {result.evidence_kind!r} evidence, "
+                f"which can support at best {ceiling!r}.")
+        basis = weaken_basis(basis, ceiling)
+
+    if not has_balances:
+        # A ledger yields CHANGES, not levels. Without an anchor balance no
+        # timeline can be built from it, and a reconstructed one is never
+        # promoted: completeness of a ledger is unverifiable from the ledger.
+        basis = weaken_basis(basis, "estimate")
+        reasons.append(
+            "No row anywhere states a balance, so only movements are known and "
+            "no level can be established without an anchor balance.")
+
+    if gaps:
+        basis = weaken_basis(basis, "statement_partial")
+        total = sum(g["days"] for g in gaps)
+        reasons.append(
+            f"{len(gaps)} coverage gap(s) totalling {total} day(s) — "
+            + "; ".join(f"{g['start']}..{g['end']} ({g['position']})" for g in gaps)
+            + ". The account was free to move unobserved in those days.")
+
+    breaks = [f for f in continuity_breaks if f.get("kind") == "break"]
+    if breaks:
+        basis = weaken_basis(basis, "statement_partial")
+        reasons.append(
+            f"{len(breaks)} continuity break(s): a period's closing balance is "
+            "not the next one's opening, so a statement is missing or a column "
+            "was read wrongly.")
+
+    if interval_uncertainty:
+        basis = weaken_basis(basis, "statement_partial")
+        kinds = sorted({u["kind"] for u in interval_uncertainty})
+        reasons.append(
+            f"The combined series carries interval uncertainty ({', '.join(kinds)}), "
+            "so the maximum is a bound rather than a determined figure.")
+
+    if any(r.period_inferred_from_rows for r in contributing):
+        basis = weaken_basis(basis, "statement_partial")
+        reasons.append(
+            "At least one statement's period was derived from its own rows. Such "
+            "a period cannot show that a statement is missing from either end.")
+
+    if basis == "statement_full_year":
+        reasons.append(
+            "Running balances cover the calendar year with no gap, no continuity "
+            "break and no bounded interval — FinCEN's periodic-statement safe "
+            "harbour is available on this evidence.")
+    return basis, reasons
+
+
+def build_timeline(account_key: str,
+                   tax_year: int,
+                   read_results: List[ReadResult],
+                   fx_rates: Dict[str, Decimal],
+                   account_group: Optional[str] = None) -> AccountTimeline:
+    """Assemble one account group's timeline from everything its files yielded.
+
+    **Grouping is configuration, not inference.** Which files belong to one
+    account was decided and written down in `sources.json`; the parser never
+    decides that two files are one account. Where the decision has not been
+    made, the group is left unset and the files become separate timelines with
+    the ambiguity flagged, rather than merged on a guess (plan §5.2, §8.2).
+    """
+    movements: List[MovementRecord] = []
+    periods: List[StatementPeriod] = []
+    warnings: List[str] = []
+    source_files: List[str] = []
+    for result in read_results:
+        movements.extend(result.movements)
+        periods.extend(result.periods)
+        warnings.extend(result.warnings)
+        if result.source_file and result.source_file not in source_files:
+            source_files.append(result.source_file)
+
+    points, uncertainty, currencies = build_combined_series(movements, fx_rates)
+    gaps = detect_gaps(periods, tax_year)
+    breaks = detect_continuity_breaks(movements, periods)
+    is_liability = any(r.is_liability for r in read_results)
+    maximum = derive_max(points, is_liability)
+    year_end, year_end_caveat = balance_at_year_end(points, tax_year)
+    if year_end_caveat:
+        warnings.append(f"December 31 balance: {year_end_caveat}")
+
+    has_balances = any(m.balance_after is not None for m in movements)
+    basis, reasons = derive_basis(read_results, gaps, breaks, uncertainty, has_balances)
+
+    series: Dict[str, List[BalancePoint]] = {}
+    for record in sorted(movements, key=MovementRecord.order_key):
+        if record.balance_after is None:
+            continue
+        series.setdefault(record.currency, []).append(BalancePoint(
+            date=record.date, currency=record.currency,
+            balance=record.balance_after,
+            source_file=record.source_file, source_row=record.source_row))
+
+    return AccountTimeline(
+        account_key=account_key,
+        account_group=account_group or account_key,
+        tax_year=tax_year,
+        currencies=currencies,
+        series=series,
+        combined_usd=points,
+        max_usd=maximum["max_usd"],
+        max_usd_bound=maximum["max_usd_bound"],
+        date_of_maximum=maximum["date_of_maximum"],
+        max_components=maximum["max_components"],
+        is_liability=is_liability,
+        max_signed_usd=maximum["max_signed_usd"],
+        max_positive_usd=maximum["max_positive_usd"],
+        balance_dec_31=year_end,
+        periods=periods,
+        gaps=gaps,
+        continuity_breaks=breaks,
+        interval_uncertainty=uncertainty,
+        parser_warnings=warnings + reasons,
+        max_value_basis=basis,
+        source_files=source_files,
+        movement_count=len(movements),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Serialization — where Decimal stops (plan §6.2)
+# ---------------------------------------------------------------------------
+
+#: Where every emitted figure is rounded. All internal arithmetic is `Decimal`,
+#: and the continuity checks compare exactly — but the emitted JSON carries
+#: plain JSON numbers, which the roster and `v3_recompute_usd` consume as
+#: `float` at a $1.00 tolerance. **The exact-equality reasoning justifies the
+#: parser's own checks and nothing downstream.** `fbar_schema._number` rejects
+#: anything that is not an int or a float, so emitting Decimal-as-string here
+#: would make the timeline unusable as roster input.
+JSON_MONEY_PLACES = Decimal("0.01")
+
+
+def money(value: Optional[Decimal]) -> Optional[float]:
+    """Round one figure to cents and hand it to JSON as a float."""
+    if value is None:
+        return None
+    return float(value.quantize(JSON_MONEY_PLACES, rounding=ROUND_HALF_UP))
+
+
+def timeline_to_json(timeline: AccountTimeline) -> Dict[str, Any]:
+    """Serialize a timeline to plain JSON types — the Phase 1 input.
+
+    `max_value_components` is shaped exactly as the roster schema takes it,
+    `[{"currency", "amount"}, ...]` in LOCAL signed units, so Claude can carry
+    it across without re-deriving anything — and so `v3_recompute_usd` can
+    re-convert it and reconcile against the stated maximum.
+    """
+    return {
+        "account_key": timeline.account_key,
+        "account_group": timeline.account_group,
+        "tax_year": timeline.tax_year,
+        "currencies": list(timeline.currencies),
+        "is_liability": timeline.is_liability,
+        "max_value_basis": timeline.max_value_basis,
+        "max_usd": money(timeline.max_usd),
+        "max_usd_bound": timeline.max_usd_bound,
+        "max_signed_usd": money(timeline.max_signed_usd),
+        "max_positive_usd": money(timeline.max_positive_usd),
+        "date_of_maximum": (timeline.date_of_maximum.isoformat()
+                            if timeline.date_of_maximum else None),
+        "max_value_components": [
+            {"currency": currency, "amount": money(amount)}
+            for currency, amount in sorted(timeline.max_components.items())
+        ],
+        "year_end_balance_usd": money(timeline.balance_dec_31),
+        "periods": [{"start": p.start.isoformat(), "end": p.end.isoformat(),
+                     "source_file": p.source_file} for p in timeline.periods],
+        "gaps": timeline.gaps,
+        "continuity_breaks": timeline.continuity_breaks,
+        "interval_uncertainty": timeline.interval_uncertainty,
+        "parser_warnings": timeline.parser_warnings,
+        "source_documents": list(timeline.source_files),
+        "movement_count": timeline.movement_count,
+        "combined_usd_series": [
+            {"date": point.date.isoformat(), "usd": money(point.usd),
+             "components": {c: money(a) for c, a in sorted(point.components.items())},
+             "unknown_currencies": point.unknown_currencies,
+             "bound": point.bound}
+            for point in timeline.combined_usd
+        ],
+    }
