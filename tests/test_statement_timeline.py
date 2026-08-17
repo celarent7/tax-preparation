@@ -259,3 +259,324 @@ def test_findings_name_both_files_so_a_break_can_be_traced():
         two_period_movements("110.00", "200.00", "50.00"), [JAN, FEB])
     assert findings[0]["source_files"] == ["jan.xlsx", "feb.xlsx"]
     assert "jan.xlsx" in findings[0]["message"]
+
+
+# ===========================================================================
+# §8 — multi-currency merge and FX conversion
+# ===========================================================================
+
+from statement_parser import (  # noqa: E402
+    BOUND_AT_LEAST,
+    BOUND_UNORDERED,
+    StatementParseError,
+    balance_at_year_end,
+    build_combined_series,
+    derive_max,
+    to_usd,
+)
+
+# Invented rates, chosen so the arithmetic is checkable by hand.
+RATES = {"EUR": Decimal("2"), "GEL": Decimal("4"), "COP": Decimal("4000")}
+
+
+# ---------------------------------------------------------------------------
+# FX direction
+# ---------------------------------------------------------------------------
+
+def test_usd_is_local_divided_by_units_per_usd_never_the_reciprocal():
+    """`units_per_usd` is foreign units per ONE dollar. Storing or applying the
+    reciprocal silently inverts every conversion for that currency — and for a
+    rate near 1.0 the result still looks plausible."""
+    assert to_usd(Decimal("100"), "EUR", RATES) == Decimal("50")
+    assert to_usd(Decimal("100"), "EUR", RATES) != Decimal("200")
+    assert to_usd(Decimal("100"), "USD", RATES) == Decimal("100")
+
+
+def test_a_missing_rate_is_refused_rather_than_treated_as_one_to_one():
+    with pytest.raises(StatementParseError, match="No exchange rate supplied for GBP"):
+        to_usd(Decimal("100"), "GBP", RATES)
+
+
+def test_a_non_positive_rate_is_refused():
+    with pytest.raises(StatementParseError, match="must be positive"):
+        to_usd(Decimal("100"), "EUR", {"EUR": Decimal("0")})
+
+
+# ---------------------------------------------------------------------------
+# Forward-fill: a currency absent from an event is unchanged, not zero
+# ---------------------------------------------------------------------------
+
+def test_a_currency_that_did_not_move_holds_its_level():
+    """Step 2 of the merge is the one that is silently wrong if omitted."""
+    movements = [
+        movement(date(2025, 1, 5), "100", currency="USD", source_file="usd.xlsx", order=0),
+        movement(date(2025, 2, 5), "200", currency="EUR", source_file="eur.xlsx", order=0),
+        movement(date(2025, 3, 5), "150", currency="USD", source_file="usd.xlsx", order=1),
+    ]
+    points, _, currencies = build_combined_series(movements, RATES)
+    assert currencies == ["EUR", "USD"]
+    # March: USD moved to 150, EUR did not move and is still 200 (= $100).
+    assert points[-1].components == {"USD": Decimal("150"), "EUR": Decimal("200")}
+    assert points[-1].usd == Decimal("250")
+
+
+def test_a_currency_before_its_first_observation_is_unknown_not_zero(  ):
+    """TBC's GEL sheet has a SINGLE data row, in November. For January through
+    October that currency's level is genuinely unknown: forward-fill has no
+    prior value, back-filling asserts a level the file never states, and
+    zero-filling asserts an empty wallet. A full-year statement with one
+    transaction does not describe a zero-balance account — it describes an
+    account whose opening balance was never exported.
+
+    Both zero-fill and back-fill pass a naive test, so this is asserted
+    explicitly."""
+    movements = [
+        movement(date(2025, 1, 5), "100", currency="USD", source_file="usd.xlsx", order=0),
+        movement(date(2025, 11, 2), "400", currency="GEL", source_file="gel.xlsx", order=0),
+    ]
+    points, uncertainty, _ = build_combined_series(movements, RATES)
+
+    january = points[0]
+    assert january.unknown_currencies == ["GEL"]
+    assert "GEL" not in january.components          # not back-filled
+    assert january.usd == Decimal("100")            # not zero-filled into the sum
+    assert january.is_bounded is True
+
+    november = points[-1]
+    assert november.unknown_currencies == []
+    assert november.usd == Decimal("200")           # 100 USD + 400/4 GEL
+
+    at_least = [u for u in uncertainty if u["kind"] == BOUND_AT_LEAST]
+    assert [u["currency"] for u in at_least] == ["GEL"]
+    assert at_least[0]["until"] == "2025-11-02"
+
+
+def test_a_peak_inside_an_unknown_prefix_is_reported_as_at_least():
+    """The peak falls in January, while GEL has still never been observed. The
+    figure is a LOWER bound: the unobserved currency could only have added."""
+    movements = [
+        movement(date(2025, 1, 5), "1000", currency="USD", source_file="usd.xlsx", order=0),
+        movement(date(2025, 6, 5), "100", currency="USD", source_file="usd.xlsx", order=1),
+        movement(date(2025, 11, 2), "4", currency="GEL", source_file="gel.xlsx", order=0),
+    ]
+    points, _, _ = build_combined_series(movements, RATES)
+    result = derive_max(points, is_liability=False)
+    assert result["date_of_maximum"] == date(2025, 1, 5)
+    assert result["max_usd"] == Decimal("1000")
+    assert result["max_usd_bound"] == BOUND_AT_LEAST
+    # Only the observed currency is a component; GEL is absent, not zero.
+    assert result["max_components"] == {"USD": Decimal("1000")}
+
+
+def test_a_peak_after_every_currency_is_observed_is_not_bounded():
+    movements = [
+        movement(date(2025, 1, 5), "100", currency="USD", source_file="usd.xlsx", order=0),
+        movement(date(2025, 11, 2), "4", currency="GEL", source_file="gel.xlsx", order=0),
+    ]
+    points, _, _ = build_combined_series(movements, RATES)
+    result = derive_max(points, is_liability=False)
+    assert result["date_of_maximum"] == date(2025, 11, 2)
+    assert result["max_usd"] == Decimal("101")
+    assert result["max_usd_bound"] is None
+
+
+# ---------------------------------------------------------------------------
+# The property that pins §8: max of the merged series != sum of maxima
+# ---------------------------------------------------------------------------
+
+def test_the_maximum_is_not_the_sum_of_per_currency_maxima():
+    """Per-currency peaks occur on different dates; summing them invents a
+    moment that never existed. The peak is a single date on a COMBINED series.
+
+    USD peaks at 1000 in March and falls to 100 in June.
+    EUR is 200 (=$100) until June, when it rises to 1000 (=$500).
+    Sum of maxima would be 1000 + 500 = $1500 — an instant that never was.
+    The real combined peak is March: 1000 + 100 = $1100.
+    """
+    movements = [
+        movement(date(2025, 1, 5), "200", currency="EUR", source_file="eur.xlsx", order=0),
+        movement(date(2025, 3, 5), "1000", currency="USD", source_file="usd.xlsx", order=0),
+        movement(date(2025, 6, 5), "100", currency="USD", source_file="usd.xlsx", order=1),
+        movement(date(2025, 6, 6), "1000", currency="EUR", source_file="eur.xlsx", order=1),
+    ]
+    points, _, _ = build_combined_series(movements, RATES)
+    result = derive_max(points, is_liability=False)
+
+    per_currency_maxima = Decimal("1000") + to_usd(Decimal("1000"), "EUR", RATES)
+    assert per_currency_maxima == Decimal("1500")
+
+    assert result["max_usd"] == Decimal("1100")
+    assert result["max_usd"] < per_currency_maxima
+    assert result["date_of_maximum"] == date(2025, 3, 5)
+    assert result["max_components"] == {"USD": Decimal("1000"), "EUR": Decimal("200")}
+
+
+def test_conversion_commutes_with_taking_the_maximum():
+    """One rate applies to every point in the year, which is what licenses
+    converting point-wise and taking the max afterwards."""
+    movements = [
+        movement(date(2025, 1, 5), "100", currency="EUR", source_file="eur.xlsx", order=0),
+        movement(date(2025, 6, 5), "300", currency="EUR", source_file="eur.xlsx", order=1),
+        movement(date(2025, 9, 5), "200", currency="EUR", source_file="eur.xlsx", order=2),
+    ]
+    points, _, _ = build_combined_series(movements, RATES)
+    converted_then_maxed = derive_max(points, is_liability=False)["max_usd"]
+    maxed_then_converted = to_usd(Decimal("300"), "EUR", RATES)
+    assert converted_then_maxed == maxed_then_converted
+
+
+# ---------------------------------------------------------------------------
+# §8.1 — ordering within a day
+# ---------------------------------------------------------------------------
+
+def cross_stream_same_day(order_usd_first=True):
+    """Two currencies both moving on one date, with no timestamp to separate
+    them. USD goes 100 -> 500; EUR goes 200 (=$100) -> 100 (=$50)."""
+    usd = [movement(date(2025, 1, 1), "100", currency="USD", source_file="usd.xlsx", order=0),
+           movement(date(2025, 6, 5), "500", currency="USD", source_file="usd.xlsx", order=1)]
+    eur = [movement(date(2025, 1, 1), "200", currency="EUR", source_file="eur.xlsx", order=0),
+           movement(date(2025, 6, 5), "100", currency="EUR", source_file="eur.xlsx", order=1)]
+    return (usd + eur) if order_usd_first else (eur + usd)
+
+
+def test_a_peak_that_depends_on_intraday_sequence_is_a_bound_not_a_figure():
+    """Two independent streams moved on one date and no timestamp separates
+    them. Taking the day's maximum per currency would manufacture an instant
+    that never existed; taking the day's last would discard a real intraday
+    peak. Neither is acceptable as a default."""
+    points, uncertainty, _ = build_combined_series(cross_stream_same_day(), RATES)
+    result = derive_max(points, is_liability=False)
+
+    # Ceiling for 5 June: USD at its highest (500) with EUR at its highest
+    # (200 = $100) — reachable by some interleaving, so a true upper bound.
+    assert result["max_usd"] == Decimal("600")
+    assert result["max_usd_bound"] == BOUND_UNORDERED
+    assert result["date_of_maximum"] == date(2025, 6, 5)
+    assert any(u["kind"] == BOUND_UNORDERED for u in uncertainty)
+
+
+def test_reordering_the_same_day_rows_changes_nothing():
+    """The reported figure must not depend on which order the reader happened
+    to see the streams in — that is what makes a bound honest rather than a
+    silent pick."""
+    first = derive_max(build_combined_series(cross_stream_same_day(True), RATES)[0], False)
+    second = derive_max(build_combined_series(cross_stream_same_day(False), RATES)[0], False)
+    assert first["max_usd"] == second["max_usd"]
+    assert first["max_usd_bound"] == second["max_usd_bound"] == BOUND_UNORDERED
+    assert first["date_of_maximum"] == second["date_of_maximum"]
+
+
+def test_same_day_rows_within_one_file_are_not_ambiguous():
+    """Within a file, row order IS the sequence — a running-balance file gives
+    one balance per row. Only the interleaving ACROSS streams is unknowable."""
+    movements = [
+        movement(date(2025, 1, 9), "110", currency="COP", source_file="q1.xlsx", row=12, order=0),
+        movement(date(2025, 1, 9), "100", currency="COP", source_file="q1.xlsx", row=13, order=1),
+    ]
+    points, uncertainty, _ = build_combined_series(movements, RATES)
+    assert uncertainty == []
+    result = derive_max(points, is_liability=False)
+    assert result["max_usd_bound"] is None
+    # The intraday peak is kept, not discarded by taking the day's last.
+    assert result["max_usd"] == to_usd(Decimal("110"), "COP", RATES)
+
+
+def test_date_of_maximum_breaks_ties_to_the_earliest_date():
+    """A maximum touched on several dates is common on a flat account, and an
+    unspecified tie-break makes the output non-deterministic."""
+    movements = [
+        movement(date(2025, 3, 5), "100", currency="USD", source_file="a.xlsx", order=0),
+        movement(date(2025, 6, 5), "50", currency="USD", source_file="a.xlsx", order=1),
+        movement(date(2025, 9, 5), "100", currency="USD", source_file="a.xlsx", order=2),
+    ]
+    points, _, _ = build_combined_series(movements, RATES)
+    assert derive_max(points, is_liability=False)["date_of_maximum"] == date(2025, 3, 5)
+
+
+# ---------------------------------------------------------------------------
+# §8.2 / §6.2 — signed components, and liabilities
+# ---------------------------------------------------------------------------
+
+def test_components_are_signed_and_no_convention_is_applied():
+    """`negative_balance_is_zero` applied per currency would floor one
+    component while the merged series was summed from signed values; the two
+    then disagree by the floored amount and V3 hard-errors on a roster that is
+    otherwise correct. Zero-flooring is a filing decision."""
+    movements = [
+        movement(date(2025, 1, 5), "1000", currency="USD", source_file="usd.xlsx", order=0),
+        movement(date(2025, 1, 5), "-200", currency="EUR", source_file="eur.xlsx", order=0),
+    ]
+    points, _, _ = build_combined_series(movements, RATES)
+    result = derive_max(points, is_liability=False)
+    assert result["max_components"]["EUR"] == Decimal("-200")
+    # The stated maximum is the SIGNED sum, so the two reconcile.
+    assert result["max_usd"] == Decimal("1000") + to_usd(Decimal("-200"), "EUR", RATES)
+    assert result["max_usd"] == Decimal("900")
+
+
+def test_a_liability_gets_no_bare_max_usd():
+    """The maximum of a mostly-negative card series is its LEAST NEGATIVE
+    point — a figure with no filing meaning until
+    `credit_card_positive_balance_only` is applied, which is Claude's call."""
+    movements = [
+        movement(date(2025, 1, 5), "-1000", currency="USD", source_file="card.xlsx", order=0),
+        movement(date(2025, 6, 5), "-100", currency="USD", source_file="card.xlsx", order=1),
+    ]
+    points, _, _ = build_combined_series(movements, RATES)
+    result = derive_max(points, is_liability=True)
+    assert result["max_usd"] is None
+    assert result["max_signed_usd"] == Decimal("-100")
+    assert result["max_positive_usd"] == Decimal("0")
+
+
+def test_a_genuine_overpayment_shows_up_as_max_positive_usd():
+    movements = [
+        movement(date(2025, 1, 5), "-1000", currency="USD", source_file="card.xlsx", order=0),
+        movement(date(2025, 6, 5), "250", currency="USD", source_file="card.xlsx", order=1),
+    ]
+    points, _, _ = build_combined_series(movements, RATES)
+    result = derive_max(points, is_liability=True)
+    assert result["max_signed_usd"] == Decimal("250")
+    assert result["max_positive_usd"] == Decimal("250")
+    assert result["max_usd"] is None
+
+
+# ---------------------------------------------------------------------------
+# 9.5 — the December 31 balance is a cross-check, not a filing field
+# ---------------------------------------------------------------------------
+
+def test_year_end_balance_is_forward_filled_and_says_so():
+    movements = [movement(date(2025, 11, 30), "500", currency="USD",
+                          source_file="nov.xlsx", order=0)]
+    points, _, _ = build_combined_series(movements, RATES)
+    value, caveat = balance_at_year_end(points, 2025)
+    assert value == Decimal("500")
+    assert "Forward-filled from 2025-11-30" in caveat
+
+
+def test_an_observed_december_31_balance_carries_no_caveat():
+    movements = [movement(date(2025, 12, 31), "500", currency="USD",
+                          source_file="dec.xlsx", order=0)]
+    points, _, _ = build_combined_series(movements, RATES)
+    value, caveat = balance_at_year_end(points, 2025)
+    assert (value, caveat) == (Decimal("500"), None)
+
+
+def test_no_year_end_balance_when_a_currency_was_never_observed():
+    movements = [
+        movement(date(2025, 12, 31), "500", currency="USD", source_file="usd.xlsx", order=0),
+    ]
+    points, _, _ = build_combined_series(movements + [
+        movement(date(2026, 1, 5), "100", currency="EUR", source_file="eur.xlsx", order=0),
+    ], RATES)
+    value, caveat = balance_at_year_end(points, 2025)
+    assert value is None
+    assert "EUR" in caveat
+
+
+def test_an_empty_series_yields_nothing_rather_than_zero():
+    points, uncertainty, currencies = build_combined_series([], RATES)
+    assert (points, uncertainty, currencies) == ([], [], [])
+    result = derive_max(points, is_liability=False)
+    assert result["max_usd"] is None
+    assert balance_at_year_end(points, 2025) == (None, "No observation falls on or before December 31.")

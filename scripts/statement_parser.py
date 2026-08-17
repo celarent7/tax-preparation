@@ -504,6 +504,10 @@ class CombinedPoint:
     unknown_currencies: List[str] = field(default_factory=list)
     source_file: str = ""
     source_row: int = 0
+    #: `BOUND_UNORDERED` when this point is the order-independent ceiling for a
+    #: date whose intraday sequence is unknowable. `None` on a point that was
+    #: actually observed.
+    bound: Optional[str] = None
 
     @property
     def is_bounded(self) -> bool:
@@ -1104,3 +1108,251 @@ def detect_continuity_breaks(movements: List[MovementRecord],
                     "statement is missing, or a column was read wrongly."))
             findings.append(finding)
     return findings
+
+
+# ---------------------------------------------------------------------------
+# Multi-currency merge and FX conversion (plan §3, §8, step 4)
+# ---------------------------------------------------------------------------
+
+
+def to_usd(amount: Decimal, currency: str, rates: Dict[str, Decimal]) -> Decimal:
+    """Convert a local amount at the December 31 Treasury rate.
+
+    `units_per_usd` is foreign currency units per ONE US dollar — the Treasury
+    Reporting Rate of Exchange convention — so USD is `local / units_per_usd`,
+    **never the reciprocal** (`fbar_guide.md:134-139`). Storing or applying the
+    reciprocal silently inverts every conversion for that currency, and for a
+    rate near 1.0 the result still looks plausible.
+
+    A missing rate is refused rather than defaulted. Treating an unconvertible
+    currency as 1:1 would produce a number, which is worse than producing none.
+    """
+    code = str(currency).strip().upper()
+    if code == "USD":
+        return amount
+    rate = rates.get(code)
+    if rate is None:
+        raise StatementParseError(
+            f"No exchange rate supplied for {code}. FBAR converts at the Treasury "
+            "Reporting Rate of Exchange for the LAST DAY of the calendar year; "
+            "the parser converts but never fetches, so the rate is an input. "
+            f"Rates supplied: {', '.join(sorted(rates)) or '(none)'}."
+        )
+    rate = Decimal(str(rate))
+    if rate <= 0:
+        raise StatementParseError(
+            f"The rate for {code} is {rate}; units_per_usd must be positive."
+        )
+    return amount / rate
+
+
+def _combined_point(when: date,
+                    levels: Dict[str, Optional[Decimal]],
+                    rates: Dict[str, Decimal],
+                    reference: MovementRecord,
+                    bound: Optional[str] = None) -> CombinedPoint:
+    """One instant of the combined series, from each currency's current level.
+
+    Components are the LOCAL, **signed** amounts. No convention is applied —
+    see `derive_max` and plan §8.2: `v3_recompute_usd` re-converts every
+    component and compares the sum to the roster's stated maximum at a $1.00
+    tolerance, severity `error`, so flooring a negative component here while
+    the merged series was summed from signed values hard-errors a roster that
+    is otherwise correct.
+    """
+    known = {currency: level for currency, level in levels.items() if level is not None}
+    unknown = sorted(currency for currency, level in levels.items() if level is None)
+    total = sum((to_usd(level, currency, rates) for currency, level in known.items()),
+                Decimal("0"))
+    return CombinedPoint(
+        date=when, usd=total, components=dict(known), unknown_currencies=unknown,
+        source_file=reference.source_file, source_row=reference.source_row,
+        bound=bound,
+    )
+
+
+def build_combined_series(movements: List[MovementRecord],
+                          rates: Dict[str, Decimal]
+                          ) -> Tuple[List[CombinedPoint], List[Dict[str, Any]], List[str]]:
+    """Merge every currency onto one axis and convert point-wise.
+
+    **The maximum is not the sum of per-currency maxima.** Per-currency peaks
+    occur on different dates; summing them invents a moment that never existed.
+    The peak is a single date on a *combined* series.
+
+    The algorithm is licensed by the single-year-end-rate rule: because one rate
+    applies to every point in the year, conversion **commutes with taking the
+    maximum**, so the merged series can be converted point-wise and the max
+    taken afterwards. Had FinCEN required historical daily rates, this would
+    need a rate per event date and the whole design would change.
+
+      1. Merge all events onto one axis ordered by `(date, source_file,
+         row_order)` — never by date alone (§8.1).
+      2. Forward-fill each currency across events where it did not move. Before
+         a currency's FIRST observation its level is `None`: not zero, not
+         back-filled. A full-year statement with one transaction does not
+         describe a zero-balance account; it describes an account whose opening
+         balance was never exported.
+      3. Convert each currency point-wise at the December 31 rate.
+      4. Sum across currencies at each event. A point with an unknown currency
+         is a BOUND, not a value.
+
+    Returns `(points, interval_uncertainty, currencies)`.
+    """
+    observations = sorted((m for m in movements if m.balance_after is not None),
+                          key=MovementRecord.order_key)
+    currencies = sorted({m.currency for m in observations})
+    if not observations:
+        return [], [], currencies
+
+    level: Dict[str, Optional[Decimal]] = {currency: None for currency in currencies}
+    points: List[CombinedPoint] = []
+    uncertainty: List[Dict[str, Any]] = []
+
+    index = 0
+    while index < len(observations):
+        when = observations[index].date
+        same_day = []
+        while index < len(observations) and observations[index].date == when:
+            same_day.append(observations[index])
+            index += 1
+
+        # A date is not a timestamp. Two streams — two currencies, or two files
+        # — that both moved on one date have an unknowable interleaving: TBC
+        # carries a time component but every value is 00:00:00, so it holds no
+        # information at all.
+        streams = {(m.source_file, m.currency) for m in same_day}
+        entering = dict(level)
+
+        if len(streams) == 1:
+            for record in same_day:
+                level[record.currency] = record.balance_after
+                points.append(_combined_point(when, level, rates, record))
+        else:
+            attained: Dict[str, List[Decimal]] = {c: [] for c in currencies}
+            for record in same_day:
+                level[record.currency] = record.balance_after
+                attained[record.currency].append(record.balance_after)
+
+            # The order-independent ceiling for the day: each currency free to
+            # sit at the highest level it touched. Reachable by some
+            # interleaving, so it is a true upper bound — and it does not
+            # depend on which order the reader happened to see the rows in,
+            # which is what makes it honest rather than a guess.
+            ceiling = {}
+            for currency in currencies:
+                touched = [v for v in [entering[currency]] + attained[currency]
+                           if v is not None]
+                ceiling[currency] = max(touched) if touched else None
+            points.append(_combined_point(when, ceiling, rates, same_day[-1],
+                                          bound=BOUND_UNORDERED))
+            # The end-of-day levels definitely coexisted, whatever the order.
+            points.append(_combined_point(when, level, rates, same_day[-1]))
+            uncertainty.append({
+                "kind": BOUND_UNORDERED,
+                "date": when.isoformat(),
+                "streams": sorted(f"{f}:{c}" for f, c in streams),
+                "message": (
+                    f"{when.isoformat()}: {len(streams)} independent streams moved "
+                    "on one date and no timestamp separates them. The combined "
+                    "value for that date is reported as a ceiling over every "
+                    "possible interleaving, not as an observed figure."),
+            })
+
+    # A currency's unknown prefix spans from the start of the series to its
+    # first observation. Forward-fill has nothing to fill from, back-filling
+    # would assert a level the file never states, and zero-filling asserts an
+    # empty wallet — TBC's GEL sheet has a single data row, in November.
+    for currency in currencies:
+        first = next((p for p in points if currency not in p.unknown_currencies), None)
+        if first is None or first is points[0]:
+            continue
+        uncertainty.append({
+            "kind": BOUND_AT_LEAST,
+            "currency": currency,
+            "from": points[0].date.isoformat(),
+            "until": first.date.isoformat(),
+            "message": (
+                f"{currency} is first observed on {first.date.isoformat()}; before "
+                f"that its level is unknown, not zero. Combined values over that "
+                "span are lower bounds — the unobserved currency could only have "
+                "added to them."),
+        })
+    return points, uncertainty, currencies
+
+
+def derive_max(points: List[CombinedPoint], is_liability: bool
+               ) -> Dict[str, Any]:
+    """The maximum of the combined series, with its date, components and bound.
+
+    Four rules, each of which is a wrong number if omitted (plan §6.2):
+
+    **`date_of_maximum` breaks ties to the EARLIEST date.** A maximum touched
+    on several dates is common on a flat account, and an unspecified tie-break
+    makes the output non-deterministic — which silently defeats both the golden
+    diff and any year-over-year comparison.
+
+    **Components are signed and no convention is applied.** `negative_balance_is_zero`
+    applied per currency would floor one component while the merged series that
+    produced the maximum was summed from signed values; the two then disagree by
+    the floored amount and V3 hard-errors. Zero-flooring is a filing decision:
+    it must be applied to the component sum and the stated maximum together, or
+    to neither.
+
+    **A liability gets no bare `max_usd`.** The maximum of a mostly-negative
+    card series is its *least negative* point — a figure with no filing meaning
+    until `credit_card_positive_balance_only` is applied, which is Claude's
+    call. Such a timeline reports `max_signed_usd` and `max_positive_usd`
+    (the largest genuine overpayment) as separate fields, and the roster has to
+    say which one it chose.
+
+    **A bounded peak is never a determined figure.** It is reported with its
+    direction, which caps the derived basis at `statement_partial`.
+    """
+    if not points:
+        return {"max_usd": None, "max_signed_usd": None, "max_positive_usd": None,
+                "date_of_maximum": None, "max_components": {}, "max_usd_bound": None}
+
+    # Ties break to the earliest date, then to the earliest point in the series.
+    peak = min(enumerate(points), key=lambda item: (-item[1].usd, item[1].date, item[0]))[1]
+
+    bound = peak.bound
+    if bound is None and peak.unknown_currencies:
+        bound = BOUND_AT_LEAST
+
+    result: Dict[str, Any] = {
+        "date_of_maximum": peak.date,
+        "max_components": dict(peak.components),
+        "max_usd_bound": bound,
+        "max_signed_usd": peak.usd,
+        "max_positive_usd": max(peak.usd, Decimal("0")),
+    }
+    result["max_usd"] = None if is_liability else peak.usd
+    return result
+
+
+def balance_at_year_end(points: List[CombinedPoint], tax_year: int
+                        ) -> Tuple[Optional[Decimal], Optional[str]]:
+    """The forward-filled combined level at December 31, and a caveat if any.
+
+    Emitted because it is a useful cross-check and the workpapers record it —
+    **not because a filing depends on it.** Form 114 Item 15 asks for the
+    maximum during the year; there is no year-end balance item, and the
+    schema's `year_end_balance_usd` is consumed by no validator.
+    """
+    year_end = date(tax_year, 12, 31)
+    eligible = [p for p in points if p.date <= year_end]
+    if not eligible:
+        return None, "No observation falls on or before December 31."
+    last = eligible[-1]
+    if last.unknown_currencies:
+        return None, (
+            f"At the last observation ({last.date.isoformat()}) "
+            f"{', '.join(last.unknown_currencies)} had never been observed, so no "
+            "combined year-end level can be stated.")
+    if last.date < year_end:
+        return last.usd, (
+            f"Forward-filled from {last.date.isoformat()}: no statement covers "
+            f"{last.date.isoformat()} to {year_end.isoformat()}, so this is the "
+            "last observed level, not an observed December 31 balance.")
+    return last.usd, None
