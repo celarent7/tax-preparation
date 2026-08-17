@@ -580,3 +580,51 @@ def test_an_empty_series_yields_nothing_rather_than_zero():
     result = derive_max(points, is_liability=False)
     assert result["max_usd"] is None
     assert balance_at_year_end(points, 2025) == (None, "No observation falls on or before December 31.")
+
+
+def test_streams_that_all_rise_on_one_date_are_not_ambiguous():
+    """Both currencies peak together at the close whatever the order, so the
+    ceiling adds nothing. Flagging it would put an `unordered_within_day` bound
+    — and a `statement_partial` cap — on a maximum that is not in doubt."""
+    movements = [
+        movement(date(2025, 1, 1), "100", currency="USD", source_file="usd.xlsx", order=0),
+        movement(date(2025, 1, 1), "200", currency="EUR", source_file="eur.xlsx", order=0),
+        movement(date(2025, 6, 5), "500", currency="USD", source_file="usd.xlsx", order=1),
+        movement(date(2025, 6, 5), "1000", currency="EUR", source_file="eur.xlsx", order=1),
+    ]
+    points, uncertainty, _ = build_combined_series(movements, RATES)
+    assert uncertainty == []
+    result = derive_max(points, is_liability=False)
+    assert result["max_usd"] == Decimal("1000")      # 500 USD + 1000/2 EUR
+    assert result["max_usd_bound"] is None
+
+
+def test_streams_that_all_fall_on_one_date_are_not_ambiguous():
+    """The ceiling equals the level ENTERING the day, which is an instant
+    already in the series — not a new possibility the ordering opens up."""
+    movements = [
+        movement(date(2025, 1, 1), "500", currency="USD", source_file="usd.xlsx", order=0),
+        movement(date(2025, 1, 1), "1000", currency="EUR", source_file="eur.xlsx", order=0),
+        movement(date(2025, 6, 5), "100", currency="USD", source_file="usd.xlsx", order=1),
+        movement(date(2025, 6, 5), "200", currency="EUR", source_file="eur.xlsx", order=1),
+    ]
+    points, uncertainty, _ = build_combined_series(movements, RATES)
+    assert uncertainty == []
+    result = derive_max(points, is_liability=False)
+    assert result["max_usd"] == Decimal("1000")
+    assert result["date_of_maximum"] == date(2025, 1, 1)
+
+
+def test_a_multi_currency_account_can_still_reach_a_full_year():
+    """Consequence of the rule above, and the reason it matters: with an
+    opening observation for every currency on the same date, a multi-currency
+    timeline carries no bound at all — otherwise no such account could ever
+    derive `statement_full_year`, because the earliest event always belongs to
+    exactly one currency."""
+    movements = [
+        movement(date(2025, 1, 1), "100", currency="USD", source_file="usd.xlsx", order=0),
+        movement(date(2025, 1, 1), "200", currency="EUR", source_file="eur.xlsx", order=0),
+    ]
+    points, uncertainty, _ = build_combined_series(movements, RATES)
+    assert uncertainty == []
+    assert points[0].unknown_currencies == []

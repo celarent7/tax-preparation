@@ -578,6 +578,9 @@ class AccountTimeline:
     max_value_basis: str = "unknown"
     source_files: List[str] = field(default_factory=list)
     movement_count: int = 0
+    #: Set by `run_sources` from the source entry. Names the markdown report;
+    #: it is a label for the reader, not something the parser derives.
+    institution: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1258,25 +1261,41 @@ def build_combined_series(movements: List[MovementRecord],
             # interleaving, so it is a true upper bound — and it does not
             # depend on which order the reader happened to see the rows in,
             # which is what makes it honest rather than a guess.
-            ceiling = {}
+            ceiling_levels = {}
             for currency in currencies:
                 touched = [v for v in [entering[currency]] + attained[currency]
                            if v is not None]
-                ceiling[currency] = max(touched) if touched else None
-            points.append(_combined_point(when, ceiling, rates, same_day[-1],
-                                          bound=BOUND_UNORDERED))
-            # The end-of-day levels definitely coexisted, whatever the order.
-            points.append(_combined_point(when, level, rates, same_day[-1]))
-            uncertainty.append({
-                "kind": BOUND_UNORDERED,
-                "date": when.isoformat(),
-                "streams": sorted(f"{f}:{c}" for f, c in streams),
-                "message": (
-                    f"{when.isoformat()}: {len(streams)} independent streams moved "
-                    "on one date and no timestamp separates them. The combined "
-                    "value for that date is reported as a ceiling over every "
-                    "possible interleaving, not as an observed figure."),
-            })
+                ceiling_levels[currency] = max(touched) if touched else None
+
+            ceiling = _combined_point(when, ceiling_levels, rates, same_day[-1],
+                                      bound=BOUND_UNORDERED)
+            # The end-of-day levels definitely coexisted, whatever the order,
+            # and so did the levels entering the day.
+            closing = _combined_point(when, level, rates, same_day[-1])
+            observed = _combined_point(when, entering, rates, same_day[-1])
+            points.append(closing)
+
+            # The ordering only MATTERS when the ceiling beats both instants
+            # that are known to have existed. Two currencies that both rise on
+            # one date peak together at the close whatever the order; two that
+            # both fall peaked together before it. Flagging those would put an
+            # `unordered_within_day` bound — and a `statement_partial` cap — on
+            # a timeline whose maximum is not in doubt at all.
+            if ceiling.usd > max(closing.usd, observed.usd):
+                points.append(ceiling)
+                uncertainty.append({
+                    "kind": BOUND_UNORDERED,
+                    "date": when.isoformat(),
+                    "streams": sorted(f"{f}:{c}" for f, c in streams),
+                    "ceiling_usd": str(ceiling.usd),
+                    "closing_usd": str(closing.usd),
+                    "message": (
+                        f"{when.isoformat()}: {len(streams)} independent streams "
+                        "moved on one date and no timestamp separates them. One "
+                        "interleaving reaches a higher combined value than the "
+                        "day's close, so the figure for that date is a ceiling "
+                        "over every possible order, not an observed instant."),
+                })
 
     # A currency's unknown prefix spans from the start of the series to its
     # first observation. Forward-fill has nothing to fill from, back-filling
@@ -1815,3 +1834,445 @@ def timeline_to_json(timeline: AccountTimeline) -> Dict[str, Any]:
             for point in timeline.combined_usd
         ],
     }
+
+
+# ---------------------------------------------------------------------------
+# Source configuration (plan §5.2, step 8)
+# ---------------------------------------------------------------------------
+
+#: Every recognized key of a `sources[]` entry, with its default. Unknown keys
+#: are REJECTED with the nearest valid one named, following
+#: `fbar_schema._reject_unknown`: a typo here silently drops a whole
+#: institution from the run, and a missing account is the one failure this
+#: module cannot detect for itself.
+SOURCE_FIELDS: Dict[str, Any] = {
+    "filer": None,              # REQUIRED — one workspace holds both filers
+    "institution": None,        # REQUIRED — names the markdown report
+    "path": "",                 # directory, relative to the workspace
+    "glob": None,               # REQUIRED — which files in it
+    "reader": None,             # REQUIRED — see READERS
+    "profile": None,            # REQUIRED — see statement_profiles.PROFILES
+    "account_key": None,        # literal key, or use account_key_pattern
+    "account_key_pattern": None,  # regex over the FILENAME with a `key` group
+    "account_group": None,      # what the multi-currency merge iterates over
+    "currency": None,           # literal ISO-4217, when the profile takes config
+    "period_start": None,       # when the file states no period the profile reads
+    "period_end": None,
+    "notes": None,
+}
+
+_SOURCE_REQUIRED = ("filer", "institution", "glob", "reader", "profile")
+
+#: Reader name -> callable. Selected by EXPLICIT CONFIG, never by sniffing the
+#: file's contents: a misidentified institution is a silent wrong number.
+READERS = {
+    "xlsx_running_balance": "read_xlsx_running_balance",
+    "xlsx_two_sheet_card": "read_xlsx_two_sheet_card",
+    "text_period_summary": "read_text_period_summary",
+}
+
+
+def _reject_unknown_keys(raw: Dict[str, Any], valid, where: str) -> None:
+    from difflib import get_close_matches
+
+    unknown = [k for k in raw if k not in valid and not k.startswith("_")]
+    if not unknown:
+        return
+    hints = []
+    for key in sorted(unknown):
+        match = get_close_matches(key, list(valid), n=1, cutoff=0.6)
+        hints.append(f"\n  {key!r}:" + (f" Did you mean {match[0]!r}?" if match else ""))
+    raise StatementParseError(
+        f"Unknown key(s) in {where}, refusing to proceed silently:{''.join(hints)}\n"
+        f"Valid keys: {', '.join(sorted(valid))}."
+    )
+
+
+def load_sources(path: str) -> Dict[str, Any]:
+    """Load and validate `sources.json` — the taxpayer-specific file map.
+
+    This lives at the **workspace root, beside the data it maps**, not in the
+    distributed plugin: it names real directories and real account keys, and
+    the plugin repository is a public distribution artifact.
+
+    Its central job is `account_group`. One `account_key` per directory does not
+    work — TBC is three files, one per currency, all under a single IBAN, which
+    the hand workpaper treats as ONE FBAR entry — and a file-level key alone
+    cannot say the three belong together. **Grouping is configuration, not
+    inference**: the parser never decides that two files are one account. Where
+    the decision has not been made, leave the group unset and the files become
+    separate timelines with the ambiguity flagged.
+    """
+    import json
+
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            raw = json.load(handle)
+    except FileNotFoundError as exc:
+        raise StatementParseError(f"sources file not found: {path}") from exc
+    except json.JSONDecodeError as exc:
+        raise StatementParseError(f"{path} is not valid JSON: {exc}") from exc
+
+    valid_top = ("tax_year", "fx_rates", "sources")
+    _reject_unknown_keys(raw, valid_top, f"{path} (top level)")
+    if raw.get("tax_year") is None:
+        raise StatementParseError(f"{path}: tax_year is required.")
+
+    rates: Dict[str, Decimal] = {}
+    for index, entry in enumerate(raw.get("fx_rates") or []):
+        _reject_unknown_keys(entry, ("currency", "units_per_usd", "as_of", "source",
+                                     "source_url"), f"{path} fx_rates[{index}]")
+        currency = str(entry.get("currency", "")).strip().upper()
+        if not currency:
+            raise StatementParseError(f"{path} fx_rates[{index}].currency is required.")
+        units = entry.get("units_per_usd")
+        if units is None:
+            raise StatementParseError(
+                f"{path} fx_rates[{index}].units_per_usd is required — foreign "
+                "units per ONE US dollar, the Treasury convention.")
+        rates[currency] = Decimal(str(units))
+
+    sources = []
+    for index, entry in enumerate(raw.get("sources") or []):
+        where = f"{path} sources[{index}]"
+        _reject_unknown_keys(entry, SOURCE_FIELDS, where)
+        source = {key: entry.get(key, default) for key, default in SOURCE_FIELDS.items()}
+        for key in _SOURCE_REQUIRED:
+            if not source[key]:
+                raise StatementParseError(f"{where}.{key} is required.")
+        if source["reader"] not in READERS:
+            raise StatementParseError(
+                f"{where}.reader is {source['reader']!r}; known readers: "
+                f"{', '.join(sorted(READERS))}.")
+        if not source["account_key"] and not source["account_key_pattern"]:
+            raise StatementParseError(
+                f"{where} sets neither account_key nor account_key_pattern. One "
+                "directory can hold several accounts — the card files are two "
+                "cards distinguished only by a filename suffix — so the key has "
+                "to be stated or derived, never assumed from the directory.")
+        sources.append(source)
+
+    if not sources:
+        raise StatementParseError(f"{path} declares no sources.")
+    return {"tax_year": int(raw["tax_year"]), "fx_rates": rates,
+            "sources": sources, "_origin": path}
+
+
+def account_key_for(source: Dict[str, Any], filename: str) -> str:
+    """The account a file's movements belong to, per its source entry."""
+    if source.get("account_key"):
+        return str(source["account_key"])
+    pattern = re.compile(source["account_key_pattern"])
+    match = pattern.search(filename)
+    if match is None or not match.groupdict().get("key"):
+        raise StatementParseError(
+            f"{filename}: account_key_pattern "
+            f"{source['account_key_pattern']!r} did not match with a `key` group. "
+            "Rather than guess which account this file belongs to, the run stops.")
+    return match.group("key")
+
+
+def read_source(source: Dict[str, Any], workspace: str) -> List[Tuple[str, ReadResult]]:
+    """Read every file a source entry selects. Returns `(account_key, result)`."""
+    import glob as globbing
+
+    from statement_profiles import get_profile
+
+    profile = get_profile(source["profile"])
+    reader_name = READERS[source["reader"]]
+    reader = globals()[reader_name]
+    directory = os.path.join(workspace, source["path"] or "")
+    matches = sorted(globbing.glob(os.path.join(directory, source["glob"])))
+    if not matches:
+        raise StatementParseError(
+            f"{source['institution']}: no file matches {source['glob']!r} under "
+            f"{directory}. A source that selects nothing is a configuration "
+            "error, not an empty account — an account with no evidence is "
+            "recorded by leaving it off this file, not by pointing at nothing.")
+
+    out = []
+    for match in matches:
+        key = account_key_for(source, os.path.basename(match))
+        if source["reader"] == "text_period_summary":
+            if not source["currency"]:
+                raise StatementParseError(
+                    f"{os.path.basename(match)}: the text reader takes its "
+                    "currency from sources.json and none is set.")
+            result = reader(match, profile, currency=source["currency"])
+        else:
+            kwargs = {"period_start": source["period_start"],
+                      "period_end": source["period_end"]}
+            if source["reader"] == "xlsx_running_balance":
+                kwargs["currency"] = source["currency"]
+            result = reader(match, profile, **kwargs)
+        out.append((key, result))
+    return out
+
+
+def run_sources(config: Dict[str, Any], workspace: str,
+                filer: Optional[str] = None) -> Dict[str, List[AccountTimeline]]:
+    """Read every configured source and build one timeline per account group.
+
+    Grouped by filer, because separately-owned accounts force separate FBARs
+    and mixing two filers' accounts would fabricate a filing neither of them
+    makes — the same rule `fbar_reconciler` enforces on rosters.
+    """
+    tax_year = config["tax_year"]
+    grouped: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+    for source in config["sources"]:
+        if filer and source["filer"] != filer:
+            continue
+        for key, result in read_source(source, workspace):
+            group = source["account_group"] or key
+            bucket = grouped.setdefault((source["filer"], group), {
+                "account_key": key, "group": group, "results": [],
+                "institution": source["institution"], "keys": set()})
+            bucket["results"].append(result)
+            bucket["keys"].add(key)
+
+    timelines: Dict[str, List[AccountTimeline]] = {}
+    for (filer_slug, group), bucket in sorted(grouped.items()):
+        timeline = build_timeline(bucket["account_key"], tax_year, bucket["results"],
+                                  config["fx_rates"], account_group=group)
+        timeline.institution = bucket["institution"]
+        if len(bucket["keys"]) > 1:
+            timeline.parser_warnings.append(
+                f"account_group {group!r} merges files whose account_keys differ "
+                f"({', '.join(sorted(bucket['keys']))}). That grouping was a "
+                "recorded decision, not something the parser inferred — check it "
+                "is still the one the roster means to make.")
+        timelines.setdefault(filer_slug, []).append(timeline)
+    return timelines
+
+
+# ---------------------------------------------------------------------------
+# Outputs (plan §10)
+# ---------------------------------------------------------------------------
+
+_BOUND_LABEL = {
+    BOUND_AT_LEAST: "at least (a currency was unobserved for part of the year)",
+    BOUND_UNORDERED: "ceiling (the peak depends on an unknowable intraday order)",
+}
+
+
+def _fmt(value: Optional[Decimal], suffix: str = "") -> str:
+    return "—" if value is None else f"{money(value):,.2f}{suffix}"
+
+
+def render_parse_report(institution: str, tax_year: int,
+                        timelines: List[AccountTimeline], filer: str) -> str:
+    """The human-readable workpaper for one institution.
+
+    Carries the frontmatter the hand-made BCS workpaper already specifies —
+    `institution`, `taxpayer`, `tax_year`, `accounts_analyzed`,
+    `parser_warnings`. That protocol was written as a specification for work not
+    yet done rather than as a record of work done by hand, which is exactly why
+    adopting it here is right: the format is being introduced, not matched.
+    """
+    warning_count = sum(len(t.parser_warnings) for t in timelines)
+    lines = [
+        "---",
+        f"institution: {institution}",
+        f"taxpayer: {filer}",
+        f"tax_year: {tax_year}",
+        f"accounts_analyzed: {len(timelines)}",
+        f"parser_warnings: {warning_count}",
+        "---",
+        "",
+        f"# Statement parse — {institution}, {tax_year}",
+        "",
+        "Phase 0 output. **This reports what the files say; it does not decide "
+        "what the filing claims.** Reportability, ownership, the applicable "
+        "conventions and the Item 15a election are Phase 1 decisions, and every "
+        "figure below still goes through the Phase 2 user-confirmation gate.",
+        "",
+        "| Account | Currencies | Maximum | On | Basis | Dec 31 | Gaps | Breaks |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for timeline in timelines:
+        headline = (_fmt(timeline.max_signed_usd) + " (signed, liability)"
+                    if timeline.is_liability else _fmt(timeline.max_usd))
+        if timeline.max_usd_bound:
+            headline += f" [{timeline.max_usd_bound}]"
+        breaks = len([f for f in timeline.continuity_breaks if f["kind"] == "break"])
+        lines.append(
+            f"| `{timeline.account_key}` | {', '.join(timeline.currencies) or '—'} "
+            f"| {headline} | {timeline.date_of_maximum or '—'} "
+            f"| `{timeline.max_value_basis}` | {_fmt(timeline.balance_dec_31)} "
+            f"| {len(timeline.gaps)} | {breaks} |")
+
+    for timeline in timelines:
+        lines += ["", f"## `{timeline.account_key}`", ""]
+        if timeline.is_liability:
+            lines += [
+                "> **Liability account.** The maximum of a mostly-negative series "
+                "is its least-negative point, which has no filing meaning until "
+                "`credit_card_positive_balance_only` is applied — a decision this "
+                "tool does not make. Largest genuine overpayment: "
+                f"**{_fmt(timeline.max_positive_usd)}**.", ""]
+        if timeline.max_usd_bound:
+            lines += [
+                f"> **The maximum is a bound, not a determined figure**: "
+                f"{_BOUND_LABEL.get(timeline.max_usd_bound, timeline.max_usd_bound)}.",
+                ""]
+
+        if timeline.max_components:
+            lines += ["Components at the peak — **signed, no convention applied**:", ""]
+            lines += [f"- {currency} {money(amount):,.2f}"
+                      for currency, amount in sorted(timeline.max_components.items())]
+            lines.append("")
+
+        lines += ["Periods read:", ""]
+        lines += [f"- {p.start} .. {p.end} (`{p.source_file}`)" for p in timeline.periods] \
+            or ["- none"]
+
+        if timeline.gaps:
+            lines += ["", "Coverage gaps — **not extrapolated**:", ""]
+            lines += [f"- {g['start']} .. {g['end']} ({g['days']} days, {g['position']})"
+                      for g in timeline.gaps]
+        if timeline.continuity_breaks:
+            lines += ["", "Continuity:", ""]
+            lines += [f"- **{f['severity']}** {f['message']}"
+                      for f in timeline.continuity_breaks]
+        if timeline.parser_warnings:
+            lines += ["", "Parser warnings:", ""]
+            lines += [f"- {w}" for w in timeline.parser_warnings]
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_outputs(output_dir: str, filer: str, tax_year: int,
+                  timelines: List[AccountTimeline]) -> List[str]:
+    """Write the timelines JSON and one markdown report per institution.
+
+    **Both artifacts are workspace-only.** They are written beside the
+    statements they describe and never into the plugin repository: the
+    descriptions are verbatim and embed counterparty names, and the source
+    paths are retained by design. Add `account_timelines_*.json` and
+    `statement_parse_*.md` to the workspace `.gitignore`.
+    """
+    import json
+
+    os.makedirs(output_dir, exist_ok=True)
+    written = []
+
+    payload = {
+        "tax_year": tax_year,
+        "filer": filer,
+        "generated_by": "statement_parser.py (FBAR Phase 0)",
+        "accounts": [timeline_to_json(t) for t in timelines],
+    }
+    json_path = os.path.join(output_dir, f"account_timelines_{filer}_{tax_year}.json")
+    with open(json_path, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, ensure_ascii=False)
+    written.append(json_path)
+
+    by_institution: Dict[str, List[AccountTimeline]] = {}
+    for timeline in timelines:
+        by_institution.setdefault(timeline.institution or filer, []).append(timeline)
+    for institution, group in sorted(by_institution.items()):
+        report = render_parse_report(institution, tax_year, group, filer)
+        report_path = os.path.join(
+            output_dir, f"statement_parse_{institution}_{tax_year}.md")
+        with open(report_path, "w", encoding="utf-8") as handle:
+            handle.write(report)
+        written.append(report_path)
+    return written
+
+
+# ---------------------------------------------------------------------------
+# CLI (plan §13)
+# ---------------------------------------------------------------------------
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Parse configured statements into balance timelines.
+
+    Exit code is **non-zero only on unreadable input**. A gap, a break or a
+    missing statement is a warning, not a failure — the same severity contract
+    as `fbar_reconciler.py`, for the same reason: a tool that refuses to run on
+    legitimate interim states gets worked around.
+    """
+    import argparse
+    import json
+
+    parser = argparse.ArgumentParser(
+        description="FBAR Phase 0: parse bank statements into balance timelines.")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_parse = sub.add_parser("parse", help="Parse the sources into timelines")
+    p_parse.add_argument("--sources", required=True,
+                         help="sources.json, at the workspace root beside the data")
+    p_parse.add_argument("--workspace", default=None,
+                         help="Directory the source paths are relative to. "
+                              "Defaults to the sources file's directory.")
+    p_parse.add_argument("--filer", default=None,
+                         help="Restrict the run to one filer slug. Omitted, "
+                              "every filer in the sources file is processed.")
+    p_parse.add_argument("--output-dir", default=None,
+                         help="Write the timelines JSON and the per-institution "
+                              "markdown reports here")
+    p_parse.add_argument("--output-format", choices=["text", "json"], default="text")
+
+    args = parser.parse_args(argv)
+
+    try:
+        config = load_sources(args.sources)
+        workspace = args.workspace or os.path.dirname(os.path.abspath(args.sources))
+        by_filer = run_sources(config, workspace, args.filer)
+    except StatementParseError as exc:
+        if args.output_format == "json":
+            print(json.dumps({"isError": True, "error": str(exc)}, indent=2))
+        else:
+            print(f"🔴 ERROR: {exc}")
+        return 1
+
+    if args.filer and args.filer not in by_filer:
+        print(f"🔴 ERROR: no source in {args.sources} names filer "
+              f"{args.filer!r}. Present: {', '.join(sorted(by_filer)) or '(none)'}.")
+        return 1
+
+    written = []
+    if args.output_dir:
+        for filer_slug, timelines in sorted(by_filer.items()):
+            written += write_outputs(args.output_dir, filer_slug,
+                                     config["tax_year"], timelines)
+
+    payload = {
+        "tax_year": config["tax_year"],
+        "filers": {slug: [timeline_to_json(t) for t in timelines]
+                   for slug, timelines in sorted(by_filer.items())},
+        "outputs": written,
+    }
+    if args.output_format == "json":
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        _print_parse_summary(by_filer, written)
+    return 0
+
+
+def _print_parse_summary(by_filer: Dict[str, List[AccountTimeline]],
+                         written: List[str]) -> None:
+    for filer_slug, timelines in sorted(by_filer.items()):
+        print(f"\n=== {filer_slug} — {len(timelines)} account group(s) ===")
+        for timeline in timelines:
+            headline = (f"{_fmt(timeline.max_signed_usd)} signed (liability)"
+                        if timeline.is_liability else _fmt(timeline.max_usd, " USD"))
+            bound = f"  [{timeline.max_usd_bound}]" if timeline.max_usd_bound else ""
+            print(f"  {timeline.account_key:<28} {headline:>22}{bound}")
+            print(f"    basis {timeline.max_value_basis!r} on "
+                  f"{timeline.movement_count} movement(s) from "
+                  f"{len(timeline.source_files)} file(s); "
+                  f"{len(timeline.gaps)} gap(s), "
+                  f"{len([f for f in timeline.continuity_breaks if f['kind'] == 'break'])} break(s)")
+    if written:
+        print("\nWrote:\n" + "\n".join(f"  {path}" for path in written))
+    print("\nPhase 0 reports what the files say. Reportability, ownership, "
+          "conventions and\nthe Item 15a election are Phase 1 — and every figure "
+          "goes through the Phase 2\nuser-confirmation gate before it reaches a "
+          "roster.")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
