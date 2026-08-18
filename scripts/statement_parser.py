@@ -2077,6 +2077,7 @@ READERS = {
     "xlsx_running_balance": "read_xlsx_running_balance",
     "xlsx_two_sheet_card": "read_xlsx_two_sheet_card",
     "text_period_summary": "read_text_period_summary",
+    "pdf_movement_register": "read_pdf_movement_register",
 }
 
 
@@ -2201,11 +2202,13 @@ def read_source(source: Dict[str, Any], workspace: str) -> List[Tuple[str, ReadR
     out = []
     for match in matches:
         key = account_key_for(source, os.path.basename(match))
-        if source["reader"] == "text_period_summary":
+        if source["reader"] in ("text_period_summary", "pdf_movement_register"):
             if not source["currency"]:
                 raise StatementParseError(
-                    f"{os.path.basename(match)}: the text reader takes its "
-                    "currency from sources.json and none is set.")
+                    f"{os.path.basename(match)}: the {source['reader']} reader "
+                    "takes its currency from sources.json and none is set. A "
+                    "register states amounts without naming the account's "
+                    "currency, so defaulting it would label rubles as dollars.")
             result = reader(match, profile, currency=source["currency"])
         else:
             kwargs = {"period_start": source["period_start"],

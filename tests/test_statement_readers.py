@@ -812,3 +812,22 @@ def test_a_register_with_no_transaction_rows_is_a_no_data_finding():
         header_only, TBANK_MOVEMENTS, "reg.pdf", currency="RUB")
     assert result.no_data is True
     assert result.movements == []
+
+
+def test_the_register_reader_is_dispatchable_and_demands_a_currency(tmp_path):
+    """Like the text reader, a register states amounts without naming the
+    account's currency, so it comes from sources.json. Defaulting it would
+    silently label rubles as dollars."""
+    from statement_parser import READERS, read_source
+
+    assert READERS["pdf_movement_register"] == "read_pdf_movement_register"
+
+    source = {"filer": "primary", "institution": "T-Bank", "path": "",
+              "glob": "*.pdf", "reader": "pdf_movement_register",
+              "profile": "tbank_movements", "account_key": "k",
+              "account_key_pattern": None, "account_group": None,
+              "currency": None, "period_start": None, "period_end": None,
+              "notes": None}
+    (tmp_path / "reg.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
+    with pytest.raises(StatementParseError, match="currency"):
+        read_source(source, str(tmp_path))
