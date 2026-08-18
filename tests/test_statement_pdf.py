@@ -37,7 +37,9 @@ def test_extraction_returns_the_lines_in_document_order():
     # extraction layer: horizontal spacing is what keeps the two amount columns
     # apart, and that is the evidence the reader is reading.
     dates = [line.split()[0] for line in lines if line.strip()[:2].isdigit()]
-    assert dates == ["05.01.2025", "20.03.2025", "14.07.2025", "02.11.2025"]
+    # Document order, NOT time order: the register prints newest-first and
+    # this layer must not quietly sort it. Reversing is the reader's job.
+    assert dates == ["02.11.2025", "14.07.2025", "20.03.2025", "05.01.2025"]
 
 
 def test_a_pdf_that_yields_no_text_is_an_explicit_error(tmp_path):
@@ -66,3 +68,18 @@ def test_a_file_that_is_not_a_pdf_is_a_different_error(tmp_path):
     broken.write_bytes(b"%PDF-1.4\n%%EOF\n")
     with pytest.raises(StatementParseError, match="cannot be opened as a PDF"):
         extract_text_lines(str(broken))
+
+
+def test_the_synthetic_fixture_reads_end_to_end_and_reconciles():
+    """The one test that puts a real PDF through the real reader. Everything
+    else about the register's rules is pinned against literal lines; what this
+    adds is that `layout=True` actually keeps the two amount columns apart in
+    a file pdfplumber produced, and that the stated totals reconcile."""
+    from statement_parser import read_pdf_movement_register
+    from statement_profiles import TBANK_MOVEMENTS
+
+    result = read_pdf_movement_register(FIXTURE, TBANK_MOVEMENTS, currency="RUB")
+    assert len(result.movements) == 4
+    assert [m.date.month for m in result.movements] == [1, 3, 7, 11]
+    assert all(m.balance_after is None for m in result.movements)
+    assert any("no balance of any kind" in w for w in result.warnings)

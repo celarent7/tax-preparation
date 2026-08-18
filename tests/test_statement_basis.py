@@ -420,3 +420,24 @@ def test_an_empty_export_caps_the_basis_even_when_a_sibling_period_spans_it():
     assert timeline.max_value_basis == "statement_partial"
     assert any("gel.xlsx" in w and "stated nothing" in w
                for w in timeline.parser_warnings)
+
+
+def test_a_register_only_account_derives_the_estimate_basis():
+    """A ledger yields CHANGES, not levels. `derive_basis` already caps a
+    balance-free read at `estimate`; this pins that a register reaches it, so
+    no later change can quietly let movements support a stronger claim."""
+    movements = [
+        MovementRecord(date(2025, 3, 20), "", "RUB", "reg.pdf", 5,
+                       amount=Decimal("-250.50"), balance_after=None, row_order=0),
+        MovementRecord(date(2025, 7, 14), "", "RUB", "reg.pdf", 6,
+                       amount=Decimal("2500.00"), balance_after=None, row_order=1),
+    ]
+    register = ReadResult(
+        source_file="reg.pdf", evidence_kind=EVIDENCE_RUNNING_BALANCE,
+        movements=movements,
+        periods=[StatementPeriod(date(2025, 1, 1), date(2025, 12, 31), "reg.pdf")])
+
+    timeline = build_timeline("k", TAX_YEAR, [register], {})
+    assert timeline.max_value_basis == "estimate"
+    assert any("no level can be established" in w or "anchor balance" in w
+               for w in timeline.parser_warnings)

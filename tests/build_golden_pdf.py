@@ -17,10 +17,14 @@ LINES = [
     "Account number: 00000000000000000000",
     "Movement of funds for the period 01.01.2025 - 31.12.2025",
     "Date        Settled     Operation      Account",
-    "05.01.2025  05.01.2025  +1 000,00 R    +1 000,00 R",
-    "20.03.2025  20.03.2025  -250,50 R      -250,50 R",
-    "14.07.2025  14.07.2025  +2 500,00 R    +2 500,00 R",
+    # NEWEST FIRST, as the real register prints it. The reader reverses these,
+    # so a fixture written in chronological order would pass every assertion
+    # about WHICH rows were found while never exercising the reversal — and the
+    # reversal is the whole reason `newest_first` exists.
     "02.11.2025  02.11.2025  -1 100,00 R    -1 100,00 R",
+    "14.07.2025  14.07.2025  +2 500,00 R    +2 500,00 R",
+    "20.03.2025  20.03.2025  -250,50 R      -250,50 R",
+    "05.01.2025  05.01.2025  +1 000,00 R    +1 000,00 R",
     "Deposits: 3 500,00 R",
     "Expenses: 1 350,50 R",
 ]
