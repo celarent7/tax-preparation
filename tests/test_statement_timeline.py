@@ -628,3 +628,30 @@ def test_a_multi_currency_account_can_still_reach_a_full_year():
     points, uncertainty, _ = build_combined_series(movements, RATES)
     assert uncertainty == []
     assert points[0].unknown_currencies == []
+
+
+# ---------------------------------------------------------------------------
+# Regressions found in review
+# ---------------------------------------------------------------------------
+
+def test_year_end_balance_is_an_observed_level_never_an_intraday_ceiling():
+    """A `BOUND_UNORDERED` ceiling is appended AFTER the day's close, so on a
+    December 31 where two streams moved it is the last point in the series.
+    Reported as the year-end balance it states a level no instant ever held —
+    and does it silently, with no caveat, because a ceiling has no unknown
+    currencies to trigger one."""
+    movements = [
+        movement(date(2025, 6, 1), "100", currency="USD", source_file="usd.xlsx", order=0),
+        movement(date(2025, 6, 1), "200", currency="EUR", source_file="eur.xlsx", order=0),
+        # USD rises and EUR falls on the last day: the order matters, so a
+        # ceiling point is emitted above the close.
+        movement(date(2025, 12, 31), "300", currency="USD", source_file="usd.xlsx", order=1),
+        movement(date(2025, 12, 31), "20", currency="EUR", source_file="eur.xlsx", order=1),
+    ]
+    points, uncertainty, _ = build_combined_series(movements, RATES)
+    assert [u["kind"] for u in uncertainty] == [BOUND_UNORDERED]
+    assert points[-1].bound == BOUND_UNORDERED and points[-1].usd == Decimal("400")
+
+    value, caveat = balance_at_year_end(points, 2025)
+    assert value == Decimal("310")      # 300 USD + 20/2 EUR, the close
+    assert caveat is None

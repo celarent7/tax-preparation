@@ -1403,7 +1403,12 @@ def balance_at_year_end(points: List[CombinedPoint], tax_year: int
     schema's `year_end_balance_usd` is consumed by no validator.
     """
     year_end = date(tax_year, 12, 31)
-    eligible = [p for p in points if p.date <= year_end]
+    # BOUNDED points are excluded. A `BOUND_UNORDERED` ceiling is appended
+    # AFTER the day's close, so on a year-end date where two streams moved the
+    # last point in the list is the order-independent ceiling — a level no
+    # instant ever held. Taking it would report a December 31 balance higher
+    # than any the files state, with no caveat at all.
+    eligible = [p for p in points if p.date <= year_end and p.bound is None]
     if not eligible:
         return None, "No observation falls on or before December 31."
     last = eligible[-1]
