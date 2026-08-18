@@ -1,8 +1,15 @@
 # Golden statement corpus — FBAR Phase 0
 
-Synthetic statements covering the four shapes `scripts/statement_parser.py`
-reads, plus the `sources.json` that maps them. `tests/test_statement_golden.py`
-parses this directory and asserts the figures **hand-computed below**.
+Synthetic statements covering four of the five shapes
+`scripts/statement_parser.py` reads, plus the `sources.json` that maps them.
+`tests/test_statement_golden.py` parses this directory and asserts the figures
+**hand-computed below**.
+
+The fifth shape — the PDF movement register in `movements/` — is deliberately
+**not** in `sources.json` and not part of the golden run. The golden corpus
+exists to check hand-computed *maxima*, and a register states no balance, so it
+produces no maximum to compute. It is exercised end-to-end by
+`tests/test_statement_pdf.py` instead.
 
 > **Every file here was written from scratch to exercise a shape.** None is a
 > real statement with the numbers edited — that is how PII survives into a
