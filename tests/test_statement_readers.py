@@ -831,3 +831,21 @@ def test_the_register_reader_is_dispatchable_and_demands_a_currency(tmp_path):
     (tmp_path / "reg.pdf").write_bytes(b"%PDF-1.4\n%%EOF\n")
     with pytest.raises(StatementParseError, match="currency"):
         read_source(source, str(tmp_path))
+
+
+def test_no_profile_may_claim_to_derive_balances_from_a_register():
+    """The reason PDF support is safe to add is that it changes the CONTAINER,
+    not the evidence rule. If a profile ever gains a way to synthesize levels
+    from deltas, that separation is gone and a register starts producing
+    maximum values it cannot support.
+
+    A regression lock, not a red-green cycle: it passes the day it is written
+    and exists to fail on a later edit."""
+    from statement_profiles import PROFILES, MovementRegisterProfile
+
+    for name, profile in PROFILES.items():
+        if isinstance(profile, MovementRegisterProfile):
+            assert not any(hasattr(profile, f) for f in
+                           ("balance_line", "opening_balance", "closing_balance",
+                            "derive_balance", "anchor_balance")), (
+                f"{name} claims a balance source; a register has none")

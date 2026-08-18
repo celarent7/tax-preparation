@@ -352,9 +352,12 @@ That derivation is the point. If a human types `statement_full_year` into a
 roster by hand, V12 warns only when someone has already admitted the evidence is
 weak; derived from gap and continuity analysis, V12 fires honestly.
 
-Phase 0 is optional and file-format-bound: it reads `.xlsx` and plain-text
-statements. **PDF statements are read by the agent's `Read` tool in Phase 1**,
-as they always were.
+Phase 0 is optional and file-format-bound: it reads `.xlsx`, plain-text and
+PDF **movement registers**. A register states transactions and period totals and
+no balance of any kind, so it yields movements and a `max_value_basis` of
+`estimate` — never a maximum value. **Balance-bearing PDF statements are read by
+the agent's `Read` tool in Phase 1**, as they always were, and no profile derives
+a balance from transaction deltas.
 
 ```bash
 # Phase 0: parse statements into balance timelines (where .xlsx/.txt exist)
@@ -444,8 +447,9 @@ figure must be confirmed against final bank records first.
 
 Statement parsing is a **separate upstream tool** (Phase 0,
 `scripts/statement_parser.py`), and it is narrower than it sounds. It reads
-`.xlsx` and plain-text statements only — **PDF statements stay with the agent's
-`Read` tool**, so a PDF-only institution gets no timeline. It never decides
+`.xlsx`, plain-text and PDF movement registers — **a balance-bearing PDF
+statement stays with the agent's `Read` tool**, so a PDF-only institution gets
+movements and an `estimate` basis, not a maximum value. It never decides
 reportability, ownership, conventions or the Item 15a election, and it never
 reconstructs a balance it cannot evidence. The reconciler itself still takes
 only normalized JSON.

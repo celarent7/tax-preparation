@@ -434,8 +434,9 @@ def _distributed_docs():
 
 
 #: The general denial. Deliberately narrow: `fbar_guide.md` and
-#: `limitations.md` both state the TRUE narrower limit — PDF statements are not
-#: parsed and stay with the `Read` tool — and that must not trip this.
+#: `limitations.md` both state the TRUE narrower limit — a PDF movement register
+#: states no balance, so balance-bearing PDF statements stay with the `Read`
+#: tool — and that must not trip this.
 #:
 #: Matched against text with markdown emphasis STRIPPED. The claim is written
 #: as "does **not** parse bank statements", so a pattern anchored on plain
@@ -492,7 +493,8 @@ def test_the_staleness_check_actually_fires_on_the_claim_it_guards():
                for pattern in _NO_PARSING_CLAIMS)
 
     # The narrower limit that replaced it is still sayable.
-    kept = "**PDF statements are not parsed** and stay with the `Read` tool."
+    kept = ("**A PDF movement register states no balance**, so balance-bearing "
+            "PDF statements stay with the `Read` tool.")
     assert not any(re.search(pattern, _plain(kept), re.IGNORECASE)
                    for pattern in _NO_PARSING_CLAIMS)
 
@@ -521,7 +523,12 @@ def test_fbar_guide_documents_phase_0_in_the_workflow():
     assert "account_timelines_" in workflow
     # The boundary travels with the tool, or the tool reads as doing more.
     assert "never decides what the filing claims" in workflow
-    assert "PDF statements are read by the agent's `Read` tool" in workflow
+    # The boundary MOVED on 2026-08-18 rather than disappearing: PDF movement
+    # registers are parsed, balance-bearing PDFs are not. Pinning the residual
+    # half is what stops the doc drifting back to a flat "PDFs are unread" or
+    # forward to an unqualified "PDFs are parsed" — both false.
+    assert "Balance-bearing PDF statements are read by\nthe agent's `Read` tool" in workflow
+    assert "no profile derives\na balance from transaction deltas" in workflow
 
 
 def test_limitations_states_the_phase_0_boundary():
@@ -532,8 +539,11 @@ def test_limitations_states_the_phase_0_boundary():
 
     assert "statement_parser.py" in fbar_bullet
     assert "Phase 0" in fbar_bullet
-    # The narrower limits that replaced the withdrawn one.
-    assert "PDF statements are not parsed" in fbar_bullet
+    # The narrower limits that replaced the withdrawn one. A PDF register IS
+    # parsed as of 2026-08-18; what it cannot do is state a level, and that is
+    # the claim this bullet has to keep making.
+    assert "a PDF movement register states no balance" in fbar_bullet
+    assert "balance-bearing PDF statements" in fbar_bullet
     assert "Item 15a" in fbar_bullet
 
 
