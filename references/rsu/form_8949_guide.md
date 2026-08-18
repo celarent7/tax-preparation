@@ -43,7 +43,8 @@ i.e. a nonzero figure that does not match the correct cost basis. For RSUs this
 occurs when the broker reports:
 - Grant-date FMV instead of vesting-date FMV
 - A basis that does not include the W-2 ordinary-income component (ESPP
-  disqualifying dispositions — see `epam_rsu_specifics.md`)
+  disqualifying dispositions — see your employer's `*_rsu_specifics.md` notes,
+  if you have added one)
 - Any other incorrect nonzero figure
 
 ## When NO code is used (noncovered shares — Box B / Box E)

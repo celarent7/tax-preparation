@@ -280,9 +280,9 @@ These files may or may not be present. Check with `Glob` before attempting to re
 
 | Reference | Contents |
 |-----------|----------|
-| `./references/rsu/epam_rsu_specifics.md` | EPAM LTI/ESPP plan details, UBS brokerage specifics, withholding rates, Form 8949 adjustment patterns |
+| `./references/rsu/*_rsu_specifics.md` (user-supplied) | Employer-specific equity-plan details — LTI/ESPP terms, brokerage specifics, withholding rates, Form 8949 adjustment patterns. Not distributed; present only if the filer has added one. |
 
-If present, load this file whenever the user mentions EPAM, UBS One Source, EPAM RSUs, or EPAM ESPP — it contains employer-specific plan terms, withholding rates, and Form 8949 adjustment examples that override the generic RSU guidance.
+If such a file is present, load it whenever the user mentions their employer's equity plan by name, their equity brokerage or plan portal, or their employer RSUs or ESPP — it contains employer-specific plan terms, withholding rates, and Form 8949 adjustment examples that override the generic RSU guidance.
 
 ---
 

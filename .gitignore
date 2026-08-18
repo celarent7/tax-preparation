@@ -21,8 +21,14 @@ dist/
 build/
 .pytest_cache/
 
-# Personal / employer-specific references (not for public distribution)
-references/rsu/epam_rsu_specifics.md
+# Employer-specific equity-plan notes — real plan terms, withholding rates and
+# broker details for whoever the filer works for, so never distributed. Matched
+# by pattern rather than by name: naming the employer here would disclose it in
+# a public repository, which is the thing the entry exists to prevent.
+# `amazon_rsu_specifics.md` is exempted deliberately — it is a GENERIC public
+# reference that ships with the plugin, not anyone's plan data.
+references/rsu/*_rsu_specifics.md
+!references/rsu/amazon_rsu_specifics.md
 
 # Real taxpayer data — must never be committed (audit finding D6)
 scripts/verified_data.json

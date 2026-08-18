@@ -59,18 +59,26 @@ The plugin is structured for both direct execution and as a toolset for AI agent
     ```
 
 ### MCP Integration (for Claude)
-Add the following to your `claude_desktop_config.json`:
+Add the following to your `claude_desktop_config.json`, replacing
+`/absolute/path/to/tax-preparation` with wherever you cloned this repository:
 ```json
 {
   "mcpServers": {
     "tax-preparation": {
-      "command": "python",
-      "args": ["path/to/tax-preparation/scripts/mcp_server.py"]
+      "command": "python3",
+      "args": ["/absolute/path/to/tax-preparation/scripts/mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "/absolute/path/to/tax-preparation/scripts"
+      }
     }
   }
 }
 ```
-*(See `mcp_config.json` for the full configuration snippet.)*
+The path must be absolute — the MCP client launches the server from its own
+working directory, not from the repository. `PYTHONPATH` is what lets the
+server import its sibling modules.
+
+*(`mcp_config.json` holds the same snippet as a copyable file.)*
 
 ---
 
