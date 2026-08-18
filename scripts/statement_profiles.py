@@ -53,7 +53,11 @@ class PeriodSpec:
 
     start_labels: Tuple[str, ...] = ()
     end_labels: Tuple[str, ...] = ()
-    #: How many rows above the data header to scan for those labels.
+    #: How many rows from the TOP OF THE SHEET to scan for those labels, up to
+    #: the data header. A metadata block sits at the top of the file; it is the
+    #: HEADER that moves down, because the totals block above it is
+    #: variable-length (`_HEADER_SCAN_ROWS` is 200 for that reason). So the
+    #: window is anchored at the top, not measured back from the header.
     search_rows: int = 40
 
 
