@@ -741,3 +741,21 @@ def test_a_grouping_separator_after_the_decimal_point_is_rejected():
     # The legitimate shapes still parse.
     assert parse_decimal("1,234.56", COLOMBIAN_EXPORT_NUMBERS) == Decimal("1234.56")
     assert parse_decimal("1 234,56", RUSSIAN_NUMBERS) == Decimal("1234.56")
+
+
+# ---------------------------------------------------------------------------
+# Shape E — movement registers (PDF), transactions with NO balance
+# ---------------------------------------------------------------------------
+
+
+def test_the_movement_register_profile_is_registered_and_states_no_balance_line():
+    """Shape E carries transactions and period totals only. If a future edit
+    gives this profile a balance line, the reader would start emitting levels
+    the document does not state — the exact substitution UNWRITABLE_PROFILES
+    exists to refuse."""
+    from statement_profiles import TBANK_MOVEMENTS, MovementRegisterProfile, get_profile
+
+    assert get_profile("tbank_movements") is TBANK_MOVEMENTS
+    assert isinstance(TBANK_MOVEMENTS, MovementRegisterProfile)
+    assert not hasattr(TBANK_MOVEMENTS, "balance_line")
+    assert TBANK_MOVEMENTS.newest_first is True

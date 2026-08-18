@@ -209,6 +209,73 @@ TBANK_TEXT = TextSummaryProfile(
 
 
 # ---------------------------------------------------------------------------
+# Shape E — movement registers, transactions with NO balance of any kind
+# ---------------------------------------------------------------------------
+
+#: T-Bank's «О движении средств». A transaction list plus two period totals.
+#: There is NO opening, closing or running balance anywhere in the document.
+#:
+#: This profile deliberately has no balance field. A register cannot yield a
+#: level, only changes, and `derive_basis` caps a balance-free read at
+#: `estimate` on exactly that ground. Deriving balances from the deltas would
+#: manufacture the evidence the document declines to give.
+@dataclass(frozen=True)
+class MovementRegisterProfile:
+    name: str
+    #: Regex per transaction row. Named groups: `date_op`, `date_settle`,
+    #: `amount_op`, `currency_op`, `amount_acct`, `currency_acct`. The ACCOUNT
+    #: amount is the movement; the operation amount is what was charged in the
+    #: merchant's currency and is read only to be discarded explicitly.
+    txn_line: str
+    #: Regex with `start` and `end` groups for the period the file covers.
+    period_line: str
+    #: Regex with a `value` group. The contract number identifies the account.
+    contract_line: str
+    #: Regex with a `value` group. May legitimately be absent — a credit
+    #: contract prints "not opened" where a deposit account prints a number.
+    account_line: str
+    #: Regexes with `label` and `amount` groups. Read so the parse can be
+    #: reconciled against the bank's own arithmetic, never as movements.
+    total_lines: Tuple[str, ...] = ()
+    numbers: NumberFormat = RUSSIAN_NUMBERS
+    #: True when rows are printed newest-first and must be reversed.
+    newest_first: bool = True
+    notes: str = ""
+
+
+TBANK_MOVEMENTS = MovementRegisterProfile(
+    name="tbank_movements",
+    txn_line=(
+        r"^\s*(?P<date_op>\d{2}\.\d{2}\.\d{4})\s+"
+        r"(?P<date_settle>\d{2}\.\d{2}\.\d{4})\s+"
+        r"(?P<amount_op>[+−-][\d\s\u00a0\u202f]*\d[.,]\d{2})\s*(?P<currency_op>[₽$€R])\s+"
+        r"(?P<amount_acct>[+−-][\d\s\u00a0\u202f]*\d[.,]\d{2})\s*(?P<currency_acct>[₽$€R])"
+    ),
+    period_line=(
+        r"(?:Movement of funds for the period|Движение "
+        r"средств за период с)\s+"
+        r"(?P<start>\d{2}\.\d{2}\.\d{4})\s*(?:-|по)\s*(?P<end>\d{2}\.\d{2}\.\d{4})"
+    ),
+    contract_line=r"(?:Contract number|Номер договора):\s*(?P<value>\S+)",
+    account_line=r"(?:Account number|Номер лицевого счета):\s*(?P<value>.+?)\s*$",
+    total_lines=(
+        r"^\s*(?P<label>Deposits|Пополнения):\s*(?P<amount>.+?)\s*$",
+        r"^\s*(?P<label>Expenses|Расходы):\s*(?P<amount>.+?)\s*$",
+    ),
+    numbers=RUSSIAN_NUMBERS,
+    newest_first=True,
+    notes=(
+        "States NO balance. Rows print newest-first, so a chronological read "
+        "must reverse them. Amounts carry U+00A0 and U+202F inside digit "
+        "groups far more often than the .xlsx exports do, because PDF text "
+        "extraction preserves typographic spaces — RUSSIAN_NUMBERS and "
+        "_assert_grouping between them are what stop that becoming a silent "
+        "factor-of-1000 error (hazard 9.4)."
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
 # Shape D — credit cards, dual-currency sheets
 # ---------------------------------------------------------------------------
 
@@ -260,6 +327,7 @@ PROFILES: Dict[str, object] = {
     BANCOLOMBIA_SAVINGS.name: BANCOLOMBIA_SAVINGS,
     BANCOLOMBIA_CARD.name: BANCOLOMBIA_CARD,
     TBANK_TEXT.name: TBANK_TEXT,
+    TBANK_MOVEMENTS.name: TBANK_MOVEMENTS,
 }
 
 #: Institutions in the corpus for which NO profile may be written, with the
