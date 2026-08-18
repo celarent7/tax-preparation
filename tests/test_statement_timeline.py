@@ -43,7 +43,7 @@ def period(start, end, source_file):
 
 
 # ---------------------------------------------------------------------------
-# 9.5 — period gaps, including the two that are live in the corpus
+# 9.5 — period gaps, including the two shapes that occur in practice
 # ---------------------------------------------------------------------------
 
 def test_full_year_coverage_has_no_gaps():
@@ -67,8 +67,9 @@ def test_monthly_periods_running_22nd_to_21st_leave_december_uncovered():
 
 
 def test_a_missing_december_statement_is_a_year_end_gap():
-    """One card lacks December, the other October through December. December is
-    the month that would establish the year-end balance."""
+    """A card statement set that stops before December. December is the month
+    that would establish the year-end balance, so its absence is the gap that
+    matters most."""
     import calendar
 
     def billing_day(year, month, day=30):
@@ -97,7 +98,7 @@ def test_a_missing_middle_statement_is_a_gap_between_periods():
 
 
 def test_no_statements_at_all_is_the_whole_year():
-    """BCS: one workpaper, zero statement files."""
+    """An institution with no statement files at all."""
     gaps = detect_gaps([], 2025)
     assert [g["position"] for g in gaps] == ["whole_year"]
     assert gaps[0]["days"] == 365

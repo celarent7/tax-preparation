@@ -99,7 +99,7 @@ def test_an_info_level_continuity_note_does_not_cap_anything():
 
 def test_period_end_summaries_can_never_reach_a_full_year():
     """Two bounding balances per period leave everything between them
-    invisible. Twelve such files are still twelve blind periods."""
+    invisible. A full year of such files is still a year of blind periods."""
     summaries = [
         ReadResult(source_file=f"text{month}.txt",
                    evidence_kind=EVIDENCE_PERIOD_END_SUMMARIES,
@@ -138,7 +138,7 @@ def test_movements_with_no_balances_anywhere_are_an_estimate():
 
 
 def test_no_files_at_all_is_unknown_and_says_it_is_claudes_call():
-    """BCS: one workpaper, zero statements."""
+    """An institution with no statement files at all."""
     basis, reasons = derive_basis([], [], [], [], has_balances=False)
     assert basis == "unknown"
     assert any("Item 15a" in reason for reason in reasons)

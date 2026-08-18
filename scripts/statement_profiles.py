@@ -7,8 +7,8 @@ merging and basis derivation; the institution-specific part is genuinely small:
 *where the columns are*. Adding an institution should mean adding a profile.
 
 Every profile here was written from a file that was actually read. Where the
-corpus could not specify something — Wise, whose both exports are a single cell
-containing `ID` — **no profile is written**. A column map written from
+available exports cannot specify a layout — a sheet whose only cell is `ID`
+is not a header row — **no profile is written**. A column map written from
 expectation rather than evidence is the one thing this module exists to
 prevent, because it fails as a plausible wrong number rather than as an error.
 """
@@ -127,9 +127,9 @@ TBC = SheetProfile(
     currency_from=CURRENCY_FROM_SHEET_SUFFIX,
     period=PeriodSpec(),
     notes=(
-        "Volume is low — about 13 transactions across all three files, one of "
-        "them the sole GEL movement. TBC exercises the multi-currency merge, "
-        "not the extraction."
+        "Low transaction volume, and a currency that may appear on a single "
+        "row. This shape exercises the multi-currency merge, not the "
+        "extraction."
     ),
 )
 
@@ -162,8 +162,9 @@ BANCOLOMBIA_SAVINGS = SheetProfile(
         end_labels=(r"per[ií]odo.*hasta", r"fecha\s+final", r"hasta"),
     ),
     notes=(
-        "Cadence is QUARTERLY, four files, and Q1 opens 2024/12/31 — in the "
-        "prior calendar year."
+        "Cadence is QUARTERLY, and the first quarter OPENS ON THE PRIOR "
+        "YEAR'S LAST DAY (e.g. 2024/12/31 for a 2025 Q1 file) — a period "
+        "boundary that reaches outside the tax year."
     ),
 )
 
@@ -172,10 +173,10 @@ BANCOLOMBIA_SAVINGS = SheetProfile(
 # Shape B — period-end summaries only
 # ---------------------------------------------------------------------------
 
-#: T-Bank. Twelve ~179-byte `.txt` files, each two bounding balances and four
-#: totals. THERE IS NO TRANSACTION DETAIL: an account that peaked mid-period
-#: and returned looks flat, which is why this shape must never yield a
-#: determined maximum (plan §6.3).
+#: T-Bank. Very small `.txt` files, each stating two bounding balances and
+#: four totals. THERE IS NO TRANSACTION DETAIL: an account that peaked
+#: mid-period and returned looks flat, which is why this shape must never yield
+#: a determined maximum, however many files arrive (plan §6.3).
 #:
 #: Not a `SheetProfile` — there is no sheet. The reader is driven by the label
 #: patterns below, and the numbers carry a space thousands separator, a comma
@@ -200,10 +201,11 @@ TBANK_TEXT = TextSummaryProfile(
         r"^\s*(?P<label>Income|Expenses|Interest|Cashback)\s*:\s*(?P<amount>.+?)\s*$",
     ),
     notes=(
-        "Periods run the 22nd to the 21st, so twelve files end at December 21 "
-        "and December 22-31 is uncovered (hazard 9.5). The period comes from "
-        "the two balance lines — NEVER from the filename: `text 3.txt` is "
-        "October and `text 12.txt` is January (hazard 9.3)."
+        "Periods run the 22nd to the 21st, so a full set of monthly files "
+        "still ends at December 21 and leaves December 22-31 uncovered "
+        "(hazard 9.5). The period comes from the two balance lines — NEVER "
+        "from the filename: these files are numbered in issue order, not "
+        "calendar order, so `text 3.txt` need not be March (hazard 9.3)."
     ),
 )
 
@@ -279,14 +281,14 @@ TBANK_MOVEMENTS = MovementRegisterProfile(
 # Shape D — credit cards, dual-currency sheets
 # ---------------------------------------------------------------------------
 
-#: Bancolombia Mastercard. Twenty files across two cards, each with TWO sheets
-#: — `DOLARES` and `PESOS` — for the same card, plus a metadata block carrying
-#: `Cupo Total`, the billing period and the masked card number.
+#: Bancolombia Mastercard. One file per card per billing period, each with TWO
+#: sheets — `DOLARES` and `PESOS` — for the same card, plus a metadata block
+#: carrying `Cupo Total`, the billing period and the masked card number.
 #:
-#: Neither card has a full year: one lacks December, the other October through
-#: December. December is the month that would establish the year-end balance,
-#: so this profile cannot produce a `statement_full_year` account no matter how
-#: well it is written — which is the correct behaviour, not a defect.
+#: Where the December file is absent this profile CANNOT produce a
+#: `statement_full_year` account however well it is written: December is the
+#: month that establishes the year-end balance. That is the correct behaviour,
+#: not a defect — the basis follows the coverage that actually arrived.
 #:
 #: The billing period runs ~30th to ~30th, so the January file OPENS IN THE
 #: PRIOR CALENDAR YEAR (`30/12/2024 -> 30/01/2025`).
@@ -335,18 +337,19 @@ PROFILES: Dict[str, object] = {
 #: oversight, and so a reader that is asked for one fails with the reason.
 UNWRITABLE_PROFILES: Dict[str, str] = {
     "wise": (
-        "Both corpus exports' `All transactions` sheet is a single cell "
+        "The available exports' `All transactions` sheet is a single cell "
         "containing `ID` — not a header row — and none of `Running Balance`, "
-        "`Exchange Rate` or `Total Fees` is present in either file. Any column "
-        "map would be written from expectation rather than evidence. The "
-        "account was dormant, which settles the roster figure; it does not "
-        "make the files describe a layout. Write this profile only when a "
+        "`Exchange Rate` or `Total Fees` is present. Any column map would be "
+        "written from expectation rather than evidence. Whatever settles the "
+        "roster figure for such an account, it is not these files describing "
+        "a layout they do not describe. Write this profile only when a "
         "non-empty export exists."
     ),
     "bcs": (
-        "One workpaper, zero statement files. There is nothing to profile; the "
-        "correct output is an explicit absent with a reason, feeding "
-        "max_value_basis 'unknown' and the Item 15a decision to Claude."
+        "No statement files, in any format, to write a column map from. There "
+        "is nothing to profile; the correct output is an explicit absent with "
+        "a reason, feeding max_value_basis 'unknown' and the Item 15a "
+        "decision to Claude."
     ),
 }
 

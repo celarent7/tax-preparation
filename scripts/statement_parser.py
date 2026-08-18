@@ -1011,11 +1011,11 @@ def merge_spans(spans: List[Tuple[date, date]]) -> List[Tuple[date, date]]:
 def detect_gaps(periods: List[StatementPeriod], tax_year: int) -> List[Dict[str, Any]]:
     """Stretches of the calendar year no statement covers.
 
-    Two of these are live in the corpus, not hypothetical. T-Bank's periods run
-    the **22nd to the 21st**, so twelve monthly files end at December 21 and
-    **December 22-31 is uncovered**. Bancolombia's cards are worse: one lacks
-    December, the other October through December — and December is the month
-    that would establish the year-end balance.
+    Neither shape below is hypothetical. Where an institution's periods run
+    the **22nd to the 21st**, a full year of monthly files still ends at
+    December 21 and **December 22-31 is uncovered**. A card whose December
+    statement never arrived is worse — December is the month that would
+    establish the year-end balance, so its absence caps the basis outright.
 
     Detected and reported. **Never extrapolated**: a gap is a fact about the
     evidence, and filling it would be the parser deciding what the filing
