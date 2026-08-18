@@ -1576,6 +1576,158 @@ def _check_summary_totals(lines, profile, result: ReadResult, source_file: str,
 
 
 # ---------------------------------------------------------------------------
+# Reader: pdf_movement_register (shape E) — movements, and NO balance
+# ---------------------------------------------------------------------------
+
+
+def read_movement_register_lines(lines: List[str], profile, source_file: str,
+                                 currency: str) -> ReadResult:
+    """Parse a movement register's text lines into movements. NO balances.
+
+    A register states changes, never levels. Every movement therefore carries
+    `balance_after=None`, and `derive_basis` caps the run at `estimate` through
+    its `has_balances` branch — which is the honest answer, not a limitation to
+    be worked around. Reconstructing levels from the deltas would assert a
+    maximum the document does not support (§9.6, UNWRITABLE_PROFILES).
+
+    The result is stamped `EVIDENCE_RUNNING_BALANCE` because `_EVIDENCE_CEILING`
+    grades evidence by GRANULARITY, not by whether balances are present: this
+    file is transaction-level, unlike a period-end summary whose two bounding
+    balances can never see a mid-period peak. The absence of balances is a
+    separate axis and `has_balances` is what applies it. Stamping
+    `EVIDENCE_NONE` here would cap the run at `unknown` and lose the true fact
+    that every transaction in the period is known.
+
+    Takes lines rather than a path so that every rule below is testable with
+    literal text; `read_pdf_movement_register` is the one-line file wrapper.
+
+    The parse is checked against the document's OWN stated totals. A register
+    has no running balance to fall out of step, so a dropped or misread row is
+    otherwise undetectable: the ledger simply comes out short and nothing
+    contradicts it. The totals are the only internal evidence available, so
+    failing to reconcile stops the run.
+    """
+    currency = currency.strip().upper()
+    result = ReadResult(source_file=source_file, currencies=[currency],
+                        evidence_kind=EVIDENCE_RUNNING_BALANCE)
+
+    txn = re.compile(profile.txn_line)
+    period_re = re.compile(profile.period_line)
+    normalized = [unicodedata.normalize("NFKC", line) for line in lines]
+
+    period = None
+    for line in normalized:
+        match = period_re.search(line)
+        if match:
+            start = parse_full_date(match.group("start"), f"{source_file} period start")
+            end = parse_full_date(match.group("end"), f"{source_file} period end")
+            if start and end:
+                period = StatementPeriod(start, end, source_file)
+            break
+
+    rows = []
+    for number, line in enumerate(normalized, start=1):
+        match = txn.match(line)
+        if match is None:
+            continue
+        when = parse_full_date(match.group("date_op"), f"{source_file} line {number}")
+        # The ACCOUNT amount is the movement. `amount_op` is what was charged
+        # in the merchant's currency; it is matched so the two columns cannot
+        # be confused for one another, and then deliberately discarded.
+        amount = parse_decimal(match.group("amount_acct"), profile.numbers,
+                               f"{source_file} line {number} account amount")
+        if when is None or amount is None:
+            continue
+        rows.append((number, when, amount))
+
+    if profile.newest_first:
+        rows.reverse()
+
+    for order, (number, when, amount) in enumerate(rows):
+        result.movements.append(MovementRecord(
+            when, "", currency, source_file, number,
+            amount=amount, balance_after=None, row_order=order))
+
+    _assert_register_reconciles(normalized, profile, rows, source_file, result)
+
+    if not rows:
+        result.no_data = True
+        result.warnings.append(
+            f"{source_file}: states a period but lists no transactions. This is "
+            "a no-data finding about the period, NOT a zero balance (§9.6).")
+    if period is not None:
+        result.periods.append(period)
+    else:
+        result.period_inferred_from_rows = True
+        if rows:
+            result.periods.append(StatementPeriod(rows[0][1], rows[-1][1], source_file))
+            result.warnings.append(
+                f"{source_file}: no period line found, so the span was inferred "
+                "from the rows and cannot show a statement missing from either end.")
+    result.warnings.append(
+        f"{source_file}: states no balance of any kind, so this file supports "
+        "movements only and no maximum value can be derived from it.")
+    return result
+
+
+def _assert_register_reconciles(lines: List[str], profile, rows, source_file: str,
+                                result: ReadResult) -> None:
+    """Check the parsed rows against the register's own stated totals.
+
+    The counterpart of `_check_summary_totals`, and stricter on purpose. There
+    a mismatch is a warning, because two stated balances still bound the period
+    whatever the totals say. Here nothing else bounds anything: if a row was
+    dropped the ledger is simply short, every figure derived from it is wrong,
+    and no other check in the pipeline can notice. So this one raises.
+    """
+    stated: Dict[str, Decimal] = {}
+    for pattern in profile.total_lines:
+        compiled = re.compile(pattern)
+        for line in lines:
+            match = compiled.match(line)
+            if match is None:
+                continue
+            label = match.group("label").strip().lower()
+            if label in stated:
+                continue
+            value = parse_decimal(match.group("amount"), profile.numbers,
+                                  f"{source_file} {label} total")
+            if value is not None:
+                stated[label] = abs(value)
+
+    if not stated:
+        result.warnings.append(
+            f"{source_file}: states no period totals, so the parse could not be "
+            "reconciled against the document's own arithmetic.")
+        return
+
+    parsed_in = sum((a for _, _, a in rows if a > 0), Decimal("0"))
+    parsed_out = -sum((a for _, _, a in rows if a < 0), Decimal("0"))
+    for labels, parsed, what in (
+            (("deposits", "пополнения"), parsed_in, "deposits"),
+            (("expenses", "расходы"), parsed_out, "expenses")):
+        for label in labels:
+            if label not in stated:
+                continue
+            if abs(stated[label] - parsed) > Decimal("0.01"):
+                raise StatementParseError(
+                    f"{source_file}: parsed {what} {parsed} does not reconcile "
+                    f"with the document's stated {stated[label]}. Rows were "
+                    "dropped or misread. A register has no running balance to "
+                    "fall out of step, so this check is the only thing standing "
+                    "between a short ledger and a silently wrong figure.")
+            break
+
+
+def read_pdf_movement_register(path: str, profile, currency: str) -> ReadResult:
+    """Read a movement-register PDF. Container handling only; see above."""
+    from statement_pdf import extract_text_lines
+
+    return read_movement_register_lines(
+        extract_text_lines(path), profile, os.path.basename(path), currency)
+
+
+# ---------------------------------------------------------------------------
 # Reader: xlsx_two_sheet_card (plan §4.4, step 6)
 # ---------------------------------------------------------------------------
 

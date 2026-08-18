@@ -759,3 +759,56 @@ def test_the_movement_register_profile_is_registered_and_states_no_balance_line(
     assert isinstance(TBANK_MOVEMENTS, MovementRegisterProfile)
     assert not hasattr(TBANK_MOVEMENTS, "balance_line")
     assert TBANK_MOVEMENTS.newest_first is True
+
+
+MOVEMENT_LINES = [
+    "Movement of funds statement",
+    "Contract number: 0000000000",
+    "Account number: 00000000000000000000",
+    "Movement of funds for the period 01.01.2025 - 31.12.2025",
+    "14.07.2025  14.07.2025  +2 500,00 R    +2 500,00 R",
+    "20.03.2025  20.03.2025  -250,50 R      -250,50 R",
+    "Deposits: 2 500,00 R",
+    "Expenses: 250,50 R",
+]
+
+
+def test_a_register_yields_movements_in_chronological_order_with_no_balances():
+    """Rows print newest-first. Read as printed, the series runs backwards and
+    every downstream cumulative figure is wrong."""
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    result = read_movement_register_lines(
+        MOVEMENT_LINES, TBANK_MOVEMENTS, "reg.pdf", currency="RUB")
+
+    assert [m.date for m in result.movements] == [date(2025, 3, 20), date(2025, 7, 14)]
+    assert [m.amount for m in result.movements] == [Decimal("-250.50"), Decimal("2500.00")]
+    assert all(m.balance_after is None for m in result.movements), (
+        "a register states no balance; emitting one would invent evidence")
+    assert result.periods == [StatementPeriod(date(2025, 1, 1), date(2025, 12, 31), "reg.pdf")]
+
+
+def test_a_register_whose_parse_misses_a_row_is_refused():
+    """The bank states its own Пополнения/Расходы totals. If the parsed rows do
+    not sum to them, rows were dropped or misread — and a dropped row in a
+    movements ledger is invisible downstream. Reconciling against the document's
+    own arithmetic is the only check that catches it."""
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    broken = list(MOVEMENT_LINES)
+    broken[-1] = "Expenses: 999,00 R"
+    with pytest.raises(StatementParseError, match="does not reconcile"):
+        read_movement_register_lines(broken, TBANK_MOVEMENTS, "reg.pdf", currency="RUB")
+
+
+def test_a_register_with_no_transaction_rows_is_a_no_data_finding():
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    header_only = MOVEMENT_LINES[:4] + ["Deposits: 0,00 R", "Expenses: 0,00 R"]
+    result = read_movement_register_lines(
+        header_only, TBANK_MOVEMENTS, "reg.pdf", currency="RUB")
+    assert result.no_data is True
+    assert result.movements == []
