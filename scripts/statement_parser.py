@@ -1696,6 +1696,20 @@ def derive_basis(read_results: List[ReadResult],
                 f"which can support at best {ceiling!r}.")
         basis = weaken_basis(basis, ceiling)
 
+    empty = sorted({r.source_file for r in read_results if r.no_data})
+    if empty:
+        # An empty export states nothing and therefore covers nothing. It
+        # contributes no period, so where a SIBLING file's period spans it the
+        # gap check sees full coverage and the basis stays `statement_full_year`
+        # — a safe-harbour claim resting partly on a file that said nothing.
+        # That is hazard 9.6 arriving through the back door.
+        basis = weaken_basis(basis, "statement_partial")
+        reasons.append(
+            f"{len(empty)} source file(s) stated nothing — {', '.join(empty)}. "
+            "An empty export is NOT a zero balance and covers no part of the "
+            "year, so the evidence cannot support a full-year claim even where "
+            "another file's period spans the same days.")
+
     if not has_balances:
         # A ledger yields CHANGES, not levels. Without an anchor balance no
         # timeline can be built from it, and a reconstructed one is never

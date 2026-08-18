@@ -389,3 +389,34 @@ def test_the_emitted_source_documents_are_what_v13_looks_for(tmp_path):
     (tmp_path / "year.xlsx").write_text("", encoding="utf-8")
     _, present = validate_roster_findings(roster_dict, workspace=str(tmp_path))
     assert [f for f in present["findings"] if f.id == "V13"] == []
+
+
+def test_an_empty_export_caps_the_basis_even_when_a_sibling_period_spans_it():
+    """Regression: an empty export contributes no movements and no period, so
+    where a SIBLING file's period covers the same days the gap check sees full
+    coverage and the basis stayed `statement_full_year` — a safe-harbour claim
+    resting partly on a file that stated nothing.
+
+    That is hazard 9.6 arriving through the back door: the reader correctly
+    refuses to call the empty file a zero balance, and the basis then treats it
+    as if it were not there at all.
+    """
+    covering = ReadResult(
+        source_file="usd.xlsx",
+        evidence_kind=EVIDENCE_RUNNING_BALANCE,
+        movements=[
+            MovementRecord(date(2025, 1, 1), "open", "USD", "usd.xlsx", 2,
+                           balance_after=Decimal("100")),
+            MovementRecord(date(2025, 12, 31), "close", "USD", "usd.xlsx", 3,
+                           balance_after=Decimal("200"), row_order=1),
+        ],
+        periods=[StatementPeriod(date(2025, 1, 1), date(2025, 12, 31), "usd.xlsx")],
+    )
+    empty = ReadResult(source_file="gel.xlsx", evidence_kind=EVIDENCE_RUNNING_BALANCE,
+                       no_data=True)
+
+    timeline = build_timeline("k", TAX_YEAR, [covering, empty], {})
+    assert timeline.gaps == []
+    assert timeline.max_value_basis == "statement_partial"
+    assert any("gel.xlsx" in w and "stated nothing" in w
+               for w in timeline.parser_warnings)
