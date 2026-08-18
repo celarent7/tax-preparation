@@ -761,6 +761,11 @@ def test_the_movement_register_profile_is_registered_and_states_no_balance_line(
     assert TBANK_MOVEMENTS.newest_first is True
 
 
+# Synthetic, following the `examples/statements/` convention. The contract and
+# account numbers are zeros on purpose: this repository is PUBLIC, and a
+# well-formed account number is identifying whether or not it is anyone's.
+# The reader never reads these two lines — they are here so the fixture has
+# the shape of the real document.
 MOVEMENT_LINES = [
     "Movement of funds statement",
     "Contract number: 0000000000",
