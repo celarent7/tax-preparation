@@ -849,3 +849,30 @@ def test_no_profile_may_claim_to_derive_balances_from_a_register():
                            ("balance_line", "opening_balance", "closing_balance",
                             "derive_balance", "anchor_balance")), (
                 f"{name} claims a balance source; a register has none")
+
+
+def test_the_movement_is_the_account_amount_not_the_operation_amount():
+    """The two columns differ on any foreign-currency transaction: the
+    operation amount is what the merchant charged, the account amount is what
+    left the account. Only the second is a movement of THIS account.
+
+    Every other register fixture prints the two columns equal, which is what a
+    same-currency purchase looks like — so reading the wrong column would pass
+    all of them. This case is the one that can tell them apart, and it is the
+    §9.4-class failure: a wrong figure, not an error.
+    """
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    lines = [
+        "Movement of funds for the period 01.01.2025 - 31.12.2025",
+        "05.02.2025  05.02.2025  -100,00 $      -9 250,00 R",
+        "Deposits: 0,00 R",
+        "Expenses: 9 250,00 R",
+    ]
+    result = read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                          currency="RUB")
+    assert [m.amount for m in result.movements] == [Decimal("-9250.00")]
+    # And the reconciliation agrees, because the bank totals its own account
+    # column too — reading the operation column would fail this as well.
+    assert not any("does not reconcile" in w for w in result.warnings)
