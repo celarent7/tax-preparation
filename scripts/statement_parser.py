@@ -131,7 +131,21 @@ def _assert_grouping(marked: str, fmt: NumberFormat, value: Any, where: str) -> 
     anywhere. Real grouping always leaves three digits after each separator, so
     a short final group is proof the profile does not match the file.
     """
-    integer_part = marked.split(fmt.decimal_sep)[0]
+    integer_part, _, fraction = marked.partition(fmt.decimal_sep)
+    if _GROUP_MARK in fraction:
+        # A group separator NEVER appears after the decimal point. `1.234,56`
+        # is `1234.56` written dot-thousands/comma-decimal; read with a
+        # dot-DECIMAL profile the comma vanishes as a group mark and the value
+        # becomes `1.23456` — a thousand times too small, and the integer-part
+        # check above never sees it because the integer part is the single
+        # digit `1`. Colombia's own convention is exactly this shape, which is
+        # what COLOMBIAN_EXPORT_NUMBERS deliberately does NOT follow.
+        raise StatementParseError(
+            f"{where}: {value!r} puts a grouping separator after "
+            f"{fmt.decimal_sep!r}, which no number does. This profile's "
+            "decimal separator does not match the file — read dot-thousands "
+            "text with a dot-decimal profile and the value silently divides."
+        )
     groups = integer_part.split(_GROUP_MARK)
     if len(groups) == 1:
         return

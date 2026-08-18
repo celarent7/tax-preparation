@@ -721,3 +721,23 @@ def test_a_card_profile_that_forgot_the_liability_flag_is_refused(tmp_path):
     asset_shaped = dataclass_replace(BANCOLOMBIA_CARD, is_liability=False)
     with pytest.raises(StatementParseError, match="not marked is_liability"):
         read_xlsx_two_sheet_card(card_file(tmp_path), asset_shaped)
+
+
+def test_a_grouping_separator_after_the_decimal_point_is_rejected():
+    """Regression: `_assert_grouping` only inspected the INTEGER part.
+
+    `1.234,56` is `1234.56` written dot-thousands/comma-decimal — Colombia's own
+    typographic convention, which is precisely what `COLOMBIAN_EXPORT_NUMBERS`
+    deliberately does not follow. Read with that dot-DECIMAL profile the comma
+    vanished as a group mark and the value became `1.23456`: a thousand times
+    too small, and the integer-part check never saw it because the integer part
+    was the single digit `1`.
+    """
+    with pytest.raises(StatementParseError, match="grouping separator after"):
+        parse_decimal("1.234,56", COLOMBIAN_EXPORT_NUMBERS)
+    with pytest.raises(StatementParseError, match="grouping separator after"):
+        parse_decimal("12.345,67", PLAIN_NUMBERS)
+
+    # The legitimate shapes still parse.
+    assert parse_decimal("1,234.56", COLOMBIAN_EXPORT_NUMBERS) == Decimal("1234.56")
+    assert parse_decimal("1 234,56", RUSSIAN_NUMBERS) == Decimal("1234.56")
