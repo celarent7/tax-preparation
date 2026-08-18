@@ -655,3 +655,24 @@ def test_year_end_balance_is_an_observed_level_never_an_intraday_ceiling():
     value, caveat = balance_at_year_end(points, 2025)
     assert value == Decimal("310")      # 300 USD + 20/2 EUR, the close
     assert caveat is None
+
+
+def test_two_periods_from_one_file_are_not_compared_against_each_other():
+    """`period_endpoints` matches movements to a period by SOURCE FILE, so a
+    multi-sheet workbook whose span was inferred per sheet yields two periods
+    that both resolve to the whole file's endpoints. Paired, they report the
+    file's own opening-to-closing move as a continuity break against itself."""
+    movements = [
+        movement(date(2025, 1, 5), "110", amount="10", currency="USD",
+                 source_file="card.xlsx", row=3, order=0),
+        movement(date(2025, 1, 25), "500", amount="10", currency="USD",
+                 source_file="card.xlsx", row=4, order=1),
+        movement(date(2025, 1, 26), "110", amount="10", currency="COP",
+                 source_file="card.xlsx", row=5, order=2),
+    ]
+    periods = [period(date(2025, 1, 5), date(2025, 1, 25), "card.xlsx"),
+               period(date(2025, 1, 26), date(2025, 1, 26), "card.xlsx")]
+    findings = detect_continuity_breaks(movements, periods)
+    assert findings == [], (
+        "a file cannot break continuity against itself: "
+        + "; ".join(f["message"] for f in findings))

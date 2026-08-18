@@ -1095,8 +1095,21 @@ def detect_continuity_breaks(movements: List[MovementRecord],
       * **`info` — reconciles.** The difference is within one minor unit, which
         is rounding or an interest posting, not evidence of a missing file.
     """
-    by_currency: Dict[str, List[Tuple[StatementPeriod, Dict[str, Any]]]] = {}
+    # `period_endpoints` matches movements to a period by SOURCE FILE, so two
+    # periods carrying the same file (a multi-sheet workbook whose span was
+    # inferred per sheet) both resolve to the whole file's endpoints. Paired
+    # against each other they compare a file with itself and report the file's
+    # own opening-to-closing move as a break. Collapse them into one span
+    # first, which is the unit `period_endpoints` actually measures.
+    spans: Dict[str, StatementPeriod] = {}
     for period in periods:
+        seen = spans.get(period.source_file)
+        spans[period.source_file] = period if seen is None else StatementPeriod(
+            min(seen.start, period.start), max(seen.end, period.end),
+            period.source_file)
+
+    by_currency: Dict[str, List[Tuple[StatementPeriod, Dict[str, Any]]]] = {}
+    for period in spans.values():
         for currency in sorted({m.currency for m in movements
                                 if m.source_file == period.source_file}):
             endpoints = period_endpoints(movements, period, currency)
