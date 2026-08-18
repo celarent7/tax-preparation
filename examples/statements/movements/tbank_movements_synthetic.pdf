@@ -1,0 +1,48 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 592 >>
+stream
+BT
+/F1 10 Tf
+12 TL
+40 750 Td
+(Movement of funds statement) Tj T*
+(Client: NOMBRE APELLIDO) Tj T*
+(Contract number: 0000000000) Tj T*
+(Account number: 00000000000000000000) Tj T*
+(Movement of funds for the period 01.01.2025 - 31.12.2025) Tj T*
+(Date        Settled     Operation      Account) Tj T*
+(05.01.2025  05.01.2025  +1 000,00 R    +1 000,00 R) Tj T*
+(20.03.2025  20.03.2025  -250,50 R      -250,50 R) Tj T*
+(14.07.2025  14.07.2025  +2 500,00 R    +2 500,00 R) Tj T*
+(02.11.2025  02.11.2025  -1 100,00 R    -1 100,00 R) Tj T*
+(Deposits: 3 500,00 R) Tj T*
+(Expenses: 1 350,50 R) Tj T*
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+954
+%%EOF

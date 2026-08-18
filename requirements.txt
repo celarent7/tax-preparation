@@ -2,6 +2,9 @@ pytest==8.2.1
 mcp==1.2.0
 # Reads the .xlsx statements in FBAR Phase 0 (`scripts/statement_parser.py`).
 openpyxl==3.1.5
-# PDF reading is done by the agent's Read tool in Phase 1, not by a library —
-# `pdfplumber` and `pandas` were listed here but imported nowhere in scripts/,
-# tests/ or evals/, so they were removed rather than installed unused.
+# Reads PDF statements in FBAR Phase 0 (`scripts/statement_pdf.py`). Added
+# 2026-08-18 when a PDF-only institution appeared, which is the
+# revisit condition docs/statement_parser_plan.md §2 named. Pinned to the
+# version the suite actually runs against; `pandas` stays absent, still
+# imported nowhere in scripts/, tests/ or evals/.
+pdfplumber==0.11.9
