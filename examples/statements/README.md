@@ -11,6 +11,40 @@ exists to check hand-computed *maxima*, and a register states no balance, so it
 produces no maximum to compute. It is exercised end-to-end by
 `tests/test_statement_pdf.py` instead.
 
+### Configuring the register reader
+
+Its source entry lives in its own file, **`sources.register.json`** — a
+complete, validated `sources.json`, not a fragment. Copy the entry into a
+workspace `sources.json` to run it:
+
+```json
+{
+  "filer": "example",
+  "institution": "register-bank",
+  "path": "movements",
+  "glob": "*_movements_synthetic.pdf",
+  "reader": "pdf_movement_register",
+  "profile": "tbank_movements",
+  "account_key": "example-register-0005",
+  "currency": "RUB"
+}
+```
+
+**`currency` is mandatory.** A register prints amounts but never names the
+account's currency, so the reader refuses to guess — defaulting it would label
+rubles as dollars, which is a wrong number rather than an error. The same is
+true of `text_period_summary`.
+
+**What comes out:** movements, and an `estimate` basis. No balance, and
+therefore **no maximum value** — a register cannot answer the FBAR
+maximum-value question, and reconstructing levels from the deltas would assert
+evidence the document does not carry. Answering that question needs a
+balance-bearing statement or an Item 15a election.
+
+The parse is checked against the document's own stated deposit and expense
+totals; a register that states none is read, with a warning that nothing
+could reconcile it.
+
 > **Every file here was written from scratch to exercise a shape.** None is a
 > real statement with the numbers edited — that is how PII survives into a
 > public repository. The names, addresses, IBANs and card numbers are invented

@@ -980,3 +980,35 @@ def test_a_page_header_repeated_across_pages_does_not_inflate_the_ledger():
                                           currency="RUB")
     assert [m.amount for m in result.movements] == [Decimal("-250.50"),
                                                     Decimal("2500.00")]
+
+
+def test_the_documented_register_source_entry_is_valid():
+    """A reader nobody can configure never runs. The entry shape is the
+    deliverable of `examples/statements/sources.register.json`, so it is pinned
+    here — a `sources.json` key that drifts would otherwise be discovered by a
+    filer at their desk, mid-return.
+
+    Validated through `load_sources` rather than by sweeping keys by hand,
+    because that is the function a real run calls: it is the check that would
+    actually reject the file.
+    """
+    import os
+    from statement_parser import load_sources
+
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "examples", "statements", "sources.register.json")
+    loaded = load_sources(path)
+
+    entry, = loaded["sources"]
+    assert entry["reader"] == "pdf_movement_register"
+    assert entry["profile"] == "tbank_movements"
+    # The reader raises without it, and that is the mistake this example exists
+    # to prevent — a register names amounts but never the account's currency.
+    assert entry["currency"] == "RUB"
+    assert entry["path"] == "movements"
+
+    # The example must point at a file that is actually here, or it documents
+    # a run that cannot be reproduced.
+    import glob as globmod
+    corpus = os.path.join(os.path.dirname(path), entry["path"], entry["glob"])
+    assert globmod.glob(corpus), f"no corpus file matches {corpus}"

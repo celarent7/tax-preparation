@@ -1,0 +1,20 @@
+{
+  "_comment": "The movement-register (shape E) source entry, kept OUT of sources.json on purpose: the golden run in tests/test_statement_golden.py asserts a hand-computed maximum for every account it names, and a register states no balance, so it has no maximum to compute. Copy this entry into a workspace sources.json to run the reader. See README.md.",
+  "tax_year": 2025,
+  "fx_rates": [
+    {"currency": "RUB", "units_per_usd": 100.0, "as_of": "2025-12-31", "source": "other"}
+  ],
+  "sources": [
+    {
+      "filer": "example",
+      "institution": "register-bank",
+      "path": "movements",
+      "glob": "*_movements_synthetic.pdf",
+      "reader": "pdf_movement_register",
+      "profile": "tbank_movements",
+      "account_key": "example-register-0005",
+      "currency": "RUB",
+      "notes": "Yields movements and an estimate basis, never a maximum value: the file states no balance of any kind. `currency` is MANDATORY here — the register prints amounts but never names the account's currency, so a default would label rubles as dollars."
+    }
+  ]
+}
