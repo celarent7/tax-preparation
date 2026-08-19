@@ -1012,3 +1012,106 @@ def test_the_documented_register_source_entry_is_valid():
     import glob as globmod
     corpus = os.path.join(os.path.dirname(path), entry["path"], entry["glob"])
     assert globmod.glob(corpus), f"no corpus file matches {corpus}"
+
+
+def test_a_register_stating_no_transactions_contributes_no_coverage():
+    """An empty export states nothing and therefore covers NOTHING — the
+    invariant `derive_basis` states in prose and both sibling readers already
+    honour by returning before they append a period.
+
+    This reader appended the period anyway, so a December register listing no
+    transactions made `detect_gaps` report December as covered. The basis is
+    still capped at `statement_partial` by the empty-file branch, but the gap
+    list is what the workpaper prints, and a gap that is never printed is one
+    nobody goes looking for a statement to fill.
+    """
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    lines = [
+        "Movement of funds for the period 01.12.2025 - 31.12.2025",
+        "Deposits: 0,00 R",
+        "Expenses: 0,00 R",
+    ]
+    result = read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                          currency="RUB")
+    assert result.no_data is True
+    assert result.periods == [], (
+        "a file that listed no transactions covers no part of the year")
+
+
+def test_an_inferred_period_spans_the_earliest_and_latest_row():
+    """The span was taken from the FIRST and LAST row as printed, which assumes
+    the print order is the order of the movement dates. It is not: rows are
+    printed in settlement order and the movement is the OPERATION date, so a
+    settlement lagging across a boundary puts the two out of step.
+
+    Both failure modes were live. The span came out short by the difference —
+    a silently wrong coverage claim — and where the drift crossed the endpoints
+    the span inverted and `StatementPeriod` raised "period ends before it
+    starts" on a perfectly well-formed file.
+    """
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    # Printed in settlement order; the operation dates are not monotonic.
+    lines = [
+        "28.12.2025  05.01.2026  -1,00 R      -1,00 R",
+        "03.01.2026  03.01.2026  -1,00 R      -1,00 R",
+        "Deposits: 0,00 R",
+        "Expenses: 2,00 R",
+    ]
+    result = read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                          currency="RUB")
+
+    assert result.period_inferred_from_rows is True
+    assert result.periods == [
+        StatementPeriod(date(2025, 12, 28), date(2026, 1, 3), "reg.pdf")]
+
+
+def test_a_register_missing_one_of_its_totals_says_so():
+    """Reconciliation is the only check standing between a dropped row and a
+    silently short ledger, and it runs per side. With `Deposits` present and
+    `Expenses` absent, the expense side was never reconciled and nothing said
+    so — every expense row could have been lost and the parse would look clean.
+
+    `layout=True` extraction re-spacing or dropping one footer line is a
+    realistic way to lose exactly one total, so the half-checked case needs to
+    be as visible as the unchecked one.
+    """
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    lines = [
+        "Movement of funds for the period 01.01.2025 - 31.12.2025",
+        "14.07.2025  14.07.2025  +2 500,00 R    +2 500,00 R",
+        "Deposits: 2 500,00 R",
+    ]
+    result = read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                          currency="RUB")
+    assert any("not reconciled" in w.lower() for w in result.warnings), (
+        f"the missing Expenses total passed unmentioned: {result.warnings}")
+
+
+def test_a_register_mixing_currency_markers_in_the_account_column_says_so():
+    """The marker never identifies the account's currency — that is why
+    `currency` is configuration. But every row is stamped with the ONE
+    configured currency and summed into one ledger, so two markers in the
+    account column is in-document proof that some rows are being counted in a
+    currency they are not in. It was the one available signal and it was
+    discarded silently.
+    """
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    lines = [
+        "Movement of funds for the period 01.01.2025 - 31.12.2025",
+        "14.07.2025  14.07.2025  +2 500,00 R    +2 500,00 R",
+        "20.03.2025  20.03.2025  -250,50 $      -250,50 $",
+        "Deposits: 2 500,00 R",
+        "Expenses: 250,50 R",
+    ]
+    result = read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                          currency="RUB")
+    assert any("more than one currency marker" in w for w in result.warnings), (
+        f"the mixed account column passed unmentioned: {result.warnings}")

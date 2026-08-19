@@ -1598,13 +1598,31 @@ def read_movement_register_lines(lines: List[str], profile, source_file: str,
     `EVIDENCE_NONE` here would cap the run at `unknown` and lose the true fact
     that every transaction in the period is known.
 
-    **Known limit of that argument.** `has_balances` is computed once over the
-    WHOLE account group (`build_timeline`), not per file. A register read alone
-    caps at `estimate` as described; a register grouped with a balance-bearing
-    file does not cap at all, because the sibling's balances satisfy the flag
-    and this result's ceiling is `statement_full_year`. Closing that needs
-    either a per-result balance flag or a fourth evidence kind — a wider change
-    than the reader, so it is recorded here rather than half-done.
+    **Known limit of that argument, and it is worse than "no cap".** Two
+    mechanisms have to hold for the reasoning above to be safe, and neither is
+    per-file:
+
+      * `has_balances` is computed once over the WHOLE account group
+        (`build_timeline`), so a balance-bearing sibling satisfies it and the
+        `estimate` cap never applies to this file's months;
+      * this result's PERIOD counts as coverage in `detect_gaps` even though it
+        contributes no `BalancePoint` — `build_combined_series` filters on
+        `balance_after is not None` — so the last remaining cap is removed too.
+
+    Measured: an `xlsx_running_balance` sibling covering Jan–Jun plus a
+    register covering Jul–Dec yields `max_value_basis: statement_full_year`
+    with `gaps: []`, and the reason string asserts FinCEN's periodic-statement
+    safe harbour — over six months in which no level is known at all. That is
+    the strongest available claim resting on the weakest available evidence,
+    and `derive_basis` calls this "the single most important output".
+
+    A register read ALONE is unaffected: nothing else supplies balances, so
+    `has_balances` is False and the run caps at `estimate` as described. The
+    empty-register path into this is closed below (a file listing no
+    transactions contributes no period); the with-rows path is NOT. Closing it
+    needs a per-result balance flag or a fourth evidence kind — a change to
+    basis derivation, wider than this reader, so it is recorded here rather
+    than half-done.
 
     Takes lines rather than a path so that every rule below is testable with
     literal text; `read_pdf_movement_register` is the one-line file wrapper.
@@ -1634,6 +1652,7 @@ def read_movement_register_lines(lines: List[str], profile, source_file: str,
             break
 
     rows = []
+    markers = set()
     for number, line in enumerate(normalized, start=1):
         match = txn.match(line)
         if match is None:
@@ -1646,7 +1665,24 @@ def read_movement_register_lines(lines: List[str], profile, source_file: str,
                                f"{source_file} line {number} account amount")
         if when is None or amount is None:
             continue
+        markers.add(match.group("currency_acct"))
         rows.append((number, when, amount))
+
+    if len(markers) > 1:
+        # The marker does NOT identify the account's currency — that is why
+        # `currency` is configuration. It does prove INCONSISTENCY: every row
+        # is stamped with the one configured currency and summed into one
+        # ledger, so more than one marker in the account column means some of
+        # those rows are being counted in a currency they are not in.
+        # A warning, not an error: `R` and `₽` can both be rubles, drifting
+        # across pages of the same extraction, and refusing that would be a
+        # false alarm on a correct file.
+        result.warnings.append(
+            f"{source_file}: the account column carries more than one currency "
+            f"marker ({', '.join(sorted(markers))}), but every row is being read "
+            f"as {currency}. If those are genuinely different currencies the "
+            "ledger is summing across them; if they are one currency typeset "
+            "two ways, this is noise.")
 
     if profile.newest_first:
         rows.reverse()
@@ -1665,11 +1701,25 @@ def read_movement_register_lines(lines: List[str], profile, source_file: str,
             f"{source_file}: states a period but lists no transactions. This is "
             "a no-data finding about the period, NOT a zero balance (§9.6).")
     if period is not None:
-        result.periods.append(period)
+        # A file that listed no transactions covers NOTHING, so it contributes
+        # no period even where it prints one — the invariant `derive_basis`
+        # states and both sibling readers already keep by returning before
+        # their own append. Appending it here let `detect_gaps` see the month
+        # as covered, and a gap that never prints is one nobody fills.
+        if rows:
+            result.periods.append(period)
     else:
         result.period_inferred_from_rows = True
         if rows:
-            result.periods.append(StatementPeriod(rows[0][1], rows[-1][1], source_file))
+            # MIN and MAX, not first and last. Rows are printed in SETTLEMENT
+            # order while the movement is the OPERATION date, so a settlement
+            # lagging over a boundary puts the two out of step: taking the ends
+            # as printed gave a span short by the drift, and where the drift
+            # crossed the endpoints it inverted and StatementPeriod raised
+            # "ends before it starts" on a well-formed file.
+            dates = [when for _, when, _ in rows]
+            result.periods.append(
+                StatementPeriod(min(dates), max(dates), source_file))
             result.warnings.append(
                 f"{source_file}: no period line found, so the span was inferred "
                 "from the rows and cannot show a statement missing from either end.")
@@ -1695,25 +1745,48 @@ def _assert_register_reconciles(lines: List[str], profile, rows, source_file: st
     way to express. Rounding noise is not a dropped row.
     """
     stated: Dict[str, Decimal] = {}
+    # Tracked PER PATTERN, not per label: a pattern alternates over the English
+    # and Russian wording of one total, and a Russian register legitimately
+    # matches only the Cyrillic side. What matters is whether each SIDE of the
+    # ledger was found, not which language stated it.
+    unread = 0
     for pattern in profile.total_lines:
         compiled = re.compile(pattern)
+        found = False
         for line in lines:
             match = compiled.match(line)
             if match is None:
                 continue
             label = match.group("label").strip().lower()
             if label in stated:
+                found = True
                 continue
             value = parse_decimal(match.group("amount"), profile.numbers,
                                   f"{source_file} {label} total")
             if value is not None:
                 stated[label] = abs(value)
+                found = True
+        if not found:
+            unread += 1
 
     if not stated:
         result.warnings.append(
             f"{source_file}: states no period totals, so the parse could not be "
             "reconciled against the document's own arithmetic.")
         return
+    if unread:
+        # A HALF-checked ledger looked exactly like a fully checked one. With
+        # `Deposits` present and `Expenses` absent every expense row could have
+        # been dropped and this function would still have returned clean, so
+        # the half case has to be as visible as the unchecked case. A warning
+        # rather than an error: an absent total is missing evidence, which is
+        # what the `not stated` branch above already treats it as.
+        result.warnings.append(
+            f"{source_file}: {unread} of {len(profile.total_lines)} period "
+            "totals could not be read, so that side of the ledger was NOT "
+            "reconciled against the document's own arithmetic. A dropped row on "
+            "an unreconciled side leaves the ledger short with nothing to "
+            "contradict it.")
 
     parsed_in = sum((a for _, _, a in rows if a > 0), Decimal("0"))
     parsed_out = -sum((a for _, _, a in rows if a < 0), Decimal("0"))
