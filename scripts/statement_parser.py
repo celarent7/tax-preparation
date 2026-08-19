@@ -1598,6 +1598,14 @@ def read_movement_register_lines(lines: List[str], profile, source_file: str,
     `EVIDENCE_NONE` here would cap the run at `unknown` and lose the true fact
     that every transaction in the period is known.
 
+    **Known limit of that argument.** `has_balances` is computed once over the
+    WHOLE account group (`build_timeline`), not per file. A register read alone
+    caps at `estimate` as described; a register grouped with a balance-bearing
+    file does not cap at all, because the sibling's balances satisfy the flag
+    and this result's ceiling is `statement_full_year`. Closing that needs
+    either a per-result balance flag or a fourth evidence kind — a wider change
+    than the reader, so it is recorded here rather than half-done.
+
     Takes lines rather than a path so that every rule below is testable with
     literal text; `read_pdf_movement_register` is the one-line file wrapper.
 
@@ -1648,7 +1656,8 @@ def read_movement_register_lines(lines: List[str], profile, source_file: str,
             when, "", currency, source_file, number,
             amount=amount, balance_after=None, row_order=order))
 
-    _assert_register_reconciles(normalized, profile, rows, source_file, result)
+    _assert_register_reconciles(normalized, profile, rows, source_file, result,
+                                currency)
 
     if not rows:
         result.no_data = True
@@ -1671,7 +1680,7 @@ def read_movement_register_lines(lines: List[str], profile, source_file: str,
 
 
 def _assert_register_reconciles(lines: List[str], profile, rows, source_file: str,
-                                result: ReadResult) -> None:
+                                result: ReadResult, currency: str) -> None:
     """Check the parsed rows against the register's own stated totals.
 
     The counterpart of `_check_summary_totals`, and stricter on purpose. There
@@ -1679,6 +1688,11 @@ def _assert_register_reconciles(lines: List[str], profile, rows, source_file: st
     whatever the totals say. Here nothing else bounds anything: if a row was
     dropped the ledger is simply short, every figure derived from it is wrong,
     and no other check in the pipeline can notice. So this one raises.
+
+    `currency` is taken for the tolerance alone, and it is taken because this
+    function raises: `minor_unit` is the same tolerance its sibling uses, and a
+    hardcoded 0.01 would stop a JPY run over half a unit the currency has no
+    way to express. Rounding noise is not a dropped row.
     """
     stated: Dict[str, Decimal] = {}
     for pattern in profile.total_lines:
@@ -1703,13 +1717,14 @@ def _assert_register_reconciles(lines: List[str], profile, rows, source_file: st
 
     parsed_in = sum((a for _, _, a in rows if a > 0), Decimal("0"))
     parsed_out = -sum((a for _, _, a in rows if a < 0), Decimal("0"))
+    tolerance = minor_unit(currency)
     for labels, parsed, what in (
             (("deposits", "пополнения"), parsed_in, "deposits"),
             (("expenses", "расходы"), parsed_out, "expenses")):
         for label in labels:
             if label not in stated:
                 continue
-            if abs(stated[label] - parsed) > Decimal("0.01"):
+            if abs(stated[label] - parsed) > tolerance:
                 raise StatementParseError(
                     f"{source_file}: parsed {what} {parsed} does not reconcile "
                     f"with the document's stated {stated[label]}. Rows were "

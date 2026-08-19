@@ -881,3 +881,102 @@ def test_the_movement_is_the_account_amount_not_the_operation_amount():
     # And the reconciliation agrees, because the bank totals its own account
     # column too — reading the operation column would fail this as well.
     assert not any("does not reconcile" in w for w in result.warnings)
+
+
+def test_the_reconciliation_tolerance_follows_the_currencys_minor_unit():
+    """A hardcoded 0.01 is the wrong tolerance for a zero-decimal currency.
+
+    JPY has no sub-unit, so a 0.50 gap between the parsed rows and the stated
+    totals cannot be a real discrepancy there — while in RUB it is exactly the
+    dropped-row signal this check exists to catch. The sibling
+    `_check_summary_totals` already scales its tolerance with `minor_unit`;
+    this one *raises* where that one only warns, so a tolerance that is too
+    tight here kills a run over a difference the currency cannot express.
+    """
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    # The R marker is the document's own typography and says nothing about the
+    # account's currency — that is precisely why `currency` comes from
+    # sources.json rather than from the page.
+    lines = [
+        "Movement of funds for the period 01.01.2025 - 31.12.2025",
+        "14.07.2025  14.07.2025  +2 500,50 R    +2 500,50 R",
+        "Deposits: 2 500,00 R",
+        "Expenses: 0,00 R",
+    ]
+
+    result = read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                          currency="JPY")
+    assert [m.amount for m in result.movements] == [Decimal("2500.50")]
+
+    # The same 0.50 in a two-decimal currency still stops the run, which is
+    # what makes the assertion above a statement about the tolerance and not
+    # about the check having been loosened for everyone.
+    with pytest.raises(StatementParseError, match="does not reconcile"):
+        read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                     currency="RUB")
+
+
+def test_a_register_row_that_matches_but_cannot_be_read_is_an_error():
+    """A row the reader recognizes as a transaction and then fails to read must
+    never be skipped. Reconciliation would catch the short ledger only where
+    the document states totals; here it states none, so nothing else would.
+
+    A regression lock on `parse_full_date`/`parse_decimal` raising rather than
+    returning None for garbage: the reader's `continue` branch is reachable
+    only for an ABSENT value, which `txn_line` cannot match. If either parser
+    is ever made lenient, that branch turns into a silent drop and this fails.
+    """
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    lines = [
+        "Movement of funds for the period 01.01.2025 - 31.12.2025",
+        "32.13.2025  32.13.2025  -100,00 R      -100,00 R",
+    ]
+    with pytest.raises(StatementParseError, match="cannot read"):
+        read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                     currency="RUB")
+
+
+def test_a_register_with_no_rows_but_non_zero_totals_is_refused():
+    """Zero rows is a no-data finding ONLY when the document agrees that
+    nothing happened. A register stating 2 500,00 of deposits and listing no
+    transaction the reader could see has not described an empty period — it has
+    described a parse that read none of it, and reporting that as `no_data`
+    would turn a total extraction failure into a confident statement about the
+    account."""
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    lines = MOVEMENT_LINES[:4] + ["Deposits: 2 500,00 R", "Expenses: 0,00 R"]
+    with pytest.raises(StatementParseError, match="does not reconcile"):
+        read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                     currency="RUB")
+
+
+def test_a_page_header_repeated_across_pages_does_not_inflate_the_ledger():
+    """`extract_text_lines` concatenates every page, so a multi-page register
+    hands the reader its column headers and its footer once per page. None of
+    those repeats may become a transaction, and a totals line read twice must
+    not be counted twice — an inflated ledger is a wrong number, not an error.
+
+    No multi-page PDF fixture exists; the line list is the whole input, so
+    repeating the blocks here reproduces exactly what a second page delivers.
+    """
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    page_break = [
+        "Movement of funds statement",
+        "Contract number: 0000000000",
+        "Date  Settlement date  Operation amount  Account amount",
+    ]
+    lines = (MOVEMENT_LINES[:5] + page_break + MOVEMENT_LINES[5:]
+             + ["Deposits: 2 500,00 R", "Expenses: 250,50 R"])
+
+    result = read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                          currency="RUB")
+    assert [m.amount for m in result.movements] == [Decimal("-250.50"),
+                                                    Decimal("2500.00")]
