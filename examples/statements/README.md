@@ -30,6 +30,16 @@ workspace `sources.json` to run it:
 }
 ```
 
+**Two register vintages, chosen by `profile` name.** T-Bank's registers write
+their transaction rows DOT-decimal (`+2 500.00 ₽`) and their period totals
+COMMA-decimal (`1 234 567,89 ₽`) in the same document; `tbank_movements` reads
+that pairing. A register that is comma-decimal THROUGHOUT — rows and totals
+alike — is `tbank_movements_comma` instead. Neither degrades quietly into the
+other: pick the wrong one and the parse is refused outright, naming the
+separator it did not expect, rather than reading `2 500,00` as two hundred and
+fifty thousand. Switching vintages is a one-word edit to `profile` here, never
+an edit to `scripts/`.
+
 **`currency` is mandatory.** A register prints amounts but never names the
 account's currency, so the reader refuses to guess — defaulting it would label
 rubles as dollars, which is a wrong number rather than an error. The same is

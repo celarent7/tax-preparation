@@ -15,7 +15,7 @@ prevent, because it fails as a plausible wrong number rather than as an error.
 
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, Optional, Tuple
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -298,6 +298,44 @@ TBANK_MOVEMENTS = MovementRegisterProfile(
 )
 
 
+#: The SAME register written comma-decimal throughout — rows and totals alike.
+#:
+#: Selected by name from `sources.json`, which is the whole point of it being
+#: a profile rather than a branch: `tbank_movements` is bound to the vintage
+#: observed above, and a filer holding a comma-row register would otherwise
+#: have to edit this file to read it. `PROFILES` is how a reader is chosen by
+#: EXPLICIT CONFIG everywhere else here, so a second vintage is a second
+#: entry, not a new configuration surface that would let a workspace invent
+#: typography nobody has seen.
+#:
+#: NOT confirmed to exist. Every live register checked was dot-row, and no
+#: comma-row file was available to check against when this was written. It is
+#: here because the cost of being wrong is asymmetric: an unused profile is
+#: one dict entry, while a missing one aborts the ENTIRE run — `run_sources`
+#: has no per-source recovery, so one unreadable register yields zero output
+#: for every filer and every account in the file. Delete it once the corpus
+#: settles the question.
+TBANK_MOVEMENTS_COMMA = replace(
+    TBANK_MOVEMENTS,
+    name="tbank_movements_comma",
+    numbers=RUSSIAN_NUMBERS,
+    total_numbers=RUSSIAN_NUMBERS,
+    notes=(
+        "As `tbank_movements`, except the rows are COMMA-decimal like the "
+        "totals — one format throughout. Derived from that profile with "
+        "`replace` so the row, period, contract and total patterns cannot "
+        "drift apart from it: the vintages differ in typography alone, and "
+        "two hand-copied regex sets would eventually disagree about "
+        "something else.\n\n"
+        "`total_numbers` is stated EXPLICITLY here rather than left None. It "
+        "would fall back to `numbers` and give the same answer today, but "
+        "this profile exists precisely because the two formats are the thing "
+        "in question, and a reader comparing the two vintages should not "
+        "have to resolve a default to see that this one claims they agree."
+    ),
+)
+
+
 # ---------------------------------------------------------------------------
 # Shape D — credit cards, dual-currency sheets
 # ---------------------------------------------------------------------------
@@ -351,6 +389,7 @@ PROFILES: Dict[str, object] = {
     BANCOLOMBIA_CARD.name: BANCOLOMBIA_CARD,
     TBANK_TEXT.name: TBANK_TEXT,
     TBANK_MOVEMENTS.name: TBANK_MOVEMENTS,
+    TBANK_MOVEMENTS_COMMA.name: TBANK_MOVEMENTS_COMMA,
 }
 
 #: Institutions in the corpus for which NO profile may be written, with the

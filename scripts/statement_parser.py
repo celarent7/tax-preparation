@@ -82,8 +82,13 @@ class NumberFormat:
     thousands_seps: Tuple[str, ...] = (",", " ")
 
 
-#: Space-thousands, comma-decimal, U+2212, `₽` (T-Bank). NFKC folds U+00A0 and
-#: U+202F to a plain space before the separators are consulted.
+#: Space-thousands, comma-decimal, U+2212, `₽`. NFKC folds U+00A0 and U+202F
+#: to a plain space before the separators are consulted.
+#:
+#: For T-Bank this is the format of the PERIOD TOTALS, and of the .txt
+#: summaries throughout — NOT of a PDF register's transaction rows, which are
+#: dot-decimal. Picking a format for a T-Bank source means picking per FIELD:
+#: see `RUSSIAN_DOT_NUMBERS` below and `total_number_format`.
 RUSSIAN_NUMBERS = NumberFormat(decimal_sep=",", thousands_seps=(" ",))
 
 #: Space-thousands, DOT-decimal — how T-Bank's PDF registers render their
@@ -1007,6 +1012,41 @@ def total_number_format(profile) -> NumberFormat:
     return getattr(profile, "total_numbers", None) or profile.numbers
 
 
+def read_stated_total(raw: Any, profile, where: str,
+                      result: ReadResult) -> Optional[Decimal]:
+    """Read one stated period total, or WARN and return None.
+
+    An ABSENT total is missing evidence rather than an error — both callers
+    already treat it that way, and say so in as many words. A total that is
+    PRESENT but unreadable is the same gap wearing different clothes: the
+    document stated its arithmetic, the profile could not follow it, and that
+    side of the ledger goes unreconciled either way. Raising here split the
+    two apart for no reason anyone could state, and the blast radius was the
+    whole run — `run_sources` has no per-source recovery, so one register
+    whose totals disagreed with its profile produced zero output for every
+    filer and every account in the file.
+
+    What stays fatal is the case this is NOT: a total that reads cleanly and
+    DISAGREES with the rows. That is a detected mismatch, it means a row was
+    dropped, and `_assert_register_reconciles` still raises on it.
+
+    The warning names the raw text because the two gaps have different
+    remedies: an absent total is the document's shape and nothing can be done
+    about it, while an unreadable one is almost always `total_numbers`
+    disagreeing with the page — a one-line profile fix, but only for a reader
+    who is told which text failed.
+    """
+    try:
+        return parse_decimal(raw, total_number_format(profile), where)
+    except StatementParseError as exc:
+        result.warnings.append(
+            f"{where}: the stated total {raw!r} could not be read, so that "
+            "side of the ledger was NOT reconciled against the document's own "
+            "arithmetic. Check the profile's `total_numbers` against the "
+            f"page. ({exc})")
+        return None
+
+
 def clip_periods(periods: List[StatementPeriod], tax_year: int) -> List[Tuple[date, date]]:
     """Trim each period to the calendar year and drop the ones that fall outside.
 
@@ -1583,9 +1623,8 @@ def _check_summary_totals(lines, profile, result: ReadResult, source_file: str,
             match = compiled.match(unicodedata.normalize("NFKC", line))
             if match is None:
                 continue
-            amount = parse_decimal(match.group("amount"),
-                                   total_number_format(profile),
-                                   f"{source_file} line {number}")
+            amount = read_stated_total(match.group("amount"), profile,
+                                       f"{source_file} line {number}", result)
             if amount is not None:
                 totals[match.group("label")] = amount
     if not totals:
@@ -1778,30 +1817,55 @@ def _assert_register_reconciles(lines: List[str], profile, rows, source_file: st
     # matches only the Cyrillic side. What matters is whether each SIDE of the
     # ledger was found, not which language stated it.
     unread = 0
+    # Counted apart from `unread`, which cannot tell the two gaps apart: a
+    # pattern that NEVER MATCHED and one that matched and could not be parsed
+    # both leave a side unreconciled, but only the second means the document
+    # stated its arithmetic and the PROFILE failed to follow it.
+    unreadable = 0
     for pattern in profile.total_lines:
         compiled = re.compile(pattern)
         found = False
+        matched = False
         for line in lines:
             match = compiled.match(line)
             if match is None:
                 continue
+            matched = True
             label = match.group("label").strip().lower()
             if label in stated:
                 found = True
                 continue
-            value = parse_decimal(match.group("amount"),
-                                  total_number_format(profile),
-                                  f"{source_file} {label} total")
+            # NOT `found = True` on an unreadable total: letting it fall
+            # through is what makes `unread` count it, so the half-checked
+            # warning below covers this case as well as the absent one.
+            value = read_stated_total(match.group("amount"), profile,
+                                      f"{source_file} {label} total", result)
             if value is not None:
                 stated[label] = abs(value)
                 found = True
         if not found:
             unread += 1
+            if matched:
+                unreadable += 1
 
     if not stated:
-        result.warnings.append(
-            f"{source_file}: states no period totals, so the parse could not be "
-            "reconciled against the document's own arithmetic.")
+        if unreadable:
+            # NOT "states no period totals". A `total_numbers` that disagrees
+            # with the page disagrees with EVERY total line, not one, so this
+            # is the ordinary shape of that misconfiguration rather than an
+            # edge of it — and telling the operator the register states
+            # nothing would point them at the document when the remedy is in
+            # the profile.
+            result.warnings.append(
+                f"{source_file}: states {unreadable} period total(s), none of "
+                "which could be read, so the parse could not be reconciled "
+                "against the document's own arithmetic. The arithmetic is "
+                "there and the profile could not follow it — check "
+                "`total_numbers`, not the file.")
+        else:
+            result.warnings.append(
+                f"{source_file}: states no period totals, so the parse could not be "
+                "reconciled against the document's own arithmetic.")
         return
     if unread:
         # A HALF-checked ledger looked exactly like a fully checked one. With

@@ -1182,13 +1182,248 @@ def test_a_profile_that_states_one_number_format_uses_it_for_its_totals_too():
                                   total_number_format)
     from statement_profiles import PROFILES, TBANK_MOVEMENTS
 
+    checked = []
     for name, profile in PROFILES.items():
         if getattr(profile, "total_lines", None) and \
                 getattr(profile, "total_numbers", None) is None:
             assert total_number_format(profile) is profile.numbers, (
                 f"{name}: an unset total_numbers must fall back to the rows'")
+            checked.append(name)
+
+    # The loop can go VACUOUS and stay green: `TBANK_TEXT` is the only shipped
+    # profile that reaches the assertion, so the day someone sets
+    # `total_numbers` on it this test would iterate nothing and pass without
+    # checking anything. A green test that checks nothing is the exact failure
+    # this commit exists to close.
+    assert checked, (
+        "no shipped profile leaves total_numbers unset, so the assertion "
+        "above ran zero times — pin the default against a synthetic profile "
+        "rather than letting this loop go vacuous")
 
     # And where the document really does differ, the two are independent.
     assert TBANK_MOVEMENTS.numbers.decimal_sep == "."
     assert total_number_format(TBANK_MOVEMENTS) is RUSSIAN_NUMBERS
     assert total_number_format(TBANK_MOVEMENTS).decimal_sep == ","
+
+
+def typed_summary_file(tmp_path, *lines: str) -> str:
+    """Write a period-summary file whose typography is set line by line.
+
+    `summary_file` above builds from `tbank_summary_text`, which is uniform in
+    one number format by construction — precisely what these tests need to
+    vary.
+    """
+    path = tmp_path / "text.txt"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return str(path)
+
+def test_a_stated_total_that_cannot_be_read_warns_rather_than_stopping_the_run():
+    """A total that is PRESENT but unreadable is the same kind of gap as an
+    ABSENT one: the document stated its arithmetic and the profile could not
+    follow it, leaving that side unreconciled either way.
+
+    They used to be treated oppositely — absent was a warning, unreadable
+    raised out of `parse_decimal` and killed the whole run, including every
+    other filer and account in the same `sources.json`. Nothing justified the
+    split: neither case is a DETECTED mismatch, which is the one thing this
+    function raises on.
+    """
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    # Rows dot-decimal as the profile expects; the Deposits total written in
+    # the ROWS' format instead of the totals' — the exact shape of a
+    # `total_numbers` that disagrees with the page.
+    lines = [
+        "Movement of funds for the period 01.01.2025 - 31.12.2025",
+        "14.07.2025  14.07.2025  +2 500.00 R    +2 500.00 R",
+        "Deposits: 2 500.00 R",
+        "Expenses: 0,00 R",
+    ]
+    result = read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                          currency="RUB")
+
+    # The rows still parsed — the run is not lost.
+    assert len(result.movements) == 1
+    assert result.movements[0].amount == Decimal("2500.00")
+    # And the unread side is stated twice over: once naming the raw text, so
+    # the remedy (`total_numbers`) is findable, and once by the half-checked
+    # warning that already existed for the absent case.
+    assert any("2 500.00 R" in w and "could not be read" in w
+               for w in result.warnings)
+    assert any("total_numbers" in w for w in result.warnings)
+    assert any("1 of 2 period totals could not be read" in w
+               for w in result.warnings)
+
+
+def test_an_unreadable_total_still_lets_a_real_mismatch_raise():
+    """Softening the unreadable case must not soften the DETECTED one. A side
+    whose total reads fine and disagrees with the rows is still fatal."""
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    lines = [
+        "Movement of funds for the period 01.01.2025 - 31.12.2025",
+        "14.07.2025  14.07.2025  +2 500.00 R    +2 500.00 R",
+        "Deposits: 9 999,00 R",
+        "Expenses: 0,00 R",
+    ]
+    with pytest.raises(StatementParseError, match="does not reconcile"):
+        read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                     currency="RUB")
+
+
+def test_a_summary_totals_line_that_cannot_be_read_warns_rather_than_raising(tmp_path):
+    """`_check_summary_totals` had the identical exposure, and less excuse for
+    it: a total that MISMATCHES there is already only a warning, so a total
+    that cannot be parsed had no business being fatal."""
+    import dataclasses
+    from statement_parser import RUSSIAN_DOT_NUMBERS, read_text_period_summary
+    from statement_profiles import TBANK_TEXT
+
+    # Balances dot-decimal, totals left comma-decimal: `total_numbers` is
+    # unset, so the totals are read with the rows' format and cannot parse.
+    profile = dataclasses.replace(TBANK_TEXT, numbers=RUSSIAN_DOT_NUMBERS)
+    path = typed_summary_file(
+        tmp_path,
+        "Balance on 22.11.2025: +1 000.00 ₽",
+        "Balance on 21.12.2025: +1 500.00 ₽",
+        "Income: +700,00 ₽",
+        "Expenses: −200,00 ₽",
+    )
+    result = read_text_period_summary(path, profile, currency="RUB")
+
+    assert [m.balance_after for m in result.movements] == [Decimal("1000.00"),
+                                                           Decimal("1500.00")]
+    assert any("could not be read" in w for w in result.warnings)
+
+
+def test_a_summary_profile_reads_its_totals_in_the_totals_format(tmp_path):
+    """Pins the `_check_summary_totals` call site itself.
+
+    No shipped profile sets `total_numbers` on a `TextSummaryProfile`, so that
+    site was unpinned: reverting it to `profile.numbers` passed green. This
+    profile is synthetic for exactly that reason — the field exists on the
+    class one document away from being needed, and an unpinned change site is
+    how the register gap survived a full suite once already.
+    """
+    import dataclasses
+    from statement_parser import (RUSSIAN_DOT_NUMBERS, RUSSIAN_NUMBERS,
+                                  read_text_period_summary)
+    from statement_profiles import TBANK_TEXT
+
+    profile = dataclasses.replace(TBANK_TEXT, numbers=RUSSIAN_DOT_NUMBERS,
+                                  total_numbers=RUSSIAN_NUMBERS)
+    path = typed_summary_file(
+        tmp_path,
+        "Balance on 22.11.2025: +1 000.00 ₽",
+        "Balance on 21.12.2025: +1 500.00 ₽",
+        "Income: +700,00 ₽",
+        "Expenses: −200,00 ₽",
+    )
+    result = read_text_period_summary(path, profile, currency="RUB")
+
+    # Both formats were honoured: the balances read dot-decimal, the totals
+    # read comma-decimal, and 1500 - 1000 == 700 - 200 reconciles.
+    assert [m.balance_after for m in result.movements] == [Decimal("1000.00"),
+                                                           Decimal("1500.00")]
+    assert not any("could not be read" in w for w in result.warnings)
+    assert not any("the stated totals sum to" in w for w in result.warnings)
+
+
+def test_the_comma_vintage_register_is_readable_by_name_from_the_config():
+    """Restores the coverage the dot-decimal switch deleted.
+
+    Every comma-decimal row fixture went away when `tbank_movements` was bound
+    to the dot vintage, which left the format that shipped previously pinned
+    by nothing at all. It is pinned here instead — and pinned through
+    `PROFILES`, because being selectable from `sources.json` by name is the
+    entire reason this is a profile rather than a branch: a filer holding such
+    a file must not have to edit `scripts/` to read it.
+    """
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import PROFILES, get_profile
+
+    assert get_profile("tbank_movements_comma") is PROFILES["tbank_movements_comma"]
+
+    lines = [
+        "Movement of funds for the period 01.01.2025 - 31.12.2025",
+        "14.07.2025  14.07.2025  +2 500,00 R    +2 500,00 R",
+        "20.03.2025  20.03.2025  -250,50 R      -250,50 R",
+        "Deposits: 2 500,00 R",
+        "Expenses: 250,50 R",
+    ]
+    result = read_movement_register_lines(lines, get_profile("tbank_movements_comma"),
+                                          "reg.pdf", currency="RUB")
+
+    # Read, reconciled against the register's own totals, and reversed into
+    # chronological order — the space groups are thousands, not decimals.
+    assert [m.amount for m in result.movements] == [Decimal("-250.50"),
+                                                    Decimal("2500.00")]
+    assert not any("could not be read" in w for w in result.warnings)
+
+
+def test_each_register_vintage_refuses_the_other_ones_rows():
+    """The two profiles are not interchangeable, and neither degrades quietly
+    into the other. A vintage picked wrongly in `sources.json` fails LOUDLY —
+    which is the property the dot/comma split was worth having in the first
+    place, and it holds in both directions."""
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS, TBANK_MOVEMENTS_COMMA
+
+    header = "Movement of funds for the period 01.01.2025 - 31.12.2025"
+    dot_row = "14.07.2025  14.07.2025  +2 500.00 R    +2 500.00 R"
+    comma_row = "14.07.2025  14.07.2025  +2 500,00 R    +2 500,00 R"
+
+    # A comma row read by the dot profile is REFUSED, never taken as a
+    # thousands group that would turn 2 500,00 into 250000.
+    with pytest.raises(StatementParseError, match="unexpected ','|does not group"):
+        read_movement_register_lines([header, comma_row], TBANK_MOVEMENTS,
+                                     "reg.pdf", currency="RUB")
+    with pytest.raises(StatementParseError, match="unexpected '\\.'|does not group"):
+        read_movement_register_lines([header, dot_row], TBANK_MOVEMENTS_COMMA,
+                                     "reg.pdf", currency="RUB")
+
+
+def test_totals_that_are_all_unreadable_are_not_reported_as_totals_absent():
+    """A `total_numbers` that disagrees with the page disagrees with EVERY
+    total line, not one — so "all unreadable" is the ORDINARY shape of that
+    misconfiguration, not an edge of it.
+
+    The register states its arithmetic in both lines. Reporting that it
+    "states no period totals" would send the operator to the document when
+    the remedy is one field in the profile.
+    """
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    lines = [
+        "Movement of funds for the period 01.01.2025 - 31.12.2025",
+        "14.07.2025  14.07.2025  +2 500.00 R    +2 500.00 R",
+        "Deposits: 2 500.00 R",
+        "Expenses: 0.00 R",
+    ]
+    result = read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                          currency="RUB")
+
+    assert not any("states no period totals" in w for w in result.warnings)
+    assert any("states 2 period total(s), none of which could be read" in w
+               for w in result.warnings)
+    assert any("total_numbers" in w for w in result.warnings)
+
+
+def test_a_register_that_really_states_no_totals_still_says_so():
+    """The other side of the same discrimination: a pattern that never matched
+    is the document's shape, and nothing in the profile can fix it."""
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    lines = [
+        "Movement of funds for the period 01.01.2025 - 31.12.2025",
+        "14.07.2025  14.07.2025  +2 500.00 R    +2 500.00 R",
+    ]
+    result = read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                          currency="RUB")
+
+    assert any("states no period totals" in w for w in result.warnings)
+    assert not any("none of which could be read" in w for w in result.warnings)
