@@ -86,6 +86,14 @@ class NumberFormat:
 #: U+202F to a plain space before the separators are consulted.
 RUSSIAN_NUMBERS = NumberFormat(decimal_sep=",", thousands_seps=(" ",))
 
+#: Space-thousands, DOT-decimal — how T-Bank's PDF registers render their
+#: transaction rows, while the very same document writes its period totals
+#: comma-decimal. Observed across every live register checked: EVERY row dot,
+#: EVERY total comma. Bound to the observed file, not to the locale, and
+#: kept as its own format rather than reusing PLAIN_NUMBERS so that a comma
+#: decimal is REJECTED here rather than read as a thousands group.
+RUSSIAN_DOT_NUMBERS = NumberFormat(decimal_sep=".", thousands_seps=(" ",))
+
 #: Comma-thousands, dot-decimal — how the Colombian exports actually render,
 #: which is NOT the country's typographic convention. Bound to the observed
 #: file, not to the locale.
@@ -980,6 +988,25 @@ def minor_unit(currency: str) -> Decimal:
     return Decimal("1") if str(currency).upper() in _ZERO_DECIMAL_CURRENCIES else Decimal("0.01")
 
 
+
+def total_number_format(profile) -> NumberFormat:
+    """The NumberFormat a profile's TOTALS lines are written in.
+
+    Locale rules bind per FIELD, not per profile — the principle already
+    applied to dates, where a savings header states `YYYY/MM/DD` over rows
+    written `D/MM`. Numbers skipped it, and a live T-Bank register is the case
+    that shows why: every transaction row in it is dot-decimal while every
+    period total in the same document is comma-decimal.
+
+    Defaults to `profile.numbers` when `total_numbers` is unset, so a profile
+    whose document is uniform says nothing and gets the right answer. The
+    default is deliberately NOT a concrete format: one that silently differed
+    from `numbers` would hand the next profile author Russian totals for an
+    English document with no error anywhere.
+    """
+    return getattr(profile, "total_numbers", None) or profile.numbers
+
+
 def clip_periods(periods: List[StatementPeriod], tax_year: int) -> List[Tuple[date, date]]:
     """Trim each period to the calendar year and drop the ones that fall outside.
 
@@ -1556,7 +1583,8 @@ def _check_summary_totals(lines, profile, result: ReadResult, source_file: str,
             match = compiled.match(unicodedata.normalize("NFKC", line))
             if match is None:
                 continue
-            amount = parse_decimal(match.group("amount"), profile.numbers,
+            amount = parse_decimal(match.group("amount"),
+                                   total_number_format(profile),
                                    f"{source_file} line {number}")
             if amount is not None:
                 totals[match.group("label")] = amount
@@ -1761,7 +1789,8 @@ def _assert_register_reconciles(lines: List[str], profile, rows, source_file: st
             if label in stated:
                 found = True
                 continue
-            value = parse_decimal(match.group("amount"), profile.numbers,
+            value = parse_decimal(match.group("amount"),
+                                  total_number_format(profile),
                                   f"{source_file} {label} total")
             if value is not None:
                 stated[label] = abs(value)

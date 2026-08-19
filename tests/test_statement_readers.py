@@ -771,8 +771,8 @@ MOVEMENT_LINES = [
     "Contract number: 0000000000",
     "Account number: 00000000000000000000",
     "Movement of funds for the period 01.01.2025 - 31.12.2025",
-    "14.07.2025  14.07.2025  +2 500,00 R    +2 500,00 R",
-    "20.03.2025  20.03.2025  -250,50 R      -250,50 R",
+    "14.07.2025  14.07.2025  +2 500.00 R    +2 500.00 R",
+    "20.03.2025  20.03.2025  -250.50 R      -250.50 R",
     "Deposits: 2 500,00 R",
     "Expenses: 250,50 R",
 ]
@@ -871,7 +871,7 @@ def test_the_movement_is_the_account_amount_not_the_operation_amount():
 
     lines = [
         "Movement of funds for the period 01.01.2025 - 31.12.2025",
-        "05.02.2025  05.02.2025  -100,00 $      -9 250,00 R",
+        "05.02.2025  05.02.2025  -100.00 $      -9 250.00 R",
         "Deposits: 0,00 R",
         "Expenses: 9 250,00 R",
     ]
@@ -901,7 +901,7 @@ def test_the_reconciliation_tolerance_follows_the_currencys_minor_unit():
     # sources.json rather than from the page.
     lines = [
         "Movement of funds for the period 01.01.2025 - 31.12.2025",
-        "14.07.2025  14.07.2025  +2 500,50 R    +2 500,50 R",
+        "14.07.2025  14.07.2025  +2 500.50 R    +2 500.50 R",
         "Deposits: 2 500,00 R",
         "Expenses: 0,00 R",
     ]
@@ -933,7 +933,7 @@ def test_a_register_row_that_matches_but_cannot_be_read_is_an_error():
 
     lines = [
         "Movement of funds for the period 01.01.2025 - 31.12.2025",
-        "32.13.2025  32.13.2025  -100,00 R      -100,00 R",
+        "32.13.2025  32.13.2025  -100.00 R      -100.00 R",
     ]
     with pytest.raises(StatementParseError, match="cannot read"):
         read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
@@ -1056,8 +1056,8 @@ def test_an_inferred_period_spans_the_earliest_and_latest_row():
 
     # Printed in settlement order; the operation dates are not monotonic.
     lines = [
-        "28.12.2025  05.01.2026  -1,00 R      -1,00 R",
-        "03.01.2026  03.01.2026  -1,00 R      -1,00 R",
+        "28.12.2025  05.01.2026  -1.00 R      -1.00 R",
+        "03.01.2026  03.01.2026  -1.00 R      -1.00 R",
         "Deposits: 0,00 R",
         "Expenses: 2,00 R",
     ]
@@ -1084,7 +1084,7 @@ def test_a_register_missing_one_of_its_totals_says_so():
 
     lines = [
         "Movement of funds for the period 01.01.2025 - 31.12.2025",
-        "14.07.2025  14.07.2025  +2 500,00 R    +2 500,00 R",
+        "14.07.2025  14.07.2025  +2 500.00 R    +2 500.00 R",
         "Deposits: 2 500,00 R",
     ]
     result = read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
@@ -1106,8 +1106,8 @@ def test_a_register_mixing_currency_markers_in_the_account_column_says_so():
 
     lines = [
         "Movement of funds for the period 01.01.2025 - 31.12.2025",
-        "14.07.2025  14.07.2025  +2 500,00 R    +2 500,00 R",
-        "20.03.2025  20.03.2025  -250,50 $      -250,50 $",
+        "14.07.2025  14.07.2025  +2 500.00 R    +2 500.00 R",
+        "20.03.2025  20.03.2025  -250.50 $      -250.50 $",
         "Deposits: 2 500,00 R",
         "Expenses: 250,50 R",
     ]
@@ -1115,3 +1115,80 @@ def test_a_register_mixing_currency_markers_in_the_account_column_says_so():
                                           currency="RUB")
     assert any("more than one currency marker" in w for w in result.warnings), (
         f"the mixed account column passed unmentioned: {result.warnings}")
+
+
+def test_one_register_carries_two_number_formats_at_once():
+    """The rows are DOT-decimal and the period totals in the SAME file are
+    COMMA-decimal — checked against every live register available: every row
+    dot, every total comma. One `NumberFormat` cannot read both, and which half
+    it breaks on depends only on which way it is set.
+
+    Locale rules bind per FIELD, not per profile. The principle was already
+    established for dates, where a savings header states `YYYY/MM/DD` over rows
+    written `D/MM`; numbers simply never got it.
+    """
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    lines = [
+        "Movement of funds for the period 01.01.2025 - 31.12.2025",
+        "14.07.2025  14.07.2025  +2 500.00 R    +2 500.00 R",   # dot
+        "20.03.2025  20.03.2025  -250.50 R      -250.50 R",     # dot
+        "Deposits: 2 500,00 R",                                  # comma
+        "Expenses: 250,50 R",                                    # comma
+    ]
+    result = read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                          currency="RUB")
+
+    assert [m.amount for m in result.movements] == [Decimal("-250.50"),
+                                                    Decimal("2500.00")]
+    # Reconciliation had to read the comma totals to get this far: a failure
+    # to parse them raises, and a wrong read of them raises "does not
+    # reconcile". Silence here is the whole assertion.
+    assert not any("reconcile" in w for w in result.warnings)
+
+
+def test_a_comma_decimal_row_is_refused_rather_than_read_as_a_thousands_group():
+    """`-250,50` under the rows' dot-decimal format must NOT become -25050.
+
+    This is the factor-100 misread the two-format split could have introduced,
+    and it is why the row format is its own `RUSSIAN_DOT_NUMBERS` rather than
+    `PLAIN_NUMBERS`: the latter accepts `,` as a thousands separator, so it
+    would fall back on the grouping check instead of rejecting the separator
+    outright. Both catch this case; only one says what is actually wrong.
+    """
+    from statement_parser import read_movement_register_lines
+    from statement_profiles import TBANK_MOVEMENTS
+
+    lines = [
+        "Movement of funds for the period 01.01.2025 - 31.12.2025",
+        "20.03.2025  20.03.2025  -250,50 R      -250,50 R",
+        "Expenses: 250,50 R",
+    ]
+    with pytest.raises(StatementParseError, match="decimal separator|unexpected"):
+        read_movement_register_lines(lines, TBANK_MOVEMENTS, "reg.pdf",
+                                     currency="RUB")
+
+
+def test_a_profile_that_states_one_number_format_uses_it_for_its_totals_too():
+    """`total_numbers` defaults to None meaning "same as the rows", so a
+    document that is uniform says nothing and still parses.
+
+    The default is deliberately not a concrete format: one that silently
+    differed from `numbers` would hand the next profile author Russian totals
+    for an English document, with no error anywhere to show it happened.
+    """
+    from statement_parser import (RUSSIAN_NUMBERS, PLAIN_NUMBERS,
+                                  total_number_format)
+    from statement_profiles import PROFILES, TBANK_MOVEMENTS
+
+    for name, profile in PROFILES.items():
+        if getattr(profile, "total_lines", None) and \
+                getattr(profile, "total_numbers", None) is None:
+            assert total_number_format(profile) is profile.numbers, (
+                f"{name}: an unset total_numbers must fall back to the rows'")
+
+    # And where the document really does differ, the two are independent.
+    assert TBANK_MOVEMENTS.numbers.decimal_sep == "."
+    assert total_number_format(TBANK_MOVEMENTS) is RUSSIAN_NUMBERS
+    assert total_number_format(TBANK_MOVEMENTS).decimal_sep == ","

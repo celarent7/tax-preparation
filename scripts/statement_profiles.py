@@ -22,6 +22,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from statement_parser import (  # noqa: E402
     COLOMBIAN_EXPORT_NUMBERS,
     PLAIN_NUMBERS,
+    RUSSIAN_DOT_NUMBERS,
     RUSSIAN_NUMBERS,
     NumberFormat,
     StatementParseError,
@@ -190,6 +191,11 @@ class TextSummaryProfile:
     #: Regexes for the totals lines. Read so a warning can say what was
     #: DISCARDED — they are not movements and never become balance points.
     total_lines: Tuple[str, ...] = ()
+    #: The format the TOTALS lines are written in, when it differs from
+    #: `numbers`. None means "same as the rows" — see
+    #: `statement_parser.total_number_format` for why the default is not a
+    #: concrete format.
+    total_numbers: Optional[NumberFormat] = None
     notes: str = ""
 
 
@@ -240,6 +246,11 @@ class MovementRegisterProfile:
     #: reconciled against the bank's own arithmetic, never as movements.
     total_lines: Tuple[str, ...] = ()
     numbers: NumberFormat = RUSSIAN_NUMBERS
+    #: The format the TOTALS lines are written in, when it differs from
+    #: `numbers`. None means "same as the rows" — see
+    #: `statement_parser.total_number_format` for why the default is not a
+    #: concrete format.
+    total_numbers: Optional[NumberFormat] = None
     #: True when rows are printed newest-first and must be reversed.
     newest_first: bool = True
     notes: str = ""
@@ -264,15 +275,25 @@ TBANK_MOVEMENTS = MovementRegisterProfile(
         r"^\s*(?P<label>Deposits|Пополнения):\s*(?P<amount>.+?)\s*$",
         r"^\s*(?P<label>Expenses|Расходы):\s*(?P<amount>.+?)\s*$",
     ),
-    numbers=RUSSIAN_NUMBERS,
+    numbers=RUSSIAN_DOT_NUMBERS,
+    total_numbers=RUSSIAN_NUMBERS,
     newest_first=True,
     notes=(
         "States NO balance. Rows print newest-first, so a chronological read "
         "must reverse them. Amounts carry U+00A0 and U+202F inside digit "
         "groups far more often than the .xlsx exports do, because PDF text "
-        "extraction preserves typographic spaces — RUSSIAN_NUMBERS and "
+        "extraction preserves typographic spaces — the number formats and "
         "_assert_grouping between them are what stop that becoming a silent "
-        "factor-of-1000 error (hazard 9.4)."
+        "factor-of-1000 error (hazard 9.4).\n\n"
+        "ONE DOCUMENT, TWO NUMBER FORMATS. The transaction rows are "
+        "DOT-decimal (`+712.00 ₽`) and the Пополнения/Расходы totals in the "
+        "same file are COMMA-decimal (`1 234 567,89 ₽`). Checked against "
+        "every live register available: every row dot, every total comma. A "
+        "single format cannot read both — it fails on the rows or the totals "
+        "depending which one it is set to, which is why `total_numbers` "
+        "exists. It failed LOUDLY in both directions, never as a factor-100 "
+        "misread, and the fixture now carries both separators so the suite "
+        "keeps proving that rather than passing over the gap."
     ),
 )
 
