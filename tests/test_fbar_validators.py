@@ -17,6 +17,7 @@ All fixtures are synthetic.
 import os
 import sys
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -901,6 +902,59 @@ def test_v16_needs_a_clear_majority_length():
                              ("c", "4081781000000012347"),
                              ("d", "4081781000000012348")]]
     assert [f for f in run(roster(accounts))["findings"] if f.id == "V16"] == []
+
+
+# ---------------------------------------------------------------------------
+# assess_credit_account (Task 2.8)
+# ---------------------------------------------------------------------------
+
+
+def _mv(day, desc, amount):
+    return {"date": f"2025-01-{day:02d}", "description": desc,
+            "amount": amount, "currency": "RUB"}
+
+
+def test_assess_credit_account_reports_net_direction():
+    import fbar_reconciler as fr
+    result = fr.assess_credit_account([_mv(1, "Purchase", -500.0),
+                                       _mv(2, "Purchase", -300.0),
+                                       _mv(3, "Repayment", 200.0)])
+    assert result["direction"] == "toward_debt"
+    assert result["net_change"] == Decimal("-600.00")
+
+
+def test_assess_credit_account_finds_the_debtor_signature():
+    """Interest charged TO the holder is a debtor signature an asset account
+    never has, in either language the register is printed in."""
+    import fbar_reconciler as fr
+    result = fr.assess_credit_account([_mv(1, "Loan interest", -42.0),
+                                       _mv(2, "Проценты по кредиту", -17.0),
+                                       _mv(3, "Grocery store", -100.0)])
+    assert [r["description"] for r in result["debtor_signature_rows"]] == [
+        "Loan interest", "Проценты по кредиту"]
+
+
+def test_assess_credit_account_names_what_it_did_not_check():
+    """Age and a parallel declaration are judgment calls. The result must say
+    they are outstanding rather than read as a complete answer."""
+    import fbar_reconciler as fr
+    result = fr.assess_credit_account([_mv(1, "Purchase", -500.0)])
+    assert result["checks_remaining"] == ["account_age", "parallel_declaration"]
+
+
+def test_assess_credit_account_ignores_rows_with_no_amount():
+    """A balance observation is not a movement; summing it would double-count."""
+    import fbar_reconciler as fr
+    result = fr.assess_credit_account([_mv(1, "Opening", None), _mv(2, "Purchase", -50.0)])
+    assert result["net_change"] == Decimal("-50.00")
+
+
+def test_assess_credit_account_on_an_empty_register_is_flat_not_an_error():
+    import fbar_reconciler as fr
+    result = fr.assess_credit_account([])
+    assert result["direction"] == "flat"
+    assert result["net_change"] == Decimal("0")
+
 
 
 

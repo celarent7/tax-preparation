@@ -298,7 +298,8 @@ request a balance-bearing document rather than to pick a side.
    it is not authority for the FBAR position, and the note must not cite it as
    though it were.
 
-Checks 1 and 2 are mechanical arithmetic over the register. Checks 3 and 4 are
+Checks 1 and 2 are mechanical and `fbar_reconciler.assess_credit_account()`
+reports them from a parsed register. Checks 3 and 4 are
 judgment and stay with Phase 1. Record the
 outcome in the account's `notes` with the checks that drove it, because the
 convention is unconfirmed and next year's reviewer needs the reasoning, not

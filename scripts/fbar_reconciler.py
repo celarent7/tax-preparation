@@ -36,9 +36,11 @@ states, and a tool that refuses to run on them would just be worked around.
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass, field, asdict
 from datetime import date
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -1317,6 +1319,78 @@ def _out_of_scope_notices(roster: Dict[str, Any]) -> List[Finding]:
             "threshold; complete Part IV by hand."),
         detail={"account_keys": keys},
     )]
+
+
+# ---------------------------------------------------------------------------
+# Credit-account decision procedure (Task 2.8)
+# ---------------------------------------------------------------------------
+
+#: Descriptions that only ever appear on an account the filer OWES money on.
+#: Kept as data because the register's language varies by export and by
+#: vintage, and because a reader should be able to see the whole list without
+#: reading the function.
+DEBTOR_SIGNATURE_PATTERNS = (
+    r"loan\s+interest",
+    r"проценты\s+по\s+кредиту",
+    r"credit\s+interest\s+charged",
+    r"начисленные\s+проценты",
+)
+
+
+def assess_credit_account(movements: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """The two mechanical checks from the credit-account decision procedure.
+
+    `credit_card_positive_balance_only` (fbar_schema.CONVENTIONS) makes a credit
+    account reportable only where it carried a positive balance in the filer's
+    favour. Every movement register lacks a balance column, so that cannot be
+    read off the document; references/fbar_guide.md §5 gives four checks that
+    answer it between them. Two are arithmetic and live here:
+
+      1. NET DIRECTION over the period, from a neutral zero baseline. The
+         baseline is fictional and the LEVEL it produces means nothing — but
+         the direction is real and order-invariant, which is the whole reason
+         this is safe to compute at all.
+      2. DEBTOR SIGNATURE — interest or fees charged TO the filer. An asset
+         account pays interest to the holder; it never charges it.
+
+    Checks 3 (account age) and 4 (a parallel foreign declaration's own
+    exclusions) are judgment and stay with Phase 1. They are named in
+    `checks_remaining` so this result cannot be mistaken for a complete answer,
+    which is the failure mode a helper like this invites.
+
+    This is NOT a validator. It answers a question when asked; it does not run
+    in `validate()` and returns no Finding.
+    """
+    patterns = [re.compile(p, re.IGNORECASE) for p in DEBTOR_SIGNATURE_PATTERNS]
+
+    net = Decimal("0")
+    signature_rows = []
+    for row in movements:
+        amount = row.get("amount")
+        if amount is not None:
+            net += Decimal(str(amount))
+        description = str(row.get("description") or "")
+        if any(p.search(description) for p in patterns):
+            signature_rows.append({
+                "date": row.get("date"),
+                "description": description,
+                "amount": None if amount is None else Decimal(str(amount)),
+            })
+
+    if net > 0:
+        direction = "toward_zero"
+    elif net < 0:
+        direction = "toward_debt"
+    else:
+        direction = "flat"
+
+    return {
+        "net_change": net,
+        "direction": direction,
+        "debtor_signature_rows": signature_rows,
+        "checks_performed": ["net_direction", "debtor_signature"],
+        "checks_remaining": ["account_age", "parallel_declaration"],
+    }
 
 
 # ---------------------------------------------------------------------------
