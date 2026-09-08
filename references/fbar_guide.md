@@ -341,7 +341,7 @@ retained with the five-year records.
 | V9 | `conventions_applied` changed from the prior year for the same `account_key` | warn |
 | V10 | Any separately-owned account → separate FBARs required, so `form_114a_spousal` must be false | error |
 | V11 | Filing date against April 15 / October 15; retention horizon; delinquency relief pointer | info (warn past the extended deadline) |
-| V12 | Reportable account asserting a determined maximum on a basis weaker than full-year statements, without electing Item 15a | warn |
+| V12 | Reportable account asserting a determined maximum on a basis weaker than full-year statements, without electing Item 15a. Quiet on `anchored_full_year` **only** when the anchor's cited document is present in the workspace; distinct wording for `non_negativity_floor`, which is a proven bound rather than an estimate | warn |
 | V13 | Every `source_documents[]` path exists in the workspace | warn |
 
 **Severity contract:** `blocking` and `error` exit non-zero with

@@ -952,29 +952,81 @@ def v11_filing_date(roster: Dict[str, Any], fbar: Dict[str, Any],
                             "extended": deadlines["extended"].isoformat()})]
 
 
-def v12_max_value_basis(roster: Dict[str, Any]) -> List[Finding]:
-    """A stated maximum should rest on statements that could show the maximum.
+def v12_max_value_basis(roster: Dict[str, Any],
+                        workspace: Optional[str] = None) -> List[Finding]:
+    """A stated maximum should rest on evidence that could show the maximum.
 
     Period-end summaries cannot: an account can peak and fall back between two
     statement dates and show nothing. Asserting a determined maximum on that
     basis, without electing Item 15a, claims more certainty than the records
     support.
+
+    Two bases are reconstructions rather than observations and are handled on
+    their own terms:
+
+      * `anchored_full_year` is EXACT — a cited dated opening replayed across a
+        complete ledger — so the safe-harbour nudge is wrong advice, but only
+        once the citation is verifiable. An anchor whose document is not in the
+        workspace (or with no workspace to look in) is an assertion, and this
+        validator's whole purpose is to not take an assertion's word for it.
+      * `non_negativity_floor` still warrants a warning — a floor may
+        understate — but calling it an estimate misdescribes it. It is a proven
+        bound with a known direction of error, and filing it is defensible.
     """
     out = []
     for acct in roster["accounts"]:
         if not acct["reportable"] or acct["max_value_unknown"]:
             continue
-        if acct["max_value_basis"] == "statement_full_year":
+        basis = acct["max_value_basis"]
+        if basis == "statement_full_year":
             continue
+
+        if basis == "anchored_full_year":
+            anchor = acct.get("max_value_anchor") or {}
+            cited = anchor.get("source_document")
+            verified = bool(
+                workspace and cited
+                and os.path.exists(os.path.join(workspace, cited)))
+            if verified:
+                continue
+            out.append(Finding(
+                id="V12", severity="warn", account_key=acct["account_key"],
+                message=(
+                    f"{acct['account_key']!r} reports an 'anchored_full_year' maximum, but "
+                    f"the anchor cannot be verified: its cited document "
+                    f"{cited!r} is not present"
+                    + (f" under {workspace}" if workspace else " (no workspace was given to check)")
+                    + ". An anchored replay is exact only if the opening it started from is "
+                      "real; until the citation resolves, this is an assertion that would "
+                      "otherwise silence this check."),
+                detail={"max_value_basis": basis, "anchor_verified": False,
+                        "source_document": cited},
+            ))
+            continue
+
+        if basis == "non_negativity_floor":
+            out.append(Finding(
+                id="V12", severity="warn", account_key=acct["account_key"],
+                message=(
+                    f"{acct['account_key']!r} reports a proven floor on its maximum: the "
+                    "opening balance is unknown, and the figure is the smallest maximum "
+                    "consistent with the account never going negative. This is a rigorous "
+                    "bound — but it may understate the true maximum, so "
+                    "either obtain the opening balance, or record in the account notes that "
+                    "the filed figure is a floor and why the opening could not be obtained."),
+                detail={"max_value_basis": basis},
+            ))
+            continue
+
         out.append(Finding(
             id="V12", severity="warn", account_key=acct["account_key"],
             message=(
                 f"{acct['account_key']!r} reports a determined maximum on a "
-                f"{acct['max_value_basis']!r} basis, without electing Item 15a. FinCEN "
+                f"{basis!r} basis, without electing Item 15a. FinCEN "
                 "permits reliance on periodic statements only where they FAIRLY REFLECT "
                 "the maximum during the year. Either obtain records that cover the year, "
                 "or elect Item 15a and note why."),
-            detail={"max_value_basis": acct["max_value_basis"]},
+            detail={"max_value_basis": basis},
         ))
     return out
 
@@ -1031,7 +1083,7 @@ def validate(roster: Dict[str, Any],
     findings += v9_convention_drift(roster, prior, resolved)
     findings += v10_spousal_114a(roster)
     findings += v11_filing_date(roster, fbar, filing_date)
-    findings += v12_max_value_basis(roster)
+    findings += v12_max_value_basis(roster, workspace)
     findings += v13_source_documents(roster, workspace, fbar)
     findings += _out_of_scope_notices(roster)
     return {"findings": findings, "threshold": threshold_result}

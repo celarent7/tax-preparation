@@ -650,3 +650,58 @@ def test_v13_covers_the_anchor_document(tmp_path):
     assert "V13" in ids
 
 
+def _anchor(**overrides):
+    base = {"as_of": "2025-01-01", "amount": 1000.0, "currency": "RUB",
+            "source_document": "anchor.pdf", "source_kind": "prior_year_filing"}
+    base.update(overrides)
+    return base
+
+
+def test_v12_is_quiet_on_a_verified_anchored_replay(tmp_path):
+    """The records DO cover the year — via a cited opening, not a balance column.
+
+    Telling this filer to obtain year-covering records or elect Item 15a is
+    advice for a problem they do not have.
+    """
+    (tmp_path / "anchor.pdf").write_bytes(b"%PDF-synthetic")
+    r = roster([account("a", max_value_basis="anchored_full_year",
+                        max_value_anchor=_anchor())])
+    v12 = [f for f in run(r, workspace=str(tmp_path))["findings"] if f.id == "V12"]
+    assert v12 == []
+
+
+def test_v12_still_warns_when_the_anchor_document_is_missing(tmp_path):
+    """An unverifiable anchor is an assertion. V12 must not take its word."""
+    r = roster([account("a", max_value_basis="anchored_full_year",
+                        max_value_anchor=_anchor(source_document="gone.pdf"))])
+    v12 = [f for f in run(r, workspace=str(tmp_path))["findings"] if f.id == "V12"]
+    assert len(v12) == 1
+    assert "cannot be verified" in v12[0].message
+    assert v12[0].detail["anchor_verified"] is False
+
+
+def test_v12_warns_on_an_anchored_basis_with_no_workspace_to_check():
+    """No workspace means no verification, so the claim stays unproven."""
+    r = roster([account("a", max_value_basis="anchored_full_year",
+                        max_value_anchor=_anchor())])
+    v12 = [f for f in run(r)["findings"] if f.id == "V12"]
+    assert len(v12) == 1
+
+
+def test_v12_uses_bound_language_for_a_floor():
+    """A proven floor is not a guess, and the message must not call it one."""
+    r = roster([account("a", max_value_basis="non_negativity_floor")])
+    v12 = [f for f in run(r)["findings"] if f.id == "V12"]
+    assert len(v12) == 1
+    assert "proven floor" in v12[0].message
+    assert "may understate" in v12[0].message
+    assert "estimate" not in v12[0].message
+
+
+def test_v12_language_for_a_real_estimate_is_unchanged():
+    r = roster([account("a", max_value_basis="estimate")])
+    v12 = [f for f in run(r)["findings"] if f.id == "V12"]
+    assert "obtain records that cover the year" in v12[0].message
+
+
+
