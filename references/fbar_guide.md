@@ -441,6 +441,31 @@ Record honestly what the workspace actually holds. `prior_year.source`
 distinguishes a BSA acknowledgment copy (`form_114_filed`) from a preparer
 review copy (`form_114_review_copy_pdf`) — they are not the same evidence.
 
+### A document that identifies no account
+
+App screenshots and partial exports arrive with no account number, no card
+number and no holder name anywhere on the page. Two responses are wrong and one
+is right:
+
+- **Wrong:** attribute it to the account it probably belongs to. A plausible
+  guess becomes a cited `source_documents[]` entry, and V13 will confirm the
+  file exists — proving nothing about whether it is the right file.
+- **Wrong:** drop it. An account whose only evidence was discarded looks like
+  an account with no evidence, which is a different and much quieter problem.
+- **Right:** file it under the convention below and leave the pending account
+  pending.
+
+**Name it `<Institution>_UNIDENTIFIED_<short description>.<ext>`** — for example
+`TBank_UNIDENTIFIED_debit_card_screenshot.pdf`. Record in the account notes for
+any account it *might* belong to that an unattributed document exists and does
+**not** resolve the gap: never attribute a document without a visible identifier —
+an account number, a card number, or a holder name printed on
+the document itself. A filename someone chose is not an identifier; neither is
+the folder it arrived in.
+
+The correct next action is always to request a document that does carry an
+identifier, not to reason about which account this one fits.
+
 ---
 
 ## 10. Manual checklist
@@ -454,6 +479,10 @@ Things no script can check. Run these before filing.
 - [ ] Every account the taxpayer *holds* is on the roster, not merely every
       account with a statement. The threshold aggregates all foreign financial
       accounts, including ones that produced no income and ones that are trivial.
+- [ ] Every `*_UNIDENTIFIED_*` document in the workspace has either been
+      resolved to an account by a newly obtained identifier, or is explicitly
+      noted as unresolved on the account it was thought to belong to. An
+      unattributed document is a pending question, not a filed record.
 - [ ] Signature-authority-only accounts (Part IV) are handled by hand — the
       reconciler carries them but does not reconcile or emit worksheets for them.
 - [ ] Each spouse's filing obligation was decided separately. Any

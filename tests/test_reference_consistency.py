@@ -575,3 +575,16 @@ def test_fbar_guide_requires_a_live_treasury_rate_check():
                      if "api.fiscaldata.treasury.gov" in ln and not ln.startswith("|")]
     assert outside_table, "the fiscaldata endpoint appears only inside the V1 table row"
 
+
+def test_fbar_guide_names_the_unidentified_document_convention():
+    """A document with no visible identifier gets a name, not a guess.
+
+    The two failure modes are silent attribution (wrong number on a filing) and
+    silent dropping (an account with no evidence that nobody notices). The
+    convention exists to make the third option reachable.
+    """
+    text = read_ref("fbar_guide.md")
+    assert "UNIDENTIFIED" in text
+    assert "never attribute a document without a visible identifier" in text
+
+
