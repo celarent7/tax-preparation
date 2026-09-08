@@ -406,6 +406,28 @@ Phase 3  (Python)   fbar_reconciler.py
                     '-- reconciliation.md + worksheet.md + roster.json
 ```
 
+### Matching unlabelled columns to real accounts
+
+A multi-account export labels its columns however the exporting app happens to
+— a nickname ("Брокерский счёт", "Брокерский счет 1"), a blank, or a
+position — and often carries no account number at all. Match each column by its
+**first non-blank date, never magnitude and never column order.**
+
+Take each column's first non-blank, non-zero row date, and match it against
+each candidate account's **contract-open date**, which each account's own
+report states in its header line (`Инвестор: NAME / NUMBER от DATE`). An
+account cannot have a value before it existed, so the earliest column belongs
+to the earliest-opened account, and the match is forced rather than guessed.
+
+Magnitude and column order both fail on the case that matters. A transposition
+— two accounts' columns swapped in the workbook — preserves every magnitude and
+every position, so neither signal changes; only the start dates disagree. One
+such swap stood for over a week in a live workspace and was found this way.
+
+Where two accounts were opened on the same date the method is silent. Say so
+and request the account numbers; do not fall back to magnitude because the
+better method ran out.
+
 **Phase 0 reports what the file says; it never decides what the filing claims.**
 It opens the statements, normalizes numbers and dates, merges multi-currency
 sub-accounts onto one axis at the December 31 rate, detects coverage gaps and

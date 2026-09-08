@@ -611,4 +611,16 @@ def test_credit_convention_note_points_at_the_procedure():
     assert "fbar_guide.md" in note
 
 
+def test_fbar_guide_forbids_matching_columns_by_magnitude():
+    """Two accounts' columns were transposed for a week; magnitude hid it.
+
+    A transposition preserves both magnitudes and both column positions, so
+    the only signal that survives it is WHEN each column starts.
+    """
+    text = read_ref("fbar_guide.md")
+    assert "first non-blank date, never magnitude and never column order" in text
+    assert "contract-open date" in text
+
+
+
 
