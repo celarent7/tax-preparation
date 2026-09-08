@@ -499,8 +499,10 @@ BOUND_UNORDERED = "unordered_within_day"       # the peak depends on intraday se
 #: evidence to weakest so a cap is a `min()` rather than a chain of ifs.
 BASIS_STRENGTH = (
     "statement_full_year",
+    "anchored_full_year",
     "statement_partial",
     "period_end_summaries_only",
+    "non_negativity_floor",
     "estimate",
     "unknown",
 )

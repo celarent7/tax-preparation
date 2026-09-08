@@ -1427,3 +1427,27 @@ def test_a_register_that_really_states_no_totals_still_says_so():
 
     assert any("states no period totals" in w for w in result.warnings)
     assert not any("none of which could be read" in w for w in result.warnings)
+
+
+def test_new_bases_are_ordered_between_their_neighbours():
+    """Position in BASIS_STRENGTH IS strength — `weaken_basis` is a max() on it.
+
+    An anchored replay is exact arithmetic on a CITED opening, so it ranks just
+    below a directly observed full year. A non-negativity floor is a proven
+    bound, so it outranks a guess but says less about a peak than two bounding
+    balances do.
+    """
+    from statement_parser import BASIS_STRENGTH, weaken_basis
+
+    assert BASIS_STRENGTH.index("statement_full_year") \
+        < BASIS_STRENGTH.index("anchored_full_year") \
+        < BASIS_STRENGTH.index("statement_partial")
+    assert BASIS_STRENGTH.index("period_end_summaries_only") \
+        < BASIS_STRENGTH.index("non_negativity_floor") \
+        < BASIS_STRENGTH.index("estimate")
+
+    # Capping still only ever weakens.
+    assert weaken_basis("anchored_full_year", "statement_partial") == "statement_partial"
+    assert weaken_basis("statement_partial", "anchored_full_year") == "statement_partial"
+    assert weaken_basis("non_negativity_floor", "estimate") == "estimate"
+

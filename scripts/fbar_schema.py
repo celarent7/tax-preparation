@@ -64,10 +64,29 @@ ACCOUNT_STATUSES = ("open", "closed", "dormant")
 #: whose basis is weaker than a full year of statements, and which has NOT
 #: elected the Item 15a "amount unknown" checkbox, is asserting a maximum it
 #: cannot support.
+#:
+#: Two members describe RECONSTRUCTIONS rather than observations, and both were
+#: added because the ad hoc alternative was recording exact work as `estimate`:
+#:
+#:   * `anchored_full_year` — the opening comes from a dated, cited anchor (a
+#:     prior-year filed figure, a declaration, or a live balance carried back to
+#:     the year boundary) and a COMPLETE transaction ledger is then replayed.
+#:     This is exact when both halves hold, which is why it requires
+#:     `max_value_anchor` and why V12 checks that citation rather than trusting
+#:     the word. Without that requirement it would be a value anyone can type to
+#:     silence V12 — precisely the hole `statement_parser.derive_basis` exists
+#:     to close.
+#:   * `non_negativity_floor` — the opening is unknown, but the account cannot
+#:     go negative, so the minimum opening consistent with the ledger yields a
+#:     PROVABLE floor on the true maximum. V12 still warns: a floor may
+#:     understate. It warns differently, because a bound with a known
+#:     relationship to the truth is not a guess.
 MAX_VALUE_BASES = (
     "statement_full_year",       # statements covering the whole year (FinCEN's safe harbour)
+    "anchored_full_year",        # a cited dated opening + a complete, reconciled ledger
     "statement_partial",         # statements for part of the year only
     "period_end_summaries_only",  # period-end balances; intra-period peaks invisible
+    "non_negativity_floor",      # opening unknown; a PROVEN floor, not a guess
     "estimate",
     "unknown",
 )
