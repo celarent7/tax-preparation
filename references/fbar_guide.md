@@ -423,7 +423,10 @@ exist.
 
 ```
 Phase 0  (Python)   statement_parser.py  -> account_timelines_<filer>_<year>.json
-                    |-- per-source readers -> normalized movement records
+                    |-- per-source readers (running balance, two-sheet credit card,
+                    |   period-end summary, PDF movement register,
+                    |   point-in-time balance, daily value series)
+                    |   -> normalized movement records
                     |-- continuity + gap detection
                     '-- timeline + derived max_value_basis
                             |
@@ -542,6 +545,14 @@ no balance of any kind, so it yields movements and a `max_value_basis` of
 `estimate` — never a maximum value. **Balance-bearing PDF statements are read by
 the agent's `Read` tool in Phase 1**, as they always were, and no profile derives
 a balance from transaction deltas.
+
+Two readers cover documents that are not statements at all. A **point-in-time balance**
+document (`point_balance`) states one bank-confirmed level at one date, with no
+period and no transactions; alone it supports nothing, and its value is as the
+anchor a complete ledger is carried across. A **daily value series**
+(`daily_value_series`) is a wide table — one row per date, one column per
+account, values already priced — and is the only reader that yields several
+accounts from one file.
 
 ```bash
 # Phase 0: parse statements into balance timelines (where .xlsx/.txt exist)
@@ -662,7 +673,7 @@ Statement parsing is a **separate upstream tool** (Phase 0,
 `scripts/statement_parser.py`), and it is narrower than it sounds. It reads
 `.xlsx`, plain-text and PDF movement registers — **a balance-bearing PDF
 statement stays with the agent's `Read` tool**, so a PDF-only institution gets
-movements and an `estimate` basis, not a maximum value. It never decides
+movements and an `estimate` basis, not a maximum value. **No balance is ever synthesized from transaction deltas alone** — a PDF movement register states no balance, so on its own it yields movements and an `estimate` basis, and balance-bearing PDFs stay with `Read`. The single exception is an ANCHORED reconstruction: where a document states a dated balance and every register reconciles against the bank's own period totals, the opening is carried from that citation and the year replayed exactly, yielding `anchored_full_year` with the anchor recorded. Where no anchor exists but the ledger is complete and reconciled, the account's non-negativity gives a `non_negativity_floor` — a proven bound, not an estimate. It never decides
 reportability, ownership, conventions or the Item 15a election, and it never
 reconstructs a balance it cannot evidence. The reconciler itself still takes
 only normalized JSON.

@@ -605,7 +605,7 @@ the peak. This covers a *replayed* series between two independently confirmed
 anchors, where the peak is order-invariant and only the intermediate trajectory
 is affected.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_fbar_guide_documents_the_same_timestamp_dip():
@@ -621,12 +621,12 @@ def test_fbar_guide_documents_the_same_timestamp_dip():
     assert "do not invent a plausible sub-minute order" in text
 ```
 
-- [ ] **Step 2: Run and confirm it fails**
+- [x] **Step 2: Run and confirm it fails**
 
 Run: `python -m pytest tests/test_reference_consistency.py::test_fbar_guide_documents_the_same_timestamp_dip -v`
 Expected: FAIL
 
-- [ ] **Step 3: Add the subsection**
+- [x] **Step 3: Add the subsection**
 
 ```markdown
 ### A replayed series that dips below zero
@@ -659,7 +659,7 @@ and does mean the anchor or the ledger is wrong. The distinguishing test is
 whether every row inside the excursion shares one timestamp.
 ```
 
-- [ ] **Step 4: Run and commit**
+- [x] **Step 4: Run and commit**
 
 Run: `python -m pytest tests/test_reference_consistency.py -q`
 Expected: PASS
@@ -3890,7 +3890,7 @@ Both SKILL.md's `statement_parser.py` row and §9/§11 of the guide state the
 reader list and the no-synthesis rule **verbatim**. Tranche 3 changes both, and
 a plan that updates only the guide ships half-done.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_the_documented_reader_list_matches_the_registry():
@@ -3912,12 +3912,12 @@ def test_the_documented_reader_list_matches_the_registry():
         assert phrase in guide, f"fbar_guide.md does not mention the {phrase} reader"
 ```
 
-- [ ] **Step 2: Run and confirm it fails**
+- [x] **Step 2: Run and confirm it fails**
 
 Run: `python -m pytest tests/test_reference_consistency.py -k "reader_list" -v`
 Expected: FAIL — neither document mentions the two new readers
 
-- [ ] **Step 3: Update the `statement_parser.py` scripts-table row**
+- [x] **Step 3: Update the `statement_parser.py` scripts-table row**
 
 Two edits inside that row:
 
@@ -3929,7 +3929,7 @@ Two edits inside that row:
 **No balance is ever synthesized from transaction deltas alone** — a PDF movement register states no balance, so on its own it yields movements and an `estimate` basis, and balance-bearing PDFs stay with `Read`. The single exception is an ANCHORED reconstruction: where a document states a dated balance and every register reconciles against the bank's own period totals, the opening is carried from that citation and the year replayed exactly, yielding `anchored_full_year` with the anchor recorded. Where no anchor exists but the ledger is complete and reconciled, the account's non-negativity gives a `non_negativity_floor` — a proven bound, not an estimate.
 ```
 
-- [ ] **Step 4: Update the guide's §9 diagram and §11**
+- [x] **Step 4: Update the guide's §9 diagram and §11**
 
 In §9's Phase 0 diagram, add the two readers to the per-source-readers line. In
 the paragraph beginning "Phase 0 is optional and file-format-bound", add:
@@ -3947,7 +3947,7 @@ accounts from one file.
 Update §11's "Limits" paragraph the same way as the SKILL.md row in step 3, so
 the two do not disagree.
 
-- [ ] **Step 5: Add the anchored workflow to SKILL.md Step 6**
+- [x] **Step 5: Add the anchored workflow to SKILL.md Step 6**
 
 After the Phase 0 invocation block:
 
@@ -3961,12 +3961,12 @@ After the Phase 0 invocation block:
    reproduces that figure; see `./references/fbar_guide.md` §9.
 ```
 
-- [ ] **Step 6: Run the whole suite**
+- [x] **Step 6: Run the whole suite**
 
 Run: `python -m pytest tests/ -q`
 Expected: PASS
 
-- [ ] **Step 7: Bump, commit, tag**
+- [x] **Step 7: Bump, commit, tag**
 
 `plugin.json`: `"version": "3.5.0"` → `"version": "3.6.0"`.
 

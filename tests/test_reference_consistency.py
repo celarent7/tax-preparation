@@ -654,3 +654,23 @@ def test_skill_md_states_the_current_validator_range():
     highest = max(int(n.split("_")[0][1:]) for n in dir(fr)
                   if re.fullmatch(r"v\d+_\w+", n))
     assert f"V1–V{highest}" in text or f"V1-V{highest}" in text
+
+
+def test_the_documented_reader_list_matches_the_registry():
+    """SKILL.md and the guide both enumerate the readers in prose. An agent
+    picks a reader from that prose without opening the code."""
+    from statement_parser import READERS
+    with open(os.path.join(ROOT, "skills", "tax-preparation", "SKILL.md")) as f:
+        skill = f.read()
+    guide = read_ref("fbar_guide.md")
+    human = {"xlsx_running_balance": "running balance",
+             "xlsx_two_sheet_card": "two-sheet credit card",
+             "text_period_summary": "period-end summary",
+             "pdf_movement_register": "PDF movement register",
+             "point_balance": "point-in-time balance",
+             "daily_value_series": "daily value series"}
+    assert set(human) == set(READERS), "reader registry changed; update this map"
+    for phrase in human.values():
+        assert phrase in skill, f"SKILL.md does not mention the {phrase} reader"
+        assert phrase in guide, f"fbar_guide.md does not mention the {phrase} reader"
+
