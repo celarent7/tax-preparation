@@ -265,6 +265,8 @@ ACCOUNT_FIELDS: Dict[str, Any] = {
     "institution": {},
     "account_number": None,              # REQUIRED — as the institution states it (Item 18)
     "account_number_normalized": None,   # derived from account_number when absent
+    "contract_number": None,             # the institution's OTHER identifier, where it issues one
+    "contract_number_normalized": None,  # derived; matching only, never displayed or filed
     "account_type": None,                # REQUIRED — Item 16 (BANK / SECURITIES / OTHER)
     "account_type_other_desc": None,     # the free text beside Item 16's OTHER checkbox
     "ownership": "separate",
@@ -577,6 +579,23 @@ def _validate_account(raw: Any, index: int) -> Dict[str, Any]:
         acct["account_number_normalized"] = normalize_account_number(acct["account_number"])
     else:
         acct["account_number_normalized"] = str(acct["account_number_normalized"])
+
+    # A contract number is not an alias of the ledger number — it is a second,
+    # structurally different identifier the institution issues alongside it
+    # (T-Bank prints «Номер договора» and «Номер лицевого счёта» on every
+    # statement). It is frequently the MORE STABLE cross-year key, because a
+    # ledger number is reissued on product migration while the contract is not.
+    # Brokerage products use one number for both roles; leave this absent there
+    # rather than duplicating the account number into it, so "absent" keeps
+    # meaning "the institution issues only one".
+    if acct["contract_number"] not in (None, ""):
+        acct["contract_number"] = str(acct["contract_number"])
+        if not acct["contract_number_normalized"]:
+            acct["contract_number_normalized"] = normalize_account_number(
+                acct["contract_number"])
+    else:
+        acct["contract_number"] = None
+        acct["contract_number_normalized"] = None
 
     acct["normalized_aliases"] = sorted({
         normalize_account_number(a) for a in acct["aliases"] if str(a).strip()

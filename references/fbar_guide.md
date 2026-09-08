@@ -111,6 +111,16 @@ used to produce this account's figures. A year-over-year *change* here is a
 finding (V9), because these treatments are unconfirmed and changing one silently
 changes the reported number.
 
+**`contract_number`** — a second identifier the institution issues *alongside*
+the account number, where it issues one. T-Bank prints «Номер договора» and
+«Номер лицевого счёта» on every bank statement; they are different numbers for
+the same account, not a renumbering. Record both. The contract number is
+usually the more stable cross-year join key, because a ledger number is reissued
+on product migration and a contract number is not. Brokerage and IIS products
+use one number for both roles — leave `contract_number` absent there, so
+"absent" keeps meaning "the institution issues only one" rather than "nobody
+filled it in".
+
 ### Multi-currency accounts
 
 An account whose reported maximum is the sum of several currency balances at the
@@ -194,12 +204,21 @@ Two deliberate limits:
 
 ### Matching order, and one thing it does not handle
 
-Matching resolves in this order: exact `account_key` → the normalized number
-appears in the other record's `aliases[]` → normalized number equality → same
-institution and the same trailing four digits, which **suggests and never
-auto-accepts** → no match. Step four is a suggestion because a fuzzy match that
-silently linked two accounts would defeat the point: the module exists to make
-unmatched accounts visible, not to make them disappear.
+Matching resolves in this order:
+
+1. **Declared identity changes** (`identity_changes[]`).
+2. **Exact `account_key`**, unless already claimed by a declaration.
+3. **Alias membership** — the normalized number appears in the other record's `aliases[]`.
+4. **Contract number**, normalized, within the same institution. Scoped by
+   institution because two banks may issue the same digits, and a false merge
+   hides an account while a false split only produces a reviewable finding.
+5. **Normalized account-number equality**.
+6. **Same institution and trailing digits** — same institution and the same trailing four digits, which **suggests and never auto-accepts**.
+7. **No match**.
+
+Step six is a suggestion because a fuzzy match that silently linked two
+accounts would defeat the point: the module exists to make unmatched accounts
+visible, not to make them disappear.
 
 Matching is greedy in prior-roster order, and each current account can be
 claimed only once. If two prior records share an alias, the one processed first

@@ -53,7 +53,12 @@ def account(key, number="10000001", **overrides):
     return base
 
 
-def roster(year, accounts, **overrides):
+def roster(year_or_accounts, accounts=None, **overrides):
+    if isinstance(year_or_accounts, list):
+        accounts = year_or_accounts
+        year = overrides.pop("year", 2025)
+    else:
+        year = year_or_accounts
     base = {
         "schema_version": "1.0",
         "tax_year": year,
@@ -566,3 +571,32 @@ def test_cli_reports_a_bad_roster_as_iserror():
                    "--output-format", "json")
     assert proc.returncode == 1
     assert json.loads(proc.stdout)["isError"] is True
+
+
+def test_a_renumbered_ledger_matches_on_the_contract_number():
+    """A bank migrates a product and issues a new ledger number; the contract
+    number survives. Without it this is one closed plus one new account."""
+    import fbar_reconciler as fr
+    prior = roster([account("old", account_number="40817810000000123474",
+                            contract_number="5000000001")], year=2024)
+    current = roster([account("new", account_number="40817810900000112233",
+                              contract_number="5000000001")])
+    matches = fr.match_accounts(current, prior)["matches"]
+    assert matches["old"]["current_keys"] == ["new"]
+    assert matches["old"]["method"] == fr.MATCH_CONTRACT_NUMBER
+
+
+def test_a_contract_number_never_matches_across_institutions():
+    """Contract numbers are institution-scoped; two banks may reuse a string."""
+    import fbar_reconciler as fr
+    prior = roster([account("old", number="11111111", contract_number="1234567890",
+                            institution={"name": "Bank One", "country": "GE",
+                                         "address": {"street": "s", "city": "c",
+                                                     "postal_code": "p"}})], year=2024)
+    current = roster([account("new", number="22222222", contract_number="1234567890",
+                              institution={"name": "Bank Two", "country": "GE",
+                                           "address": {"street": "s", "city": "c",
+                                                       "postal_code": "p"}})])
+    matches = fr.match_accounts(current, prior)["matches"]
+    assert matches.get("old", {}).get("current_keys") != ["new"]
+

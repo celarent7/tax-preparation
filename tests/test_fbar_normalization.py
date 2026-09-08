@@ -133,3 +133,16 @@ def test_display_guard_rejects_the_normalized_form():
     normalized = normalize_account_number(account["account_number"])
     with pytest.raises(RosterError, match="as the institution states it"):
         assert_display_safe(normalized, account)
+
+
+def test_contract_number_is_normalized_for_matching_only():
+    from fbar_schema import validate_roster
+    r = validate_roster({
+        "schema_version": "1.0", "tax_year": 2025, "filer": {"slug": "t"},
+        "accounts": [{"account_key": "a", "account_number": "40817 810 0000 0012 3474",
+                      "account_type": "bank", "contract_number": "5000-000-001"}],
+    }, origin="<test>")
+    acct = r["accounts"][0]
+    assert acct["contract_number"] == "5000-000-001"          # as the institution states it
+    assert acct["contract_number_normalized"] == "5000000001"  # matching key only
+

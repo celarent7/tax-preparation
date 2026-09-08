@@ -107,6 +107,7 @@ DISPOSITION_SEVERITY = {
 #: reviewer can see whether a match rested on a declared identity change, a
 #: stable key, or bare digit equality.
 MATCH_EXACT_KEY = "account_key"
+MATCH_CONTRACT_NUMBER = "contract_number"
 MATCH_ALIAS = "alias"
 MATCH_NORMALIZED_NUMBER = "normalized_account_number"
 MATCH_IDENTITY_CHANGE = "identity_change"
@@ -178,10 +179,11 @@ def match_accounts(current: Dict[str, Any],
     The ladder, in order, exactly as plan §4.1 specifies:
       1. declared `identity_changes`
       2. exact `account_key`
-      3. normalized account number present in the other record's aliases
-      4. normalized account-number equality
-      5. same institution + same trailing 4+ digits -> SUGGEST ONLY
-      6. no match
+      3. contract number, normalized, within the same institution
+      4. normalized account number present in the other record's aliases
+      5. normalized account-number equality
+      6. same institution + same trailing 4+ digits -> SUGGEST ONLY
+      7. no match
 
     Each rung is a full pass over the prior accounts before the next one runs.
     Applying the ladder per account instead would let a weaker rung on an
@@ -222,7 +224,34 @@ def match_accounts(current: Dict[str, Any],
         matches[pkey] = {"current_keys": [pkey], "method": MATCH_EXACT_KEY}
         matched_current_keys.add(pkey)
 
-    # Rungs 3-4 — alias membership, then normalized-number equality.
+    # Rung 3 — a contract number that survived a ledger renumbering.
+    #
+    # Institution-scoped, like every other number-based rung: two banks may
+    # issue the same digits, and matching across institutions would merge
+    # unrelated accounts. A false merge HIDES an account; a false split only
+    # produces a reviewable finding, which is why the asymmetry always
+    # resolves this way here.
+    for pa in prior_accounts:
+        pkey = pa["account_key"]
+        if pkey in matches:
+            continue
+        p_contract = pa.get("contract_number_normalized")
+        if not p_contract:
+            continue
+        hit = next(
+            (ca for ca in current_accounts
+             if ca["account_key"] not in matched_current_keys
+             and ca.get("contract_number_normalized") == p_contract
+             and _institution_key(ca) == _institution_key(pa)),
+            None,
+        )
+        if hit is None:
+            continue
+        matches[pkey] = {"current_keys": [hit["account_key"]],
+                         "method": MATCH_CONTRACT_NUMBER}
+        matched_current_keys.add(hit["account_key"])
+
+    # Rungs 4-5 — alias membership, then normalized-number equality.
     for pa in prior_accounts:
         pkey = pa["account_key"]
         if pkey in matches:
@@ -243,7 +272,7 @@ def match_accounts(current: Dict[str, Any],
         matches[pkey] = {"current_keys": [alias_hit["account_key"]], "method": method}
         matched_current_keys.add(alias_hit["account_key"])
 
-    # Rung 5 — suggestion only, never applied.
+    # Rung 6 — suggestion only, never applied.
     for pa in prior_accounts:
         pkey = pa["account_key"]
         if pkey in matches:
