@@ -106,6 +106,27 @@ PRIOR_YEAR_SOURCES = (
     "none",
 )
 
+#: Where an `anchored_full_year` opening balance came from. Each member names a
+#: DOCUMENT the filer can produce, which is the point: an anchor is a citation,
+#: not a recollection.
+ANCHOR_SOURCE_KINDS = (
+    "prior_year_filing",      # the filed Form 114's own Item 15 for this account
+    "declaration",            # a foreign-regime asset declaration stating a dated balance
+    "point_balance_document",  # a bank-issued "balance as of <date>" letter
+    "statement_closing",      # a statement's own stated closing balance
+)
+
+ANCHOR_FIELDS: Dict[str, Any] = {
+    "as_of": None,            # REQUIRED — the date the anchor balance is stated for
+    "amount": None,           # REQUIRED — in `currency`, the institution's own figure
+    "currency": None,         # REQUIRED — ISO-4217
+    "source_document": None,  # REQUIRED — workspace-relative path; V13 checks it exists
+    "source_kind": None,      # REQUIRED — ANCHOR_SOURCE_KINDS
+    "note": None,             # how the anchor was carried to the year boundary, if it was
+}
+
+_ANCHOR_REQUIRED = ("as_of", "amount", "currency", "source_document", "source_kind")
+
 
 # ---------------------------------------------------------------------------
 # Filer-adopted conventions (plan §3.1)
@@ -255,6 +276,7 @@ ACCOUNT_FIELDS: Dict[str, Any] = {
     "max_value_date": None,
     "max_value_usd": None,               # Item 15
     "max_value_basis": "unknown",
+    "max_value_anchor": None,            # REQUIRED when max_value_basis is anchored_full_year
     "max_value_unknown": False,          # Item 15a checkbox
     "year_end_balance_usd": None,
     "reportable": True,
@@ -434,6 +456,36 @@ def _validate_institution(raw: Any, where: str) -> Dict[str, Any]:
     return inst
 
 
+def _validate_anchor(raw: Any, where: str) -> Optional[Dict[str, Any]]:
+    """The citation behind an `anchored_full_year` opening balance.
+
+    An anchored basis claims a replay was exact because the opening came from
+    somewhere real. This is where it says where. V12 goes quiet on an anchored
+    basis ONLY when this validates and V13 finds the cited document — otherwise
+    the basis is a word that silences a validator, which is the failure mode
+    `statement_parser.derive_basis` exists to prevent.
+    """
+    if raw in (None, {}):
+        return None
+    if not isinstance(raw, dict):
+        raise RosterError(f"{where} must be an object.")
+    _reject_unknown(raw, ANCHOR_FIELDS, where)
+    anchor = {k: raw.get(k, v) for k, v in ANCHOR_FIELDS.items()}
+    for key in _ANCHOR_REQUIRED:
+        if anchor[key] in (None, ""):
+            raise RosterError(
+                f"{where}.{key} is required. An anchor without it cannot be "
+                "traced back to the document it came from, which is the only "
+                "thing that distinguishes an anchored replay from an assertion."
+            )
+    anchor["as_of"] = parse_date(anchor["as_of"], f"{where}.as_of")
+    anchor["amount"] = _number(anchor["amount"], f"{where}.amount")
+    anchor["currency"] = str(anchor["currency"]).strip().upper()
+    anchor["source_document"] = str(anchor["source_document"])
+    _require_enum(anchor["source_kind"], ANCHOR_SOURCE_KINDS, f"{where}.source_kind")
+    return anchor
+
+
 def _validate_account(raw: Any, index: int) -> Dict[str, Any]:
     where = f"roster.accounts[{index}]"
     if not isinstance(raw, dict):
@@ -463,6 +515,16 @@ def _validate_account(raw: Any, index: int) -> Dict[str, Any]:
     _require_enum(acct["ownership"], OWNERSHIPS, f"{where}.ownership")
     _require_enum(acct["account_status"], ACCOUNT_STATUSES, f"{where}.account_status")
     _require_enum(acct["max_value_basis"], MAX_VALUE_BASES, f"{where}.max_value_basis")
+    acct["max_value_anchor"] = _validate_anchor(
+        acct["max_value_anchor"], f"{where}.max_value_anchor")
+    if acct["max_value_basis"] == "anchored_full_year" and not acct["max_value_anchor"]:
+        raise RosterError(
+            f"{where}.max_value_basis is 'anchored_full_year' but no "
+            "max_value_anchor is recorded. That basis asserts the opening "
+            "balance came from a dated, cited document; without the citation "
+            "it is indistinguishable from a hand-typed 'statement_full_year' "
+            "and would silence V12 on no evidence at all."
+        )
 
     for flag in ("max_value_unknown", "reportable"):
         if not isinstance(acct[flag], bool):

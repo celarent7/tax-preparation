@@ -580,3 +580,73 @@ def test_example_pair_surfaces_the_defect_shapes_as_warnings_only():
     assert "D-NEW-UNREPORTED" in fired               # D2
     assert not fr.stops(findings), \
         "the example cycle must run clean: every defect shape is a warning"
+
+
+def test_anchored_basis_requires_an_anchor():
+    """The basis asserts an opening came from somewhere. Say where.
+
+    Without this, `anchored_full_year` is a word that silences V12 — which is
+    the exact hole derive_basis was built to close.
+    """
+    with pytest.raises(RosterError) as exc:
+        roster([account("a", max_value_basis="anchored_full_year")])
+    assert "max_value_anchor" in str(exc.value)
+
+
+def test_anchor_requires_every_field():
+    for missing in ("as_of", "amount", "currency", "source_document", "source_kind"):
+        anchor = {"as_of": "2025-01-01", "amount": 1000.0, "currency": "RUB",
+                  "source_document": "prior/form_114_2024.pdf",
+                  "source_kind": "prior_year_filing"}
+        del anchor[missing]
+        with pytest.raises(RosterError) as exc:
+            roster([account("a", max_value_basis="anchored_full_year",
+                            max_value_anchor=anchor)])
+        assert missing in str(exc.value)
+
+
+def test_anchor_source_kind_is_an_enum():
+    with pytest.raises(RosterError) as exc:
+        roster([account("a", max_value_basis="anchored_full_year",
+                        max_value_anchor={"as_of": "2025-01-01", "amount": 1000.0,
+                                          "currency": "RUB",
+                                          "source_document": "x.pdf",
+                                          "source_kind": "vibes"})])
+    assert "vibes" in str(exc.value)
+
+
+def test_an_anchor_on_a_non_anchored_basis_is_kept_not_rejected():
+    """A recorded anchor is evidence even where the basis is weaker.
+
+    An account may have an anchor and still be capped at `statement_partial`
+    by a coverage gap. Dropping the anchor there would discard the citation
+    that explains a figure.
+    """
+    r = roster([account("a", max_value_basis="statement_partial",
+                        max_value_anchor={"as_of": "2025-01-01", "amount": 1000.0,
+                                          "currency": "RUB",
+                                          "source_document": "x.pdf",
+                                          "source_kind": "declaration"})])
+    assert r["accounts"][0]["max_value_anchor"]["currency"] == "RUB"
+
+
+def test_anchor_as_of_must_be_a_date():
+    with pytest.raises(RosterError):
+        roster([account("a", max_value_basis="anchored_full_year",
+                        max_value_anchor={"as_of": "January 1", "amount": 1.0,
+                                          "currency": "RUB", "source_document": "x.pdf",
+                                          "source_kind": "declaration"})])
+
+
+def test_v13_covers_the_anchor_document(tmp_path):
+    """An anchor citing a file that is not there is the same defect as any
+    other dangling citation — and a worse one, since V12 trusts it."""
+    r = roster([account("a", max_value_basis="anchored_full_year",
+                        max_value_anchor={"as_of": "2025-01-01", "amount": 1.0,
+                                          "currency": "RUB",
+                                          "source_document": "nowhere.pdf",
+                                          "source_kind": "declaration"})])
+    ids = [f.id for f in run(r, workspace=str(tmp_path))["findings"]]
+    assert "V13" in ids
+
+

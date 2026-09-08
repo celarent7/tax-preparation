@@ -991,7 +991,11 @@ def v13_source_documents(roster: Dict[str, Any], workspace: Optional[str],
     years = int(get_constant(fbar, "recordkeeping_years"))
     out = []
     for acct in roster["accounts"]:
-        missing = [p for p in acct["source_documents"]
+        cited = list(acct["source_documents"])
+        anchor = acct.get("max_value_anchor")
+        if anchor and anchor.get("source_document"):
+            cited.append(anchor["source_document"])
+        missing = [p for p in cited
                    if not os.path.exists(os.path.join(workspace, p))]
         if missing:
             out.append(Finding(
