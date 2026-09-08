@@ -3375,7 +3375,7 @@ is the closest thing to a bank's own daily balance column that a brokerage
 produces, values are already priced, and gap/continuity analysis then caps it
 honestly if days are missing.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_daily_value_series.py`:
 
@@ -3487,12 +3487,12 @@ def _write_series_csv(tmp_path):
     return path
 ```
 
-- [ ] **Step 2: Run and confirm they fail**
+- [x] **Step 2: Run and confirm they fail**
 
 Run: `python -m pytest tests/test_daily_value_series.py -v`
 Expected: collection error — `ImportError: cannot import name 'EVIDENCE_PRICED_DAILY_SERIES'`
 
-- [ ] **Step 3: Add the profile**
+- [x] **Step 3: Add the profile**
 
 ```python
 # ---------------------------------------------------------------------------
@@ -3547,7 +3547,7 @@ TBANK_DAILY_VALUES = DailyValueSeriesProfile(
 )
 ```
 
-- [ ] **Step 4: Add the evidence kind, the matcher and the reader**
+- [x] **Step 4: Add the evidence kind, the matcher and the reader**
 
 ```python
 EVIDENCE_PRICED_DAILY_SERIES = "priced_daily_series"
@@ -3714,7 +3714,7 @@ branch:
 the key is absent — which `match_columns_by_open_date` then refuses, naming the
 missing configuration rather than matching positionally.
 
-- [ ] **Step 5: Document what to request when a broker report cannot be priced**
+- [x] **Step 5: Document what to request when a broker report cannot be priced**
 
 Add to `references/fbar_guide.md` §9:
 
@@ -3734,7 +3734,7 @@ and it closed the gap for six accounts in one pass. Requesting another trade
 report gets another report with the same gap.
 ```
 
-- [ ] **Step 6: Run and commit**
+- [x] **Step 6: Run and commit**
 
 Run: `python -m pytest tests/ -q`
 Expected: PASS

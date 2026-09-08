@@ -34,6 +34,7 @@ All money is `Decimal`. Never `float`: these figures are compared for
 continuity equality and rounded into a filing.
 """
 
+import csv
 import os
 import re
 import sys
@@ -406,6 +407,7 @@ def resolve_partial_date(value: Any, period: StatementPeriod,
 EVIDENCE_RUNNING_BALANCE = "running_balance"
 EVIDENCE_PERIOD_END_SUMMARIES = "period_end_summaries"
 EVIDENCE_DECLARED_ANCHOR = "declared_anchor"
+EVIDENCE_PRICED_DAILY_SERIES = "priced_daily_series"
 EVIDENCE_NONE = "none"
 
 
@@ -2049,6 +2051,172 @@ def read_point_balance(path: str, profile, currency: str) -> ReadResult:
     return result
 
 
+def _read_table(path: str, profile) -> List[List[Any]]:
+    """Read a table from a .csv or .xlsx file as a list of rows."""
+    if path.lower().endswith(".csv") or getattr(profile, "sheet_pattern", None) is None:
+        try:
+            with open(path, "r", encoding="utf-8-sig") as f:
+                return [list(r) for r in csv.reader(f)]
+        except UnicodeDecodeError:
+            with open(path, "r", encoding="cp1251") as f:
+                return [list(r) for r in csv.reader(f)]
+    import openpyxl
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    ws = None
+    if getattr(profile, "sheet_pattern", None):
+        for name in wb.sheetnames:
+            if re.search(profile.sheet_pattern, name):
+                ws = wb[name]
+                break
+    if ws is None:
+        ws = wb.active
+    rows = [list(r[1]) for r in read_sheet_rows(ws)]
+    wb.close()
+    return rows
+
+
+def match_columns_by_open_date(first_dates: Dict[str, date],
+                               contract_open_dates: Dict[str, date]) -> Dict[str, str]:
+    """Match unlabelled export columns to accounts by when each one starts.
+
+    A multi-account export labels its columns by nickname or not at all. The
+    reliable signal is each column's FIRST NON-BLANK DATE against each
+    account's CONTRACT-OPEN DATE, because an account cannot hold value before
+    it existed — the match is forced, not guessed.
+
+    Magnitude and column order both fail on the case that matters. A
+    transposition — two accounts' columns swapped in the workbook — preserves
+    every magnitude and every position; only the start dates disagree. One such
+    swap stood for over a week in a live workspace and was caught this way.
+
+    Raises rather than guessing when the signal runs out. Two accounts opened
+    on the same date make this method silent, and falling back to magnitude
+    because the better method ran out is how the transposition survived in the
+    first place.
+    """
+    opens = sorted(contract_open_dates.items(), key=lambda kv: kv[1])
+    for index in range(len(opens) - 1):
+        if opens[index][1] == opens[index + 1][1]:
+            raise StatementParseError(
+                f"{opens[index][0]!r} and {opens[index + 1][0]!r} were opened on the "
+                f"same date ({opens[index][1]}), so first-non-blank-date cannot tell "
+                "their columns apart. Obtain the account numbers rather than falling "
+                "back to magnitude or column order — a transposition preserves both.")
+
+    columns = sorted(first_dates.items(), key=lambda kv: kv[1])
+    if len(columns) > len(opens):
+        raise StatementParseError(
+            f"The export has {len(columns)} account column(s) and only {len(opens)} "
+            "contract-open date(s) were supplied. An unmatched column is an account "
+            "that may be on no roster — see validator V15.")
+
+    mapping = {}
+    for (label, first_date), (key, opened) in zip(columns, opens):
+        if first_date < opened:
+            raise StatementParseError(
+                f"Column {label!r} has a value on {first_date}, which predates when {key!r} was "
+                f"opened on {opened}. An account cannot hold value before it existed, "
+                "so this pairing is wrong and the contract-open dates or the column "
+                "set need checking before anything is read from this file.")
+        mapping[label] = key
+    return mapping
+
+
+def read_daily_value_series(path: str, profile, currency: str = "RUB",
+                            contract_open_dates: Optional[Dict[str, date]] = None
+                            ) -> List[Tuple[str, ReadResult]]:
+    """A wide daily value table: one row per date, one column per account.
+
+    Returns ONE (account_key, ReadResult) PAIR PER COLUMN — the only reader
+    here that yields several accounts from one file, because a daily-value
+    export covers every brokerage account the filer holds. Merging them into
+    one result would produce a single fictional account holding the sum.
+
+    Values are already priced (cash + securities at that day's close), which is
+    what makes this gradeable as `statement_full_year`-capable evidence: it is
+    the closest thing to a bank's own daily balance column a brokerage
+    produces. Gap and continuity analysis then caps it honestly where days are
+    missing — nothing here claims coverage the file does not have.
+    """
+    rows = _read_table(path, profile)          # CSV, or the sheet_pattern tab
+    if not rows:
+        raise StatementParseError(f"{os.path.basename(path)}: file contains no rows.")
+    header, data_rows = rows[0], rows[1:]
+
+    try:
+        date_index = header.index(profile.date_column)
+    except ValueError:
+        date_index = -1
+        for idx, col in enumerate(header):
+            if str(col or "").strip() == profile.date_column:
+                date_index = idx
+                break
+        if date_index == -1:
+            raise StatementParseError(
+                f"{os.path.basename(path)}: date column {profile.date_column!r} not found in header: {header!r}"
+            )
+
+    column_pattern = re.compile(profile.account_column_pattern)
+    account_columns = {label: index for index, label in enumerate(header)
+                       if index != date_index and column_pattern.search(str(label or ""))}
+    if not account_columns:
+        raise StatementParseError(
+            f"{os.path.basename(path)}: no header cell matched "
+            f"{profile.account_column_pattern!r}, so no column in this file can be "
+            "read as an account. Reading it positionally would assign values to "
+            "whichever account happened to sort first.")
+
+    # (label, row_number, date, value) for every NON-BLANK cell. A blank is an
+    # absent observation, never a zero: before an account opened there is
+    # nothing to observe, and 0.00 would assert a determined balance the export
+    # never states — the §9.6 empty-export rule in another costume.
+    observed: Dict[str, List[Tuple[int, date, Decimal]]] = {l: [] for l in account_columns}
+    for row_number, row in enumerate(data_rows, start=2):
+        if date_index >= len(row) or row[date_index] is None or str(row[date_index]).strip() == "":
+            continue
+        when = parse_full_date(row[date_index], where=f"{path}:{row_number}")
+        if when is None:
+            continue
+        for label, index in account_columns.items():
+            cell = row[index] if index < len(row) else None
+            if cell is None or str(cell).strip() == "":
+                continue
+            observed[label].append((row_number, when, parse_decimal(
+                cell, profile.numbers, where=f"{path}:{row_number}:{label}")))
+
+    first_dates = {label: entries[0][1]
+                   for label, entries in observed.items() if entries}
+    mapping = match_columns_by_open_date(first_dates, contract_open_dates or {})
+
+    out: List[Tuple[str, ReadResult]] = []
+    for label, entries in observed.items():
+        key = mapping.get(label, label)
+        result = ReadResult(source_file=os.path.basename(path),
+                            currencies=[currency.upper()],
+                            evidence_kind=EVIDENCE_PRICED_DAILY_SERIES)
+        if not entries:
+            result.no_data = True
+            result.warnings.append(
+                f"{result.source_file}: column {label!r} is blank on every row. An "
+                "empty column states nothing and covers no part of the year.")
+            out.append((key, result))
+            continue
+        for order, (row_number, when, value) in enumerate(entries):
+            result.movements.append(MovementRecord(
+                date=when, description="stated portfolio value",
+                currency=currency.upper(), source_file=result.source_file,
+                source_row=row_number, amount=None, balance_after=value,
+                row_order=order))
+        # The period is the column's OWN first and last observation, so a
+        # column that starts in June contributes June..December of coverage and
+        # `detect_gaps` reports January..May honestly rather than the file's
+        # overall span papering over it.
+        result.periods.append(StatementPeriod(start=entries[0][1], end=entries[-1][1],
+                                              source_file=result.source_file))
+        out.append((key, result))
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Basis derivation and timeline assembly (plan §6.2, §6.3, step 7)
 # ---------------------------------------------------------------------------
@@ -2057,6 +2225,7 @@ def read_point_balance(path: str, profile, currency: str) -> ReadResult:
 #: verdict: gaps, breaks and bounded intervals weaken it further.
 _EVIDENCE_CEILING = {
     EVIDENCE_RUNNING_BALANCE: "statement_full_year",
+    EVIDENCE_PRICED_DAILY_SERIES: "statement_full_year",
     EVIDENCE_PERIOD_END_SUMMARIES: "period_end_summaries_only",
     EVIDENCE_DECLARED_ANCHOR: "estimate",
     EVIDENCE_NONE: "unknown",
@@ -2461,6 +2630,7 @@ SOURCE_FIELDS: Dict[str, Any] = {
     "currency": None,           # literal ISO-4217, when the profile takes config
     "period_start": None,       # when the file states no period the profile reads
     "period_end": None,
+    "contract_open_dates": None,
     "notes": None,
 }
 
@@ -2474,6 +2644,7 @@ READERS = {
     "text_period_summary": "read_text_period_summary",
     "pdf_movement_register": "read_pdf_movement_register",
     "point_balance": "read_point_balance",
+    "daily_value_series": "read_daily_value_series",
 }
 
 
@@ -2549,7 +2720,9 @@ def load_sources(path: str) -> Dict[str, Any]:
             raise StatementParseError(
                 f"{where}.reader is {source['reader']!r}; known readers: "
                 f"{', '.join(sorted(READERS))}.")
-        if not source["account_key"] and not source["account_key_pattern"]:
+        if (source["reader"] != "daily_value_series"
+                and not source["account_key"]
+                and not source["account_key_pattern"]):
             raise StatementParseError(
                 f"{where} sets neither account_key nor account_key_pattern. One "
                 "directory can hold several accounts — the card files are two "
@@ -2577,6 +2750,19 @@ def account_key_for(source: Dict[str, Any], filename: str) -> str:
     return match.group("key")
 
 
+def _parse_open_dates(source: Dict[str, Any]) -> Dict[str, date]:
+    """Parse `contract_open_dates` config {account_key: 'YYYY-MM-DD'} into {account_key: date}."""
+    raw = source.get("contract_open_dates") or {}
+    if not isinstance(raw, dict):
+        return {}
+    out: Dict[str, date] = {}
+    for key, val in raw.items():
+        parsed = parse_full_date(val, where=f"contract_open_dates[{key!r}]")
+        if parsed is not None:
+            out[str(key)] = parsed
+    return out
+
+
 def read_source(source: Dict[str, Any], workspace: str) -> List[Tuple[str, ReadResult]]:
     """Read every file a source entry selects. Returns `(account_key, result)`."""
     import glob as globbing
@@ -2597,14 +2783,23 @@ def read_source(source: Dict[str, Any], workspace: str) -> List[Tuple[str, ReadR
 
     out = []
     for match in matches:
-        key = account_key_for(source, os.path.basename(match))
-        if source["reader"] in ("text_period_summary", "pdf_movement_register", "point_balance"):
+        if source["reader"] in ("text_period_summary", "pdf_movement_register", "point_balance", "daily_value_series"):
             if not source["currency"]:
                 raise StatementParseError(
                     f"{os.path.basename(match)}: the {source['reader']} reader "
                     "takes its currency from sources.json and none is set. A "
                     "register states amounts without naming the account's "
                     "currency, so defaulting it would label rubles as dollars.")
+        if source["reader"] == "daily_value_series":
+            # The ONLY reader that returns several accounts from one file: a
+            # daily-value export covers every brokerage account the filer
+            # holds. Keyed by the matcher, not by `account_key_for`, because
+            # the file's own columns decide which accounts it describes.
+            out.extend(reader(match, profile, currency=source["currency"],
+                              contract_open_dates=_parse_open_dates(source)))
+            continue
+        key = account_key_for(source, os.path.basename(match))
+        if source["reader"] in ("text_period_summary", "pdf_movement_register", "point_balance"):
             result = reader(match, profile, currency=source["currency"])
         else:
             kwargs = {"period_start": source["period_start"],

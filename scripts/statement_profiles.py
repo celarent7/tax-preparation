@@ -427,6 +427,58 @@ TBANK_POINT_BALANCE = PointBalanceProfile(
 
 
 # ---------------------------------------------------------------------------
+# Shape G — a wide daily value series: one row per date, one column per account
+# ---------------------------------------------------------------------------
+
+#: A daily portfolio-value export — `.csv`, or an `.xlsx` tab named
+#: «Стоимость по дням, RUB». Values are ALREADY PRICED: cash plus securities at
+#: that day's price, which is the exact figure a broker's trade report cannot
+#: give. T-Bank's own «Отчет о сделках и операциях» states cash and holdings
+#: (ISIN + share count) and no price at all — checked across eight brokerage
+#: accounts, every one with the identical gap. The next document to request is
+#: this one, never another trade report.
+#:
+#: Wide, not long: one date column and N account columns. Every other profile
+#: here describes a single account's ledger, which is why this needs its own
+#: shape and its own reader return type.
+@dataclass(frozen=True)
+class DailyValueSeriesProfile:
+    name: str
+    #: Header text of the date column.
+    date_column: str
+    #: Regex matched against the remaining header cells to decide which are
+    #: account columns. Everything else — a total, a note — is skipped.
+    account_column_pattern: str
+    numbers: NumberFormat = PLAIN_NUMBERS
+    date_kind: str = "full"
+    #: Sheet to read for an .xlsx export. None means "a CSV, one table".
+    sheet_pattern: Optional[str] = None
+    notes: str = ""
+
+
+TBANK_DAILY_VALUES = DailyValueSeriesProfile(
+    name="tbank_daily_values",
+    date_column="Дата",
+    account_column_pattern=r"^(Брокерский|ИИС|Broker|IIS)",
+    numbers=PLAIN_NUMBERS,
+    date_kind="full",
+    sheet_pattern=r"Стоимость по дням",
+    notes=(
+        "Columns are labelled by NICKNAME and carry no account number, so a "
+        "column is matched to an account by its first non-blank date against "
+        "that account's contract-open date (`Инвестор: NAME / NUMBER от DATE` "
+        "in the account's own report). Never by magnitude and never by column "
+        "order: a transposition preserves both, and one stood undetected in a "
+        "live workbook for over a week.\n\n"
+        "A BLANK CELL IS NOT A ZERO. Before an account opened there is no "
+        "observation, and emitting 0.00 there would assert a determined "
+        "balance the export never states — the §9.6 empty-export rule in a "
+        "different costume."
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -438,6 +490,7 @@ PROFILES: Dict[str, object] = {
     TBANK_MOVEMENTS.name: TBANK_MOVEMENTS,
     TBANK_MOVEMENTS_COMMA.name: TBANK_MOVEMENTS_COMMA,
     TBANK_POINT_BALANCE.name: TBANK_POINT_BALANCE,
+    TBANK_DAILY_VALUES.name: TBANK_DAILY_VALUES,
 }
 
 #: Institutions in the corpus for which NO profile may be written, with the

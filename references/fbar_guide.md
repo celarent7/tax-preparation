@@ -509,6 +509,20 @@ Record which account was used as the control, and its agreement, in the
 reconstructed account's `notes`. Next year's reviewer cannot re-derive that the
 method was validated; they can only read that it was.
 
+### When a broker report states holdings but no prices
+
+A broker's trade-and-operations report states cash exactly and holdings exactly
+— ISIN and share count — and, routinely, **no price at all**. Eight brokerage
+accounts in one live cycle had the identical gap. Pricing those holdings by
+hand from market data is not the answer: it puts a figure on a filing that the
+institution never stated, on a date and a close nobody can reproduce later.
+
+**Request a daily portfolio-value export** — a `.csv` or an `.xlsx` tab of one
+row per date and one column per account, values already priced. It is the
+closest thing to a bank's own daily balance column that a brokerage produces,
+and it closed the gap for six accounts in one pass. Requesting another trade
+report gets another report with the same gap.
+
 **Phase 0 reports what the file says; it never decides what the filing claims.**
 It opens the statements, normalizes numbers and dates, merges multi-currency
 sub-accounts onto one axis at the December 31 rate, detects coverage gaps and
