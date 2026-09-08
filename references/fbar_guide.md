@@ -428,6 +428,35 @@ Where two accounts were opened on the same date the method is silent. Say so
 and request the account numbers; do not fall back to magnitude because the
 better method ran out.
 
+### A replayed series that dips below zero
+
+Replaying a year of transactions from an anchor will occasionally show the
+running balance going negative for a few rows around a cluster of transactions
+sharing one timestamp — four postings in the same minute, settled by the bank
+in an order the document does not record. The dip is arithmetically genuine for
+the order you happened to sort in, and impossible for the account. It is not
+evidence that the anchor is wrong.
+
+**The resolution rule:**
+
+1. **An anchor is judged by conservation, not by any assumed intra-tie order.**
+   `final = opening + net sum` holds for every permutation of the movements.
+   If the replayed final balance matches an independently known closing figure,
+   the anchor and the ledger are both sound, and that conclusion is untouched
+   by how the ties were ordered.
+2. **The opening, the maximum and the closing are conservation results.** A dip
+   strictly *between* two confirmed anchors changes none of them. Only the
+   intermediate trajectory is affected, and the trajectory is not a filed
+   figure.
+3. **Rule: do not invent a plausible sub-minute order to remove the dip.** Any order
+   that clears it is one you chose, and it will be indistinguishable in the
+   workpaper from an order the document actually recorded. Report the condition
+   and do not display a false-precision intra-minute path.
+
+A dip that persists *outside* a same-timestamp cluster is a different finding
+and does mean the anchor or the ledger is wrong. The distinguishing test is
+whether every row inside the excursion shares one timestamp.
+
 **Phase 0 reports what the file says; it never decides what the filing claims.**
 It opens the statements, normalizes numbers and dates, merges multi-currency
 sub-accounts onto one axis at the December 31 rate, detects coverage gaps and

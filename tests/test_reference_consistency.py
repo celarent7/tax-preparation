@@ -622,5 +622,19 @@ def test_fbar_guide_forbids_matching_columns_by_magnitude():
     assert "contract-open date" in text
 
 
+def test_fbar_guide_documents_the_same_timestamp_dip():
+    """The dip is a display artefact of an assumed order, not a bad anchor.
+
+    Opening and maximum are conservation results: final = opening + net sum,
+    whatever the internal order. Distrusting the anchor because an assumed
+    intra-minute path dips negative inverts the actual logic.
+    """
+    text = read_ref("fbar_guide.md")
+    assert "A replayed series that dips below zero" in text
+    assert "conservation, not by any assumed intra-tie order" in text
+    assert "do not invent a plausible sub-minute order" in text
+
+
+
 
 
