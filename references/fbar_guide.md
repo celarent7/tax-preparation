@@ -238,6 +238,44 @@ report rather than silent acceptance.
 that physically sits in the prior year's folder while describing the current
 cycle will eventually be silently inherited or silently lost.
 
+### Deciding which side of the line an account falls on
+
+`credit_card_positive_balance_only` says a credit account is reportable only if
+it ever carried a positive balance in the filer's favour. On a statement with a
+balance column that is a lookup. **Every movement register has no balance
+column at all**, so the question has to be answered from transactions. These
+four checks answer it; run all four, and treat a disagreement as a reason to
+request a balance-bearing document rather than to pick a side.
+
+1. **Net direction over the year.** Replay the register from a neutral zero
+   baseline and look at the direction, not the level. A balance growing more
+   negative is debt being drawn; one trending toward zero is debt being repaid.
+   Neither establishes a level — the baseline is fictional — but the direction
+   is real and is order-invariant.
+2. **Interest and fees charged TO the filer.** Line items like `Loan interest`
+   / `Проценты по кредиту` are a debtor signature. An asset account pays
+   interest *to* the holder; it never charges it. One such line is strong
+   evidence the account was in debit for the period it covers.
+3. **The account's age.** An account opened years before the tax year carries
+   forward whatever balance it already had. A small *relative* positive
+   excursion above an assumed-zero start is an artefact of the assumed start,
+   not evidence of a genuine credit balance. Weight check 1 by this: on an
+   account opened during the tax year, the zero baseline is real and the
+   replay means much more.
+4. **A parallel foreign declaration, where one exists.** Where the filer also
+   files a foreign-country asset declaration, read that regime's stated
+   methodology. Russia's Bank-of-Russia 5798-У declaration, for one, excludes
+   credit cards explicitly, for the same underlying reason FBAR would. A second
+   regime reaching the same exclusion on its own reasoning is corroboration —
+   it is not authority for the FBAR position, and the note must not cite it as
+   though it were.
+
+Checks 1 and 2 are mechanical arithmetic over the register. Checks 3 and 4 are
+judgment and stay with Phase 1. Record the
+outcome in the account's `notes` with the checks that drove it, because the
+convention is unconfirmed and next year's reviewer needs the reasoning, not
+just the answer.
+
 ---
 
 ## 6. Dispositions

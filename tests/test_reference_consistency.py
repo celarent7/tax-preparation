@@ -588,3 +588,27 @@ def test_fbar_guide_names_the_unidentified_document_convention():
     assert "never attribute a document without a visible identifier" in text
 
 
+def test_fbar_guide_gives_a_credit_account_decision_procedure():
+    """The convention says WHAT to do; the filer needs to know HOW to decide.
+
+    Every register-only statement lacks a balance column, so 'did it ever carry
+    a positive balance' cannot be read off the document. Four checks answer it.
+    """
+    text = read_ref("fbar_guide.md")
+    assert "Deciding which side of the line an account falls on" in text
+    for check in ("Net direction over the year",
+                  "Interest and fees charged TO the filer",
+                  "The account's age",
+                  "A parallel foreign declaration"):
+        assert check in text, f"missing check: {check}"
+
+
+def test_credit_convention_note_points_at_the_procedure():
+    """The registry note must not still read as 'unconfirmed, good luck'."""
+    from fbar_schema import CONVENTIONS  # noqa: E402
+    note = CONVENTIONS["credit_card_positive_balance_only"]["note"]
+    assert "four checks" in note
+    assert "fbar_guide.md" in note
+
+
+

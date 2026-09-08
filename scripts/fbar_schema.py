@@ -124,7 +124,12 @@ CONVENTIONS: Dict[str, Dict[str, str]] = {
         "note": (
             "Directionally consistent with a credit card not being a financial "
             "account absent a credit balance owed to the holder, but "
-            "unconfirmed as phrased."
+            "unconfirmed as phrased. Determining which side of the line a "
+            "given account falls on is NOT read off the document — every "
+            "movement register lacks a balance column — so the four checks in "
+            "references/fbar_guide.md §5 supply the procedure: net direction, "
+            "interest charged to the filer, account age, and any parallel "
+            "foreign declaration's own exclusions."
         ),
     },
     "negative_balance_is_zero": {
