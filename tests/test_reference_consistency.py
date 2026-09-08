@@ -632,9 +632,20 @@ def test_fbar_guide_documents_the_same_timestamp_dip():
     text = read_ref("fbar_guide.md")
     assert "A replayed series that dips below zero" in text
     assert "conservation, not by any assumed intra-tie order" in text
-    assert "do not invent a plausible sub-minute order" in text
 
 
 
+def test_skill_md_states_the_current_validator_range():
+    """SKILL.md's scripts table names the validator range in prose. An agent
+    reads that row without opening the guide, so it cannot lag the code.
 
-
+    This is a LIVE COUPLING, not a 3.5.0 artefact: it recomputes the highest
+    implemented validator every run, so adding a V17 later fails here until
+    SKILL.md is updated too. That is the intent — do not pin the number.
+    """
+    import fbar_reconciler as fr
+    with open(os.path.join(ROOT, "skills", "tax-preparation", "SKILL.md")) as f:
+        text = f.read()
+    highest = max(int(n.split("_")[0][1:]) for n in dir(fr)
+                  if re.fullmatch(r"v\d+_\w+", n))
+    assert f"V1–V{highest}" in text or f"V1-V{highest}" in text

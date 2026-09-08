@@ -2214,7 +2214,7 @@ basis rules in prose, and an agent reads them without opening the guide.
 - Modify: `plugin.json:4`
 - Test: `tests/test_reference_consistency.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_skill_md_states_the_current_validator_range():
@@ -2233,12 +2233,12 @@ def test_skill_md_states_the_current_validator_range():
     assert f"V1–V{highest}" in text or f"V1-V{highest}" in text
 ```
 
-- [ ] **Step 2: Run and confirm it fails**
+- [x] **Step 2: Run and confirm it fails**
 
 Run: `python -m pytest tests/test_reference_consistency.py -k "validator_range" -v`
 Expected: FAIL — SKILL.md still says `V1–V13`
 
-- [ ] **Step 3: Update the `fbar_reconciler.py` scripts-table row**
+- [x] **Step 3: Update the `fbar_reconciler.py` scripts-table row**
 
 Replace `validators V1–V13 (Treasury FX provenance, USD recomputation,
 $10,000 threshold arithmetic, 25-account rule, addresses, Item 15a
@@ -2252,7 +2252,7 @@ In the same row, after "matches accounts across years through renumbering,
 splits, merges and Cyrillic/Latin homoglyph drift", add ", and through a
 surviving contract number where a ledger number was reissued".
 
-- [ ] **Step 4: Add the anchored-basis note to Step 6**
+- [x] **Step 4: Add the anchored-basis note to Step 6**
 
 In `skills/tax-preparation/SKILL.md` Step 6, after the roster-authoring bullet
 (item 2, the one naming `fbar_schema.py`):
@@ -2268,12 +2268,12 @@ In `skills/tax-preparation/SKILL.md` Step 6, after the roster-authoring bullet
    bound; V12 still warns, because a floor may understate.
 ```
 
-- [ ] **Step 5: Run the whole suite**
+- [x] **Step 5: Run the whole suite**
 
 Run: `python -m pytest tests/ -q`
 Expected: PASS
 
-- [ ] **Step 6: Bump and commit**
+- [x] **Step 6: Bump and commit**
 
 `plugin.json`: `"version": "3.4.4"` → `"version": "3.5.0"`.
 
