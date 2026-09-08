@@ -704,4 +704,83 @@ def test_v12_language_for_a_real_estimate_is_unchanged():
     assert "obtain records that cover the year" in v12[0].message
 
 
+# ---------------------------------------------------------------------------
+# V14 — unsourced figure tracking prior year (Task 2.5)
+# ---------------------------------------------------------------------------
+
+
+def test_v14_flags_an_uncited_figure_that_tracks_last_year():
+    """The signature of a carried-forward placeholder: no source, same number."""
+    prior = roster([account("a", max_value_usd=12000.0, max_value_local=12000.0)],
+                   year=2024)
+    current = roster([account("a", max_value_usd=12050.0, max_value_local=12050.0,
+                              source_documents=[])])
+    v14 = [f for f in run(current, prior)["findings"] if f.id == "V14"]
+    assert len(v14) == 1
+    assert "no current-year source" in v14[0].message
+    assert v14[0].detail["delta_pct"] == pytest.approx(0.42, abs=0.01)
+
+
+def test_v14_is_quiet_when_a_source_is_cited():
+    prior = roster([account("a", max_value_usd=12000.0, max_value_local=12000.0)],
+                   year=2024)
+    current = roster([account("a", max_value_usd=12050.0, max_value_local=12050.0,
+                              source_documents=["statements/2025_q4.xlsx"])])
+    assert [f for f in run(current, prior)["findings"] if f.id == "V14"] == []
+
+
+def test_v14_is_quiet_when_the_figure_moved():
+    """A figure that moved 60% was not copied forward, cited or not."""
+    prior = roster([account("a", max_value_usd=12000.0, max_value_local=12000.0)],
+                   year=2024)
+    current = roster([account("a", max_value_usd=30000.0, max_value_local=30000.0,
+                              source_documents=[])])
+    assert [f for f in run(current, prior)["findings"] if f.id == "V14"] == []
+
+
+def test_v14_is_quiet_on_an_admitted_estimate():
+    """`estimate` and `unknown` already say the evidence is weak. V14 exists for
+    figures presented WITHOUT a caveat."""
+    prior = roster([account("a", max_value_usd=12000.0, max_value_local=12000.0)],
+                   year=2024)
+    current = roster([account("a", max_value_usd=12050.0, max_value_local=12050.0,
+                              max_value_basis="estimate", source_documents=[])])
+    assert [f for f in run(current, prior)["findings"] if f.id == "V14"] == []
+
+
+def test_v14_accepts_a_verified_anchor_as_a_citation(tmp_path):
+    """An anchor IS a cited source; it just lives in its own field."""
+    (tmp_path / "anchor.pdf").write_bytes(b"%PDF-synthetic")
+    prior = roster([account("a", max_value_usd=12000.0, max_value_local=12000.0)],
+                   year=2024)
+    current = roster([account("a", max_value_usd=12050.0, max_value_local=12050.0,
+                              max_value_basis="anchored_full_year",
+                              source_documents=[],
+                              max_value_anchor={"as_of": "2025-01-01", "amount": 1.0,
+                                                "currency": "USD",
+                                                "source_document": "anchor.pdf",
+                                                "source_kind": "prior_year_filing"})])
+    findings = run(current, prior, workspace=str(tmp_path))["findings"]
+    assert [f for f in findings if f.id == "V14"] == []
+
+
+def test_v14_follows_a_renumbering():
+    """The accounts whose figures were copied forward are often the ones that
+    got a new number, so V14 must use the same matching ladder as everything else."""
+    prior = roster([account("old", account_number="1111", contract_number="C-1",
+                            max_value_usd=12000.0, max_value_local=12000.0)], year=2024)
+    current = roster([account("new", account_number="2222", contract_number="C-1",
+                              max_value_usd=12050.0, max_value_local=12050.0,
+                              source_documents=[])])
+    v14 = [f for f in run(current, prior)["findings"] if f.id == "V14"]
+    assert len(v14) == 1
+    assert v14[0].account_key == "new"
+
+
+def test_v14_needs_a_prior_year():
+    current = roster([account("a", source_documents=[])])
+    assert [f for f in run(current)["findings"] if f.id == "V14"] == []
+
+
+
 

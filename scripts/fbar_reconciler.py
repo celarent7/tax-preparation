@@ -1091,12 +1091,87 @@ def v13_source_documents(roster: Dict[str, Any], workspace: Optional[str],
     return out
 
 
+#: How close a current figure has to sit to the prior year's filed figure
+#: before an absent citation looks like a carry-forward rather than a
+#: coincidence. 15% is wide on purpose: the observed defects ranged from 0.2%
+#: to 51%, and the cheap direction to be wrong in is a warning nobody needed.
+V14_TRACKING_TOLERANCE = 0.15
+
+
+def v14_unsourced_figure_tracks_prior_year(
+        current: Dict[str, Any],
+        prior: Optional[Dict[str, Any]],
+        resolved: Optional[Dict[str, Dict[str, Any]]] = None,
+        tolerance: float = V14_TRACKING_TOLERANCE) -> List[Finding]:
+    """A confident figure, no source, and last year's number. That is a copy.
+
+    Four accounts in one live cycle carried a stated current-year maximum with
+    no caveat, no source document anywhere, and a figure sitting between 0.2%
+    and 51% of the prior year's FILED maximum. Each had been carried forward.
+    V13 could not see it — every account cited nothing, so nothing was missing —
+    and V12 could not either, because the basis had been typed as though the
+    evidence existed.
+
+    Two conditions, both required:
+
+      * the account cites NO source at all — neither `source_documents[]` nor a
+        `max_value_anchor`; and
+      * the stated maximum sits within `tolerance` of the prior year's.
+
+    **Narrower than the original proposal, deliberately.** That version also
+    fired when every cited source predated the tax year. A `source_documents`
+    entry is a PATH, and a path is not a date; deriving a year from a filename
+    is the filename-sniffing this module refuses everywhere else, and it would
+    misfire on any workspace foldered by filing year. "Cites nothing" is the
+    case that actually occurred and the only one that is mechanically decidable.
+
+    `estimate` and `unknown` are exempt: they have already said the evidence is
+    weak, and this validator exists for figures presented without a caveat.
+    """
+    if prior is None:
+        return []
+    if resolved is None:
+        resolved = prior_to_current(current, prior)
+
+    out = []
+    for pa in prior["accounts"]:
+        ca = resolved.get(pa["account_key"])
+        if ca is None or not ca["reportable"] or ca["max_value_unknown"]:
+            continue
+        if ca["max_value_basis"] in ("estimate", "unknown"):
+            continue
+        if ca["source_documents"] or ca.get("max_value_anchor"):
+            continue
+        current_max, prior_max = ca["max_value_usd"], pa["max_value_usd"]
+        if current_max is None or not prior_max:
+            continue
+
+        delta_pct = abs(current_max - prior_max) / abs(prior_max) * 100.0
+        if delta_pct > tolerance * 100.0:
+            continue
+        out.append(Finding(
+            id="V14", severity="warn", account_key=ca["account_key"],
+            message=(
+                f"{ca['account_key']!r} states a ${current_max:,.2f} maximum on a "
+                f"{ca['max_value_basis']!r} basis with no current-year source — no "
+                f"source_documents and no max_value_anchor — and the figure tracks the "
+                f"{prior['tax_year']} filed maximum of ${prior_max:,.2f} to within "
+                f"{delta_pct:.2f}%. Verify it was independently derived this year and was "
+                "not simply carried forward; if it was derived, cite the document it came "
+                "from."),
+            detail={"current_max_usd": current_max, "prior_max_usd": prior_max,
+                    "delta_pct": round(delta_pct, 2),
+                    "max_value_basis": ca["max_value_basis"]},
+        ))
+    return out
+
+
 def validate(roster: Dict[str, Any],
              prior: Optional[Dict[str, Any]] = None,
              fbar: Optional[Dict[str, Any]] = None,
              workspace: Optional[str] = None,
              filing_date: Optional[date] = None) -> Dict[str, Any]:
-    """Run V1-V13. Returns findings plus the threshold arithmetic."""
+    """Run V1-V14. Returns findings plus the threshold arithmetic."""
     fbar = fbar or load_fbar_constants(str(roster["tax_year"]))
     findings: List[Finding] = []
     findings += v1_fx_source(roster, fbar)
@@ -1114,6 +1189,7 @@ def validate(roster: Dict[str, Any],
     findings += v11_filing_date(roster, fbar, filing_date)
     findings += v12_max_value_basis(roster, workspace)
     findings += v13_source_documents(roster, workspace, fbar)
+    findings += v14_unsourced_figure_tracks_prior_year(roster, prior, resolved)
     findings += _out_of_scope_notices(roster)
     return {"findings": findings, "threshold": threshold_result}
 
