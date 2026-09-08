@@ -1451,3 +1451,64 @@ def test_new_bases_are_ordered_between_their_neighbours():
     assert weaken_basis("statement_partial", "anchored_full_year") == "statement_partial"
     assert weaken_basis("non_negativity_floor", "estimate") == "estimate"
 
+
+POINT_BALANCE_FIXTURE = """\
+Document on the available balance
+Card number: 5536 91** **** 1234
+Available balance on 15.03.2026: 123 456,78 ₽
+"""
+
+
+def test_point_balance_reads_one_dated_balance(tmp_path):
+    from statement_parser import EVIDENCE_DECLARED_ANCHOR, read_point_balance
+    from statement_profiles import get_profile
+
+    path = tmp_path / "balance.txt"
+    path.write_text(POINT_BALANCE_FIXTURE, encoding="utf-8")
+    result = read_point_balance(str(path), get_profile("tbank_point_balance"),
+                                currency="RUB")
+
+    assert len(result.movements) == 1
+    movement = result.movements[0]
+    assert movement.date == date(2026, 3, 15)
+    assert movement.balance_after == Decimal("123456.78")
+    assert movement.amount is None          # a level, not a flow
+    assert result.evidence_kind == EVIDENCE_DECLARED_ANCHOR
+    assert result.periods == []             # a point has no period
+
+
+def test_point_balance_refuses_a_document_with_two_balances(tmp_path):
+    """Two dated balances is a period summary wearing a point balance's name.
+    Reading only the first would silently discard the other."""
+    from statement_parser import StatementParseError, read_point_balance
+    from statement_profiles import get_profile
+
+    path = tmp_path / "balance.txt"
+    path.write_text(POINT_BALANCE_FIXTURE
+                    + "Available balance on 16.03.2026: 1,00 ₽\n", encoding="utf-8")
+    with pytest.raises(StatementParseError) as exc:
+        read_point_balance(str(path), get_profile("tbank_point_balance"), currency="RUB")
+    assert "two" in str(exc.value).lower() or "2 " in str(exc.value)
+
+
+def test_point_balance_with_no_balance_line_is_no_data(tmp_path):
+    """An unreadable document states nothing; it is not a zero balance."""
+    from statement_parser import read_point_balance
+    from statement_profiles import get_profile
+
+    path = tmp_path / "balance.txt"
+    path.write_text("Document on the available balance\n", encoding="utf-8")
+    result = read_point_balance(str(path), get_profile("tbank_point_balance"),
+                                currency="RUB")
+    assert result.no_data is True
+    assert result.movements == []
+    assert result.warnings
+
+
+def test_point_balance_caps_the_basis_at_estimate_on_its_own():
+    """One dated balance is a LEVEL at one instant. It says nothing about the
+    peak, so alone it must never support a maximum — only anchored to a
+    complete ledger (Task 3.3) does it strengthen anything."""
+    from statement_parser import EVIDENCE_DECLARED_ANCHOR, _EVIDENCE_CEILING
+    assert _EVIDENCE_CEILING[EVIDENCE_DECLARED_ANCHOR] == "estimate"
+

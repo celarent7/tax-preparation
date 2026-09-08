@@ -403,6 +403,7 @@ def resolve_partial_date(value: Any, period: StatementPeriod,
 #: returned looks flat (plan §4.2, §6.3).
 EVIDENCE_RUNNING_BALANCE = "running_balance"
 EVIDENCE_PERIOD_END_SUMMARIES = "period_end_summaries"
+EVIDENCE_DECLARED_ANCHOR = "declared_anchor"
 EVIDENCE_NONE = "none"
 
 
@@ -1975,6 +1976,61 @@ def read_xlsx_two_sheet_card(path: str,
     return result
 
 
+def read_point_balance(path: str, profile, currency: str) -> ReadResult:
+    """One bank-confirmed balance, at one date. No period, no transactions.
+
+    Emitted as a MovementRecord with `amount=None` and a stated
+    `balance_after` — the same "pure balance observation" shape a period-end
+    summary already produces. Nothing is being inferred: the document states
+    this level, and the reader reports what the document says.
+
+    `periods` is empty, and that is the point. A point balance has no span, so
+    it contributes no COVERAGE: `detect_gaps` must not see it as a month of
+    observed year, or a single letter would close a gap it says nothing about.
+    """
+    result = ReadResult(source_file=os.path.basename(path),
+                        currencies=[currency.upper()],
+                        evidence_kind=EVIDENCE_DECLARED_ANCHOR)
+    with open(path, "r", encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+
+    balance_re = re.compile(profile.balance_line)
+    hits = [(n, m) for n, line in enumerate(lines, start=1)
+            if (m := balance_re.search(line))]
+
+    if len(hits) > 1:
+        raise StatementParseError(
+            f"{result.source_file}: found {len(hits)} dated balances, expected "
+            "exactly one. A document stating two bounding balances is a PERIOD "
+            "SUMMARY, and reading only the first would silently discard the "
+            "other. Read it with the text_period_summary reader instead.")
+
+    if not hits:
+        result.no_data = True
+        result.warnings.append(
+            f"{result.source_file}: no line matched the profile's balance "
+            "pattern, so the document states no balance this reader can use. "
+            "That is a no-data finding, not a zero balance.")
+        return result
+
+    row, match = hits[0]
+    when = parse_full_date(match.group("date"), where=f"{result.source_file}:{row}")
+    balance = parse_decimal(match.group("balance"), profile.numbers,
+                            where=f"{result.source_file}:{row}")
+    result.movements.append(MovementRecord(
+        date=when, description="stated available balance", currency=currency.upper(),
+        source_file=result.source_file, source_row=row,
+        amount=None, balance_after=balance, row_order=0))
+
+    identifier_re = re.compile(profile.identifier_line)
+    if not any(identifier_re.search(line) for line in lines):
+        result.warnings.append(
+            f"{result.source_file}: states a balance but names no card or "
+            "account. Do not attribute it — see the UNIDENTIFIED convention in "
+            "references/fbar_guide.md §9.")
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Basis derivation and timeline assembly (plan §6.2, §6.3, step 7)
 # ---------------------------------------------------------------------------
@@ -1984,6 +2040,7 @@ def read_xlsx_two_sheet_card(path: str,
 _EVIDENCE_CEILING = {
     EVIDENCE_RUNNING_BALANCE: "statement_full_year",
     EVIDENCE_PERIOD_END_SUMMARIES: "period_end_summaries_only",
+    EVIDENCE_DECLARED_ANCHOR: "estimate",
     EVIDENCE_NONE: "unknown",
 }
 
@@ -2261,6 +2318,7 @@ READERS = {
     "xlsx_two_sheet_card": "read_xlsx_two_sheet_card",
     "text_period_summary": "read_text_period_summary",
     "pdf_movement_register": "read_pdf_movement_register",
+    "point_balance": "read_point_balance",
 }
 
 
@@ -2385,7 +2443,7 @@ def read_source(source: Dict[str, Any], workspace: str) -> List[Tuple[str, ReadR
     out = []
     for match in matches:
         key = account_key_for(source, os.path.basename(match))
-        if source["reader"] in ("text_period_summary", "pdf_movement_register"):
+        if source["reader"] in ("text_period_summary", "pdf_movement_register", "point_balance"):
             if not source["currency"]:
                 raise StatementParseError(
                     f"{os.path.basename(match)}: the {source['reader']} reader "

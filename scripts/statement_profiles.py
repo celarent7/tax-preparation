@@ -380,6 +380,53 @@ BANCOLOMBIA_CARD = SheetProfile(
 
 
 # ---------------------------------------------------------------------------
+# Shape F — one balance, one date, no period and no transactions
+# ---------------------------------------------------------------------------
+
+#: A bank-issued "balance as of <date>" document. It is not a statement: there
+#: is no period, no transaction detail and nothing to reconcile against. What
+#: it gives is a CONFIRMED LEVEL at one instant, which is the one thing a
+#: movement register can never supply and the one thing a register needs to
+#: become a balance timeline.
+#:
+#: Alone it supports nothing — a level at one instant says nothing about a
+#: peak, and `_EVIDENCE_CEILING` caps it at `estimate` on exactly that ground.
+#: Its value is as the anchor in `anchor_reconstruction`, where a complete,
+#: totals-reconciled ledger carries it to a year boundary.
+@dataclass(frozen=True)
+class PointBalanceProfile:
+    name: str
+    #: Regex with `date` and `balance` groups. Matched per line; the document
+    #: must state EXACTLY ONE, or it is a period summary under another name.
+    balance_line: str
+    #: Regex with a `value` group naming the card or account the balance is
+    #: for. A point balance with no identifier is an orphan document — see
+    #: the UNIDENTIFIED convention in fbar_guide.md §9.
+    identifier_line: str
+    numbers: NumberFormat = RUSSIAN_NUMBERS
+    notes: str = ""
+
+
+TBANK_POINT_BALANCE = PointBalanceProfile(
+    name="tbank_point_balance",
+    balance_line=(
+        r"(?:Available balance|Доступный остаток)\s+on\s+"
+        r"(?P<date>\d{2}\.\d{2}\.\d{4})\s*:\s*(?P<balance>.+?)\s*$"
+    ),
+    identifier_line=r"(?:Card number|Номер карты|Номер счета):\s*(?P<value>.+?)\s*$",
+    numbers=RUSSIAN_NUMBERS,
+    notes=(
+        "Issued on request, so the as-of date is the REQUEST date and lands "
+        "wherever the filer asked — mid-March for a December year-end, in the "
+        "case this profile was written from. That is not a defect: the point "
+        "of the document is that the level is bank-confirmed, and carrying it "
+        "back to the year boundary is arithmetic over a ledger, not a reading "
+        "problem."
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -390,6 +437,7 @@ PROFILES: Dict[str, object] = {
     TBANK_TEXT.name: TBANK_TEXT,
     TBANK_MOVEMENTS.name: TBANK_MOVEMENTS,
     TBANK_MOVEMENTS_COMMA.name: TBANK_MOVEMENTS_COMMA,
+    TBANK_POINT_BALANCE.name: TBANK_POINT_BALANCE,
 }
 
 #: Institutions in the corpus for which NO profile may be written, with the

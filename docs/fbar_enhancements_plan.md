@@ -2317,7 +2317,7 @@ A point balance emitted as a `MovementRecord` with `amount=None` and a stated
 period-end summary already produces. Nothing new is being asserted: **the
 document states this balance, and the reader reports what the document says.**
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 POINT_BALANCE_FIXTURE = """\
@@ -2381,12 +2381,12 @@ def test_point_balance_caps_the_basis_at_estimate_on_its_own():
     assert _EVIDENCE_CEILING[EVIDENCE_DECLARED_ANCHOR] == "estimate"
 ```
 
-- [ ] **Step 2: Run and confirm they fail**
+- [x] **Step 2: Run and confirm they fail**
 
 Run: `python -m pytest tests/test_statement_readers.py -k "point_balance" -v`
 Expected: 4 FAILED with `ImportError` / `StatementParseError: Unknown profile 'tbank_point_balance'`
 
-- [ ] **Step 3: Add the profile**
+- [x] **Step 3: Add the profile**
 
 In `scripts/statement_profiles.py`, after the Shape E section:
 
@@ -2440,7 +2440,7 @@ TBANK_POINT_BALANCE = PointBalanceProfile(
 
 Register it in `PROFILES`.
 
-- [ ] **Step 4: Add the evidence kind and the reader**
+- [x] **Step 4: Add the evidence kind and the reader**
 
 In `scripts/statement_parser.py`, beside the other evidence constants:
 
@@ -2521,7 +2521,7 @@ Add `"point_balance": "read_point_balance"` to `READERS`, and add
 point balance states an amount without naming its currency, exactly like a
 register.
 
-- [ ] **Step 5: Run and commit**
+- [x] **Step 5: Run and commit**
 
 Run: `python -m pytest tests/ -q`
 Expected: PASS
