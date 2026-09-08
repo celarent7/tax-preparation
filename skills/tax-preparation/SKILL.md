@@ -14,7 +14,7 @@ description: >
   results than general knowledge alone.
 allowed-tools: Read, Bash, WebSearch, WebFetch, Grep, Glob, Task, Skill, Write, AskUserQuestion
 metadata:
-  version: 3.4.3
+  version: 3.4.4
   last-updated: 2026-08-15
   target-users: individuals, families, self-employed
   tax-year: 2025
