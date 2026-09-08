@@ -45,6 +45,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+from anchor_reconstruction import Anchor, carry_balance, non_negativity_floor, replay_year
+
 
 class StatementParseError(ValueError):
     """Raised when a source file cannot be read as the profile describes it.
@@ -485,6 +487,13 @@ class ReadResult:
     #: Names of the sheets actually read, so a caller can tell that a
     #: two-sheet source arrived with one sheet.
     sheets_read: List[str] = field(default_factory=list)
+    #: Whether the register's parsed rows reconcile against the bank's own
+    #: stated period totals. `True` when they do, `False` when the reader
+    #: accepted the file with a caveat, and **None when the file is not a
+    #: register at all** — a running-balance sheet has no totals to reconcile,
+    #: and reading its None as a failure would block every anchored
+    #: reconstruction on a group that happens to hold one.
+    totals_reconciled: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------
@@ -611,6 +620,11 @@ class AccountTimeline:
     #: Set by `run_sources` from the source entry. Names the markdown report;
     #: it is a label for the reader, not something the parser derives.
     institution: Optional[str] = None
+    #: What an anchored reconstruction established, or None. Carries the
+    #: DERIVATION, not just the answer — the five-year recordkeeping rule wants
+    #: to see how a figure was reached, and this figure was reached by
+    #: arithmetic over a cited document rather than read off a column.
+    reconstruction: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1764,6 +1778,8 @@ def read_movement_register_lines(lines: List[str], profile, source_file: str,
 
     _assert_register_reconciles(normalized, profile, rows, source_file, result,
                                 currency)
+    if result.totals_reconciled is not False:
+        result.totals_reconciled = True
 
     if not rows:
         result.no_data = True
@@ -1852,6 +1868,7 @@ def _assert_register_reconciles(lines: List[str], profile, rows, source_file: st
                 unreadable += 1
 
     if not stated:
+        result.totals_reconciled = False
         if unreadable:
             # NOT "states no period totals". A `total_numbers` that disagrees
             # with the page disagrees with EVERY total line, not one, so this
@@ -1871,6 +1888,7 @@ def _assert_register_reconciles(lines: List[str], profile, rows, source_file: st
                 "reconciled against the document's own arithmetic.")
         return
     if unread:
+        result.totals_reconciled = False
         # A HALF-checked ledger looked exactly like a fully checked one. With
         # `Deposits` present and `Expenses` absent every expense row could have
         # been dropped and this function would still have returned clean, so
@@ -2049,7 +2067,9 @@ def derive_basis(read_results: List[ReadResult],
                  gaps: List[Dict[str, Any]],
                  continuity_breaks: List[Dict[str, Any]],
                  interval_uncertainty: List[Dict[str, Any]],
-                 has_balances: bool) -> Tuple[str, List[str]]:
+                 has_balances: bool,
+                 anchor_available: bool = False,
+                 ledger_reconciled: bool = False) -> Tuple[str, List[str]]:
     """Derive `max_value_basis` from what the files actually contain.
 
     **This is the single most important output.** `fbar_schema.MAX_VALUE_BASES`
@@ -2081,7 +2101,10 @@ def derive_basis(read_results: List[ReadResult],
 
     basis = "statement_full_year"
     for result in contributing:
-        ceiling = _EVIDENCE_CEILING.get(result.evidence_kind, "unknown")
+        if result.evidence_kind == EVIDENCE_DECLARED_ANCHOR and anchor_available and ledger_reconciled:
+            ceiling = "anchored_full_year"
+        else:
+            ceiling = _EVIDENCE_CEILING.get(result.evidence_kind, "unknown")
         if BASIS_STRENGTH.index(ceiling) > BASIS_STRENGTH.index(basis):
             reasons.append(
                 f"{result.source_file} is {result.evidence_kind!r} evidence, "
@@ -2103,13 +2126,32 @@ def derive_basis(read_results: List[ReadResult],
             "another file's period spans the same days.")
 
     if not has_balances:
-        # A ledger yields CHANGES, not levels. Without an anchor balance no
-        # timeline can be built from it, and a reconstructed one is never
-        # promoted: completeness of a ledger is unverifiable from the ledger.
-        basis = weaken_basis(basis, "estimate")
-        reasons.append(
-            "No row anywhere states a balance, so only movements are known and "
-            "no level can be established without an anchor balance.")
+        # A ledger yields CHANGES, not levels — and that rule is intact here.
+        # What changes is WHICH cap applies, because a cited dated level plus a
+        # ledger the bank's own totals prove complete is not the same evidence
+        # as a bare register. Nothing is promoted: `weaken_basis` still only
+        # caps, and gaps, breaks and inferred periods below cap further.
+        if anchor_available and ledger_reconciled:
+            basis = weaken_basis(basis, "anchored_full_year")
+            reasons.append(
+                "No row states a balance, but a dated anchor balance was read from "
+                "its own document and every register reconciles against the bank's "
+                "stated period totals. The opening is carried from the anchor and the "
+                "year replayed exactly — the records DO cover the year, via a citation "
+                "rather than a balance column.")
+        elif ledger_reconciled:
+            basis = weaken_basis(basis, "non_negativity_floor")
+            reasons.append(
+                "No row states a balance and no anchor was supplied, but every "
+                "register reconciles against the bank's stated totals, so the ledger "
+                "is complete. The account cannot go negative, so the smallest opening "
+                "consistent with it yields a PROVEN FLOOR on the maximum — a bound "
+                "that can only understate, not a guess.")
+        else:
+            basis = weaken_basis(basis, "estimate")
+            reasons.append(
+                "No row anywhere states a balance, so only movements are known and "
+                "no level can be established without an anchor balance.")
 
     if gaps:
         basis = weaken_basis(basis, "statement_partial")
@@ -2173,6 +2215,8 @@ def build_timeline(account_key: str,
             source_files.append(result.source_file)
 
     points, uncertainty, currencies = build_combined_series(movements, fx_rates)
+    currencies = sorted(set(currencies) | {c for r in read_results for c in r.currencies}
+                        | {m.currency for m in movements if m.currency})
     gaps = detect_gaps(periods, tax_year)
     breaks = detect_continuity_breaks(movements, periods)
     is_liability = any(r.is_liability for r in read_results)
@@ -2181,8 +2225,117 @@ def build_timeline(account_key: str,
     if year_end_caveat:
         warnings.append(f"December 31 balance: {year_end_caveat}")
 
-    has_balances = any(m.balance_after is not None for m in movements)
-    basis, reasons = derive_basis(read_results, gaps, breaks, uncertainty, has_balances)
+    has_balances = any(m.balance_after is not None for r in read_results
+                       if r.evidence_kind != EVIDENCE_DECLARED_ANCHOR
+                       for m in r.movements)
+
+    # --- Anchored reconstruction (docs/fbar_enhancements_plan.md, F1/F2) -----
+    #
+    # Two preconditions, and neither is negotiable. A cited dated LEVEL, from a
+    # document that stated it; and a ledger the bank's own arithmetic proves is
+    # COMPLETE. Without the first there is nothing to carry; without the second
+    # the replay is exact over the wrong set of rows, which is worse than
+    # inexact because it does not look wrong.
+    anchor_results = [r for r in read_results
+                      if r.evidence_kind == EVIDENCE_DECLARED_ANCHOR]
+    register_flags = [r.totals_reconciled for r in read_results
+                      if r.totals_reconciled is not None]
+    ledger_reconciled = bool(register_flags) and all(register_flags)
+
+    reconstruction = None
+    anchor_available = False
+    flow_movements = [m for m in movements if m.amount is not None]
+
+    if anchor_results and len(currencies) > 1:
+        # `carry_balance` sums Decimals with no currency awareness, and this
+        # group merges several currencies onto a USD axis. An anchor stated in
+        # one currency has no defined meaning against that sum, so the honest
+        # answer is to decline rather than to convert silently at a rate the
+        # anchor's own document never mentioned.
+        warnings.append(
+            f"{len(anchor_results)} anchor balance(s) were read, but this account "
+            f"group holds {len(currencies)} currencies ({', '.join(currencies)}). An "
+            "anchored reconstruction is defined for a SINGLE-CURRENCY group only; "
+            "the anchor is recorded and not applied.")
+    elif anchor_results and not ledger_reconciled:
+        warnings.append(
+            "An anchor balance was read, but no register in this group reconciles "
+            "against the bank's own stated period totals. Exactness rests on the "
+            "ledger being complete, and nothing here proves it is — so the anchor "
+            "is recorded and not applied.")
+    elif anchor_results:
+        anchors = [
+            Anchor(when=m.date, balance=m.balance_after, source_file=m.source_file)
+            for r in anchor_results for m in r.movements
+            if m.balance_after is not None
+        ]
+        boundary = date(tax_year, 1, 1)
+        openings = {a.source_file: carry_balance(a, flow_movements, boundary)
+                    for a in anchors}
+
+        # More than one anchor is a GIFT, not a complication: each is carried
+        # independently and they must agree. A disagreement means the ledger
+        # between them is incomplete — exactly the condition the exactness
+        # claim rests on — so it fails loudly here rather than producing a
+        # confident wrong opening.
+        distinct = set(openings.values())
+        if len(distinct) > 1:
+            detail = "; ".join(f"{f} -> {v}" for f, v in sorted(openings.items()))
+            warnings.append(
+                f"{len(anchors)} anchors carry to DIFFERENT January 1 openings "
+                f"({detail}). They cannot all be right, and the ledger between them "
+                "must be incomplete. No reconstruction is applied.")
+        else:
+            opening = distinct.pop()
+            replay = replay_year(opening, flow_movements, tax_year)
+            anchor_available = True
+            reconstruction = {
+                "method": "anchored_full_year",
+                "anchors": [{"as_of": a.when.isoformat(),
+                             "balance": money(a.balance),
+                             "source_file": a.source_file} for a in anchors],
+                "opening": money(replay.opening),
+                "closing": money(replay.closing),
+                "maximum": money(replay.maximum),
+                "date_of_maximum": (replay.date_of_maximum.isoformat()
+                                    if replay.date_of_maximum else None),
+                "minimum": money(replay.minimum),
+                # Informational, NEVER an error (fbar_guide.md §9). The opening,
+                # maximum and closing are conservation results and hold under
+                # every ordering; only the trajectory is affected, and the
+                # trajectory is not a filed figure.
+                "negative_excursions": [
+                    {"start": e["start"].isoformat(), "end": e["end"].isoformat(),
+                     "low": money(e["low"]), "same_timestamp": e["same_timestamp"]}
+                    for e in replay.negative_excursions],
+            }
+            for excursion in replay.negative_excursions:
+                warnings.append(
+                    f"The replayed balance goes below zero {excursion['start']}.."
+                    f"{excursion['end']} (low {excursion['low']}). "
+                    + ("Every row in the excursion shares one date, so this is a "
+                       "same-timestamp batch-processing artefact: the opening, "
+                       "maximum and closing are conservation results and are "
+                       "unaffected. Do not reorder the rows to remove it."
+                       if excursion["same_timestamp"] else
+                       "The excursion spans more than one date, so it is NOT a "
+                       "same-timestamp artefact — the anchor or the ledger is "
+                       "wrong. Resolve this before using any figure here."))
+
+    elif ledger_reconciled and not has_balances and len(currencies) == 1:
+        # No anchor, but the ledger is complete: the account's own
+        # non-negativity gives a PROVEN floor. Same single-currency restriction,
+        # for the same reason.
+        opening, maximum_floor = non_negativity_floor(flow_movements, tax_year)
+        reconstruction = {
+            "method": "non_negativity_floor",
+            "opening": money(opening),
+            "maximum": money(maximum_floor),
+        }
+
+    basis, reasons = derive_basis(read_results, gaps, breaks, uncertainty,
+                                  has_balances, anchor_available=anchor_available,
+                                  ledger_reconciled=ledger_reconciled)
 
     series: Dict[str, List[BalancePoint]] = {}
     for record in sorted(movements, key=MovementRecord.order_key):
@@ -2216,6 +2369,7 @@ def build_timeline(account_key: str,
         max_value_basis=basis,
         source_files=source_files,
         movement_count=len(movements),
+        reconstruction=reconstruction,
     )
 
 
@@ -2274,6 +2428,7 @@ def timeline_to_json(timeline: AccountTimeline) -> Dict[str, Any]:
         "parser_warnings": timeline.parser_warnings,
         "source_documents": list(timeline.source_files),
         "movement_count": timeline.movement_count,
+        "reconstruction": timeline.reconstruction,
         "combined_usd_series": [
             {"date": point.date.isoformat(), "usd": money(point.usd),
              "components": {c: money(a) for c, a in sorted(point.components.items())},

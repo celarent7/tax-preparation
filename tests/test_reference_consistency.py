@@ -634,6 +634,11 @@ def test_fbar_guide_documents_the_same_timestamp_dip():
     assert "conservation, not by any assumed intra-tie order" in text
 
 
+def test_fbar_guide_requires_cross_validating_a_reconstruction():
+    text = read_ref("fbar_guide.md")
+    assert "Cross-validate a reconstruction before trusting it" in text
+    assert "until the same chain has reproduced a known answer" in text
+
 
 def test_skill_md_states_the_current_validator_range():
     """SKILL.md's scripts table names the validator range in prose. An agent

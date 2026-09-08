@@ -489,6 +489,26 @@ A dip that persists *outside* a same-timestamp cluster is a different finding
 and does mean the anchor or the ledger is wrong. The distinguishing test is
 whether every row inside the excursion shares one timestamp.
 
+### Cross-validate a reconstruction before trusting it
+
+**Never trust an anchored reconstruction on an account whose answer is not
+otherwise knowable, until the same chain has reproduced a known answer on
+another account in the same batch.**
+
+A reconstruction has assumptions in it — which end of the anchor date the
+movements fall on, whether the ledger is complete, how ties were handled. Every
+one of them is invisible when the answer is unknown, because there is nothing
+for a wrong answer to disagree with. Run the chain first on an account whose
+maximum is already established from a balance-bearing statement or a prior
+filing. If it reproduces that figure to the cent, the assumptions held for that
+data, and the novel result earns the same confidence. If it does not, the
+reconstruction is wrong in a way that would have been invisible on the account
+you actually cared about.
+
+Record which account was used as the control, and its agreement, in the
+reconstructed account's `notes`. Next year's reviewer cannot re-derive that the
+method was validated; they can only read that it was.
+
 **Phase 0 reports what the file says; it never decides what the filing claims.**
 It opens the statements, normalizes numbers and dates, merges multi-currency
 sub-accounts onto one axis at the December 31 rate, detects coverage gaps and

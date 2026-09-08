@@ -441,3 +441,128 @@ def test_a_register_only_account_derives_the_estimate_basis():
     assert timeline.max_value_basis == "estimate"
     assert any("no level can be established" in w or "anchor balance" in w
                for w in timeline.parser_warnings)
+
+
+def _register_result(currency="RUB"):
+    """A movement register: transaction-level evidence, no balance anywhere.
+
+    `totals_reconciled=True` because the bank's own period totals matched the
+    parsed rows — the completeness proof every anchored reconstruction rests on.
+    """
+    from statement_parser import EVIDENCE_RUNNING_BALANCE, MovementRecord, ReadResult
+    source = f"reg_{currency.lower()}.pdf"
+    return ReadResult(
+        movements=[MovementRecord(date=date(2025, 1, 10), description="txn",
+                                  currency=currency, source_file=source,
+                                  source_row=1, amount=Decimal("100"),
+                                  balance_after=None)],
+        source_file=source, currencies=[currency],
+        evidence_kind=EVIDENCE_RUNNING_BALANCE, totals_reconciled=True)
+
+
+def _anchor_result(when=date(2025, 6, 1), balance=Decimal("1000"),
+                   source_file="bal.pdf", currency="RUB"):
+    """One stated level at one date, as `read_point_balance` emits it.
+
+    No period: a point balance has no span and must contribute no coverage.
+    `totals_reconciled` stays None — it is not a register, and reading that
+    None as a failure would block every reconstruction it exists to enable.
+    """
+    from statement_parser import EVIDENCE_DECLARED_ANCHOR, MovementRecord, ReadResult
+    return ReadResult(
+        movements=[MovementRecord(date=when, description="stated available balance",
+                                  currency=currency, source_file=source_file,
+                                  source_row=1, amount=None, balance_after=balance)],
+        source_file=source_file, currencies=[currency],
+        evidence_kind=EVIDENCE_DECLARED_ANCHOR)
+
+
+def test_a_register_with_a_verified_anchor_is_anchored_not_an_estimate():
+    """A complete, reconciled ledger plus a cited dated level is exact.
+
+    Recording this as `estimate` was the ad hoc workaround this replaces: it
+    told the filer to obtain year-covering records they already had.
+    """
+    from statement_parser import derive_basis
+    basis, reasons = derive_basis(
+        [_register_result()], gaps=[], continuity_breaks=[],
+        interval_uncertainty=[], has_balances=False,
+        anchor_available=True, ledger_reconciled=True)
+    assert basis == "anchored_full_year"
+    assert any("anchor" in r for r in reasons)
+
+
+def test_a_register_with_no_anchor_but_full_reconciled_coverage_is_a_floor():
+    from statement_parser import derive_basis
+    basis, reasons = derive_basis(
+        [_register_result()], gaps=[], continuity_breaks=[],
+        interval_uncertainty=[], has_balances=False,
+        anchor_available=False, ledger_reconciled=True)
+    assert basis == "non_negativity_floor"
+    assert any("cannot go negative" in r for r in reasons)
+
+
+def test_an_unreconciled_ledger_stays_an_estimate_even_with_an_anchor():
+    """Exactness rests on the ledger being COMPLETE. The bank's own totals are
+    what prove that; without them the anchor buys nothing."""
+    from statement_parser import derive_basis
+    basis, _ = derive_basis(
+        [_register_result()], gaps=[], continuity_breaks=[],
+        interval_uncertainty=[], has_balances=False,
+        anchor_available=True, ledger_reconciled=False)
+    assert basis == "estimate"
+
+
+def test_an_anchored_account_with_a_coverage_gap_is_still_partial():
+    """Capping composes. An anchor does not close a hole in the year."""
+    from statement_parser import derive_basis
+    basis, _ = derive_basis(
+        [_register_result()],
+        gaps=[{"start": "2025-03-01", "end": "2025-03-31", "days": 30,
+               "position": "middle"}],
+        continuity_breaks=[], interval_uncertainty=[], has_balances=False,
+        anchor_available=True, ledger_reconciled=True)
+    assert basis == "statement_partial"
+
+
+def test_the_defaults_preserve_existing_behaviour():
+    """Every existing caller passes neither flag and must be unaffected."""
+    from statement_parser import derive_basis
+    basis, _ = derive_basis([_register_result()], gaps=[], continuity_breaks=[],
+                            interval_uncertainty=[], has_balances=False)
+    assert basis == "estimate"
+
+
+def test_an_anchor_is_declined_on_a_multi_currency_group():
+    """`carry_balance` sums Decimals with no currency awareness, and this group
+    merges currencies onto a USD axis. Converting the anchor at a rate its own
+    document never mentioned would be the silent wrong number this module
+    exists to prevent."""
+    from statement_parser import build_timeline
+
+    timeline = build_timeline(
+        "grp", 2025,
+        [_register_result(), _register_result(currency="USD"), _anchor_result()],
+        fx_rates={"RUB": Decimal("81.996"), "USD": Decimal("1")})
+    assert timeline.reconstruction is None
+    assert timeline.max_value_basis != "anchored_full_year"
+    assert any("SINGLE-CURRENCY" in w for w in timeline.parser_warnings)
+
+
+def test_two_anchors_that_disagree_produce_no_reconstruction():
+    """Each anchor is carried independently and they must agree. A
+    disagreement means the ledger between them is incomplete — which is exactly
+    the precondition the exactness claim rests on."""
+    from statement_parser import build_timeline
+
+    timeline = build_timeline(
+        "grp", 2025,
+        [_register_result(),
+         _anchor_result(when=date(2025, 6, 1), balance=Decimal("1000"),
+                        source_file="bal_a.pdf"),
+         _anchor_result(when=date(2025, 6, 1), balance=Decimal("9999"),
+                        source_file="bal_b.pdf")],
+        fx_rates={"RUB": Decimal("81.996")})
+    assert timeline.reconstruction is None
+    assert any("DIFFERENT January 1 openings" in w for w in timeline.parser_warnings)
+

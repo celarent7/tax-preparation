@@ -2941,7 +2941,7 @@ correctly lands on `statement_partial`.
    and the exactness claim is false. **Refuse it; do not downgrade it** — a
    silently downgraded reconstruction still shows a figure someone will use.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_statement_basis.py`:
 
@@ -3081,12 +3081,12 @@ def _anchor_result(when=date(2025, 6, 1), balance=Decimal("1000"),
         evidence_kind=EVIDENCE_DECLARED_ANCHOR)
 ```
 
-- [ ] **Step 2: Run and confirm they fail**
+- [x] **Step 2: Run and confirm they fail**
 
 Run: `python -m pytest tests/test_statement_basis.py -k "anchor or floor or reconciled or defaults or currency" -v`
 Expected: 6 FAILED (four on `TypeError: derive_basis() got an unexpected keyword argument 'anchor_available'`, two on `TypeError: ReadResult.__init__() got an unexpected keyword argument 'totals_reconciled'`), 1 PASSED (`test_the_defaults_preserve_existing_behaviour`)
 
-- [ ] **Step 3: Extend `derive_basis`**
+- [x] **Step 3: Extend `derive_basis`**
 
 Change the signature:
 
@@ -3132,7 +3132,7 @@ Replace the `if not has_balances:` branch with:
                 "no level can be established without an anchor balance.")
 ```
 
-- [ ] **Step 4a: Record reconciliation as a fact, not only as an exception**
+- [x] **Step 4a: Record reconciliation as a fact, not only as an exception**
 
 `_assert_register_reconciles` currently *raises* on a mismatch and records
 nothing on success, so "this ledger reconciles" is not reachable from
@@ -3151,7 +3151,7 @@ nothing on success, so "this ledger reconciles" is not reachable from
 and set `result.totals_reconciled = True` in `read_movement_register_lines`
 immediately after `_assert_register_reconciles` returns without raising.
 
-- [ ] **Step 4b: Wire the reconstruction into `build_timeline`**
+- [x] **Step 4b: Wire the reconstruction into `build_timeline`**
 
 Insert this immediately **before** the `basis, reasons = derive_basis(...)`
 line (`statement_parser.py:2125-2126`), and change that call to pass the two
@@ -3272,7 +3272,7 @@ assignment up if the ordering does not work out, and import `Anchor`,
 `carry_balance`, `non_negativity_floor` and `replay_year` from
 `anchor_reconstruction` at the top of `statement_parser.py`.
 
-- [ ] **Step 4c: Carry it onto the timeline and into the JSON**
+- [x] **Step 4c: Carry it onto the timeline and into the JSON**
 
 Add to `AccountTimeline`:
 
@@ -3294,7 +3294,7 @@ at the end of `build_timeline`, and add to `timeline_to_json`:
 Every figure inside it has already been through `money()`, so it is
 JSON-serializable as built and needs no further conversion.
 
-- [ ] **Step 5: Add the cross-validation requirement to the guide**
+- [x] **Step 5: Add the cross-validation requirement to the guide**
 
 The proposal makes this a requirement, not a suggestion, and it is what made
 the first live result trustworthy. Add to `references/fbar_guide.md` §9, after
@@ -3331,7 +3331,7 @@ def test_fbar_guide_requires_cross_validating_a_reconstruction():
     assert "until the same chain has reproduced a known answer" in text
 ```
 
-- [ ] **Step 6: Run and commit**
+- [x] **Step 6: Run and commit**
 
 Run: `python -m pytest tests/ -q`
 Expected: PASS
