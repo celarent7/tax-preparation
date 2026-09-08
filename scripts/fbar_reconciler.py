@@ -1206,12 +1206,78 @@ def v15_external_account_count(roster: Dict[str, Any]) -> List[Finding]:
     return out
 
 
+#: How many same-length siblings at one institution establish a norm to compare
+#: against. Two agreeing numbers plus one outlier is the smallest set where
+#: "the outlier is wrong" beats "the two are wrong", and a majority is required
+#: on top of that so an even split names no norm.
+V16_MIN_SIBLINGS = 2
+
+
+def v16_account_number_length(roster: Dict[str, Any]) -> List[Finding]:
+    """An account number whose digit count differs from its siblings'.
+
+    A hand-transcribed account number lost a digit in one live cycle — 19
+    digits where the institution issues 20 — and was caught only because an
+    unrelated third document happened to be consulted. A byte-comparison cannot
+    see it (the numbers genuinely differ) and `normalize_account_number` cannot
+    report it (it is a pure fold with nowhere to put a warning, and its output
+    must never be displayed).
+
+    No table of national formats. Russian ledger accounts are 20 digits, but a
+    roster is not limited to Russia, and a hard-coded format table would carry a
+    permanent false-positive tail for every institution nobody thought of.
+    Comparison against SIBLINGS at the same institution needs no table and is
+    what actually caught the defect.
+
+    Silent unless there is a clear majority to be an outlier from: an even split
+    between two lengths names no norm, and picking one would be a guess dressed
+    as a finding.
+    """
+    out = []
+    by_institution: Dict[str, List[Dict[str, Any]]] = {}
+    for acct in roster["accounts"]:
+        by_institution.setdefault(_institution_key(acct), []).append(acct)
+
+    for siblings in by_institution.values():
+        lengths: Dict[str, int] = {}
+        for acct in siblings:
+            digits = sum(ch.isdigit() for ch
+                         in normalize_account_number(acct["account_number"]))
+            lengths[acct["account_key"]] = digits
+        counts: Dict[int, int] = {}
+        for digits in lengths.values():
+            counts[digits] = counts.get(digits, 0) + 1
+
+        modal, modal_count = max(counts.items(), key=lambda kv: (kv[1], kv[0]))
+        if modal_count < V16_MIN_SIBLINGS or modal_count * 2 <= len(siblings):
+            continue
+
+        for acct in siblings:
+            digits = lengths[acct["account_key"]]
+            if digits == modal:
+                continue
+            out.append(Finding(
+                id="V16", severity="warn", account_key=acct["account_key"],
+                message=(
+                    f"{acct['account_key']!r} has a {digits}-digit account number where "
+                    f"{modal_count} other account(s) at the same institution have {modal} "
+                    "digits. A transcription that drops or gains a digit produces exactly "
+                    "this shape, and no other check can see it — the numbers genuinely "
+                    "differ, so matching cannot object. Verify the number against the "
+                    "institution's own document, and prefer the contract number as the "
+                    "cross-reference where one exists."),
+                detail={"digits": digits, "sibling_digits": modal,
+                        "siblings": modal_count},
+            ))
+    return out
+
+
 def validate(roster: Dict[str, Any],
              prior: Optional[Dict[str, Any]] = None,
              fbar: Optional[Dict[str, Any]] = None,
              workspace: Optional[str] = None,
              filing_date: Optional[date] = None) -> Dict[str, Any]:
-    """Run V1-V15. Returns findings plus the threshold arithmetic."""
+    """Run V1-V16. Returns findings plus the threshold arithmetic."""
     fbar = fbar or load_fbar_constants(str(roster["tax_year"]))
     findings: List[Finding] = []
     findings += v1_fx_source(roster, fbar)
@@ -1231,6 +1297,7 @@ def validate(roster: Dict[str, Any],
     findings += v13_source_documents(roster, workspace, fbar)
     findings += v14_unsourced_figure_tracks_prior_year(roster, prior, resolved)
     findings += v15_external_account_count(roster)
+    findings += v16_account_number_length(roster)
     findings += _out_of_scope_notices(roster)
     return {"findings": findings, "threshold": threshold_result}
 

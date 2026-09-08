@@ -850,6 +850,60 @@ def test_external_count_rejects_an_unknown_key():
                                          "source_document": "x.xlsx"}])
 
 
+# ---------------------------------------------------------------------------
+# V16 — account number length outlier (Task 2.7)
+# ---------------------------------------------------------------------------
+
+
+def test_v16_flags_a_short_number_among_siblings():
+    """Three 20-digit siblings and one 19-digit outlier is a dropped digit."""
+    accounts = [account(k, institution=_inst("T-Bank"),
+                        account_number=n)
+                for k, n in [("a", "40817810000000123474"),
+                             ("b", "40817810000000123475"),
+                             ("c", "40817810000000123476"),
+                             ("d", "4081781000000012347")]]
+    v16 = [f for f in run(roster(accounts))["findings"] if f.id == "V16"]
+    assert len(v16) == 1
+    assert v16[0].account_key == "d"
+    assert v16[0].detail == {"digits": 19, "sibling_digits": 20, "siblings": 3}
+
+
+def test_v16_is_quiet_without_enough_siblings_to_compare():
+    """Two accounts of different lengths do not establish which is the norm."""
+    accounts = [account("a", institution=_inst("T-Bank"), account_number="40817810000000123474"),
+                account("b", institution=_inst("T-Bank"), account_number="4081781000000012347")]
+    assert [f for f in run(roster(accounts))["findings"] if f.id == "V16"] == []
+
+
+def test_v16_is_quiet_when_every_sibling_agrees():
+    accounts = [account(k, institution=_inst("T-Bank"), account_number=n)
+                for k, n in [("a", "40817810000000123474"),
+                             ("b", "40817810000000123475"),
+                             ("c", "40817810000000123476")]]
+    assert [f for f in run(roster(accounts))["findings"] if f.id == "V16"] == []
+
+
+def test_v16_does_not_compare_across_institutions():
+    """An IBAN and a Russian ledger number have no business being compared."""
+    accounts = [account("a", institution=_inst("Bank One"), account_number="GE29TB1234567890123456"),
+                account("b", institution=_inst("Bank One"), account_number="GE29TB1234567890123457"),
+                account("c", institution=_inst("Bank One"), account_number="GE29TB1234567890123458"),
+                account("d", institution=_inst("Bank Two"), account_number="1234")]
+    assert [f for f in run(roster(accounts))["findings"] if f.id == "V16"] == []
+
+
+def test_v16_needs_a_clear_majority_length():
+    """Two 20s and two 19s name no norm; saying which is wrong would be a guess."""
+    accounts = [account(k, institution=_inst("T-Bank"), account_number=n)
+                for k, n in [("a", "40817810000000123474"),
+                             ("b", "40817810000000123475"),
+                             ("c", "4081781000000012347"),
+                             ("d", "4081781000000012348")]]
+    assert [f for f in run(roster(accounts))["findings"] if f.id == "V16"] == []
+
+
+
 
 
 

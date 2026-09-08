@@ -373,6 +373,7 @@ retained with the five-year records.
 | V13 | Every `source_documents[]` path exists in the workspace | warn |
 | V14 | Reportable account citing no source at all (no `source_documents`, no `max_value_anchor`) whose maximum sits within 15% of the prior year's filed maximum — the signature of a carried-forward placeholder | warn |
 | V15 | A document outside the roster (`external_account_counts[]`) lists more accounts at an institution than the roster carries | warn |
+| V16 | An account number whose digit count differs from a clear majority of its siblings at the same institution — the shape of a dropped or doubled digit | warn |
 
 **Severity contract:** `blocking` and `error` exit non-zero with
 `"isError": true` in the payload. `warn`, `info` and `ok` do not. Warnings never
