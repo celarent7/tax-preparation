@@ -560,3 +560,18 @@ def test_skill_registers_the_phase_0_tool_so_the_agent_can_reach_it():
     assert "Phase 0" in fbar_step
     assert "statement_parser.py parse" in fbar_step
     assert "sources.json" in fbar_step
+
+
+def test_fbar_guide_requires_a_live_treasury_rate_check():
+    """A rate labelled `treasury` can still be a wrong number typed by hand.
+
+    V1 checks the LABEL. Only fetching the rate checks the rate, so the guide
+    has to say to fetch it rather than leaving it as a remedy after a warning.
+    """
+    text = read_ref("fbar_guide.md")
+    assert "Verify the rate, do not inherit it" in text
+    # The endpoint must appear somewhere other than the V1 validator row.
+    outside_table = [ln for ln in text.splitlines()
+                     if "api.fiscaldata.treasury.gov" in ln and not ln.startswith("|")]
+    assert outside_table, "the fiscaldata endpoint appears only inside the V1 table row"
+

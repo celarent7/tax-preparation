@@ -138,6 +138,35 @@ this guards against is a rate recorded once as itself and once as its own
 reciprocal, under conflicting provenance labels. A validator that quietly
 accepted either direction would erase exactly the finding it exists to produce.
 
+#### Verify the rate, do not inherit it
+
+**Fetch the Treasury rate live at the start of every cycle, before using any
+rate already recorded in the workspace — including one already labelled
+`treasury`.**
+
+V1 checks a rate's *provenance label*, which is a different thing from its
+value. A figure hand-copied from a commercial FX site, or a correct Treasury
+rate for the wrong year, passes V1 without complaint. A stale rate then
+propagates: it is copied into a workpaper, the workpaper is copied into the
+next document, and every USD figure downstream is wrong by the drift. Nothing
+in the pipeline can detect this, because every document agrees with every
+other document. Only the source disagrees.
+
+```bash
+curl -s 'https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/od/rates_of_exchange?filter=record_date:eq:2025-12-31,country_currency_desc:in:(Russia-Ruble,Georgia-Lari)&fields=country_currency_desc,exchange_rate,record_date'
+```
+
+The FBAR rate is the Treasury Reporting Rate of Exchange for the **last day of
+the calendar year** — `record_date` December 31 of the tax year, not the
+quarter-end nearest it and not the rate on the date of the maximum. Record the
+fetched value in `fx_rates[].units_per_usd` with `source: "treasury"` and the
+query URL in `source_url`, so the next cycle can re-run the same query rather
+than trusting this one.
+
+If a rate already in the workspace disagrees with the live query, the live
+query wins and every figure derived from the old rate is recomputed. Do not
+reconcile the difference by adjusting a maximum.
+
 ---
 
 ## 4. Account-number normalization
