@@ -38,7 +38,7 @@ SOURCES = os.path.join(GOLDEN, "sources.json")
 @pytest.fixture(scope="module")
 def timelines():
     config = load_sources(SOURCES)
-    by_filer = run_sources(config, GOLDEN)
+    by_filer = run_sources(config, GOLDEN)["timelines"]
     assert list(by_filer) == ["example"]
     return {t.account_key: t for t in by_filer["example"]}
 
@@ -261,7 +261,7 @@ def test_the_emitted_payload_is_stable_across_runs(timelines):
     """Determinism is what makes this a regression test at all. An unspecified
     tie-break on `date_of_maximum` would silently defeat it."""
     config = load_sources(SOURCES)
-    again = run_sources(config, GOLDEN)["example"]
+    again = run_sources(config, GOLDEN)["timelines"]["example"]
     assert [timeline_to_json(t) for t in again] == \
         [timeline_to_json(timelines[t.account_key]) for t in again]
 

@@ -3762,7 +3762,7 @@ would have noticed the surplus.
 - Produces: `external_account_counts` in the Phase 0 output JSON, in exactly the
   shape `fbar_schema.EXTERNAL_COUNT_FIELDS` defines, ready to paste into a roster
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def _series_workspace(tmp_path, columns=("Брокерский счёт", "Брокерский счет 1")):
@@ -3846,12 +3846,12 @@ Each count entry carries **exactly** the keys in
 into a roster, and `_reject_unknown` refuses any extra key — so a match failure
 or any other complaint goes into `parser_warnings`, never onto the entry.
 
-- [ ] **Step 2: Run and confirm they fail**
+- [x] **Step 2: Run and confirm they fail**
 
 Run: `python -m pytest tests/test_daily_value_series.py -k "reports_how_many or columns_found" -v`
 Expected: 2 FAILED with `KeyError: 'external_account_counts'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `run_sources`, accumulate one entry per `daily_value_series` source: the
 institution from the source entry, `account_type` `"securities"` where the
@@ -3866,7 +3866,7 @@ unmatched column is precisely the account that is on no roster, and counting
 matched columns would make the surplus disappear at exactly the moment it
 mattered.
 
-- [ ] **Step 4: Run and commit**
+- [x] **Step 4: Run and commit**
 
 Run: `python -m pytest tests/ -q`
 Expected: PASS

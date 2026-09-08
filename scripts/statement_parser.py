@@ -2812,20 +2812,64 @@ def read_source(source: Dict[str, Any], workspace: str) -> List[Tuple[str, ReadR
 
 
 def run_sources(config: Dict[str, Any], workspace: str,
-                filer: Optional[str] = None) -> Dict[str, List[AccountTimeline]]:
+                filer: Optional[str] = None) -> Dict[str, Any]:
     """Read every configured source and build one timeline per account group.
 
     Grouped by filer, because separately-owned accounts force separate FBARs
     and mixing two filers' accounts would fabricate a filing neither of them
     makes — the same rule `fbar_reconciler` enforces on rosters.
     """
+    import glob as globbing
+    from statement_profiles import get_profile
+
     tax_year = config["tax_year"]
     grouped: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    external_account_counts: List[Dict[str, Any]] = []
+    parser_warnings: List[str] = []
 
     for source in config["sources"]:
         if filer and source["filer"] != filer:
             continue
-        for key, result in read_source(source, workspace):
+
+        if source["reader"] == "daily_value_series":
+            # Accumulate count of account columns the file contained,
+            # even if matching fails later.
+            try:
+                profile = get_profile(source["profile"])
+                directory = os.path.join(workspace, source["path"] or "")
+                matches = sorted(globbing.glob(os.path.join(directory, source["glob"])))
+                for match in matches:
+                    rows = _read_table(match, profile)
+                    if rows:
+                        header = rows[0]
+                        try:
+                            date_index = header.index(profile.date_column)
+                        except ValueError:
+                            date_index = -1
+                            for idx, col in enumerate(header):
+                                if str(col or "").strip() == profile.date_column:
+                                    date_index = idx
+                                    break
+                        column_pattern = re.compile(profile.account_column_pattern)
+                        account_columns = [label for index, label in enumerate(header)
+                                           if index != date_index and column_pattern.search(str(label or ""))]
+                        external_account_counts.append({
+                            "institution": source["institution"],
+                            "account_type": source.get("account_type") or "securities",
+                            "count": len(account_columns),
+                            "source_document": os.path.basename(match),
+                            "note": "account columns found in the daily value series",
+                        })
+            except Exception as exc:
+                parser_warnings.append(str(exc))
+
+        try:
+            source_results = read_source(source, workspace)
+        except StatementParseError as exc:
+            parser_warnings.append(str(exc))
+            continue
+
+        for key, result in source_results:
             group = source["account_group"] or key
             bucket = grouped.setdefault((source["filer"], group), {
                 "account_key": key, "group": group, "results": [],
@@ -2845,7 +2889,12 @@ def run_sources(config: Dict[str, Any], workspace: str,
                 "recorded decision, not something the parser inferred — check it "
                 "is still the one the roster means to make.")
         timelines.setdefault(filer_slug, []).append(timeline)
-    return timelines
+
+    return {
+        "timelines": timelines,
+        "external_account_counts": external_account_counts,
+        "parser_warnings": parser_warnings,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -2863,7 +2912,8 @@ def _fmt(value: Optional[Decimal], suffix: str = "") -> str:
 
 
 def render_parse_report(institution: str, tax_year: int,
-                        timelines: List[AccountTimeline], filer: str) -> str:
+                        timelines: List[AccountTimeline], filer: str,
+                        external_account_counts: Optional[List[Dict[str, Any]]] = None) -> str:
     """The human-readable workpaper for one institution.
 
     Carries the frontmatter the hand-made BCS workpaper already specifies —
@@ -2903,6 +2953,15 @@ def render_parse_report(institution: str, tax_year: int,
             f"| {headline} | {timeline.date_of_maximum or '—'} "
             f"| `{timeline.max_value_basis}` | {_fmt(timeline.balance_dec_31)} "
             f"| {len(timeline.gaps)} | {breaks} |")
+
+    inst_counts = [c for c in (external_account_counts or [])
+                   if c.get("institution") == institution]
+    if inst_counts:
+        lines += ["", "## What the document itself counted", ""]
+        for c in inst_counts:
+            lines.append(
+                f"- `{c['source_document']}`: **{c['count']}** {c['account_type']} "
+                f"account(s) ({c.get('note', '')})")
 
     for timeline in timelines:
         lines += ["", f"## `{timeline.account_key}`", ""]
@@ -2945,7 +3004,8 @@ def render_parse_report(institution: str, tax_year: int,
 
 
 def write_outputs(output_dir: str, filer: str, tax_year: int,
-                  timelines: List[AccountTimeline]) -> List[str]:
+                  timelines: List[AccountTimeline],
+                  external_account_counts: Optional[List[Dict[str, Any]]] = None) -> List[str]:
     """Write the timelines JSON and one markdown report per institution.
 
     **Both artifacts are workspace-only.** They are written beside the
@@ -2963,6 +3023,7 @@ def write_outputs(output_dir: str, filer: str, tax_year: int,
         "tax_year": tax_year,
         "filer": filer,
         "generated_by": "statement_parser.py (FBAR Phase 0)",
+        "external_account_counts": external_account_counts or [],
         "accounts": [timeline_to_json(t) for t in timelines],
     }
     json_path = os.path.join(output_dir, f"account_timelines_{filer}_{tax_year}.json")
@@ -2974,7 +3035,8 @@ def write_outputs(output_dir: str, filer: str, tax_year: int,
     for timeline in timelines:
         by_institution.setdefault(timeline.institution or filer, []).append(timeline)
     for institution, group in sorted(by_institution.items()):
-        report = render_parse_report(institution, tax_year, group, filer)
+        report = render_parse_report(institution, tax_year, group, filer,
+                                     external_account_counts=external_account_counts)
         report_path = os.path.join(
             output_dir, f"statement_parse_{institution}_{tax_year}.md")
         with open(report_path, "w", encoding="utf-8") as handle:
@@ -3022,7 +3084,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         config = load_sources(args.sources)
         workspace = args.workspace or os.path.dirname(os.path.abspath(args.sources))
-        by_filer = run_sources(config, workspace, args.filer)
+        parsed = run_sources(config, workspace, args.filer)
+        by_filer = parsed["timelines"]
+        external_counts = parsed["external_account_counts"]
+        parser_warnings = parsed["parser_warnings"]
     except StatementParseError as exc:
         if args.output_format == "json":
             print(json.dumps({"isError": True, "error": str(exc)}, indent=2))
@@ -3039,23 +3104,30 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.output_dir:
         for filer_slug, timelines in sorted(by_filer.items()):
             written += write_outputs(args.output_dir, filer_slug,
-                                     config["tax_year"], timelines)
+                                     config["tax_year"], timelines,
+                                     external_account_counts=external_counts)
 
     payload = {
         "tax_year": config["tax_year"],
         "filers": {slug: [timeline_to_json(t) for t in timelines]
                    for slug, timelines in sorted(by_filer.items())},
+        "external_account_counts": external_counts,
+        "parser_warnings": parser_warnings,
         "outputs": written,
     }
     if args.output_format == "json":
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
-        _print_parse_summary(by_filer, written)
+        _print_parse_summary(by_filer, written,
+                             external_account_counts=external_counts,
+                             parser_warnings=parser_warnings)
     return 0
 
 
 def _print_parse_summary(by_filer: Dict[str, List[AccountTimeline]],
-                         written: List[str]) -> None:
+                         written: List[str],
+                         external_account_counts: Optional[List[Dict[str, Any]]] = None,
+                         parser_warnings: Optional[List[str]] = None) -> None:
     for filer_slug, timelines in sorted(by_filer.items()):
         print(f"\n=== {filer_slug} — {len(timelines)} account group(s) ===")
         for timeline in timelines:
@@ -3068,6 +3140,14 @@ def _print_parse_summary(by_filer: Dict[str, List[AccountTimeline]],
                   f"{len(timeline.source_files)} file(s); "
                   f"{len(timeline.gaps)} gap(s), "
                   f"{len([f for f in timeline.continuity_breaks if f['kind'] == 'break'])} break(s)")
+    if external_account_counts:
+        print("\nWhat the document itself counted:")
+        for c in external_account_counts:
+            print(f"  {c['source_document']}: {c['count']} {c['account_type']} account(s) ({c.get('note', '')})")
+    if parser_warnings:
+        print("\nParser warnings:")
+        for w in parser_warnings:
+            print(f"  ⚠️  {w}")
     if written:
         print("\nWrote:\n" + "\n".join(f"  {path}" for path in written))
     print("\nPhase 0 reports what the files say. Reportability, ownership, "

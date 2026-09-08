@@ -111,3 +111,72 @@ def _write_series_csv(tmp_path):
         "31.12.2025,700.00,1200.00\n",
         encoding="utf-8")
     return path
+
+
+def _series_workspace(tmp_path, columns=("Брокерский счёт", "Брокерский счет 1")):
+    """A workspace holding one daily-value export and the sources.json for it."""
+    import json
+
+    header = "Дата," + ",".join(columns) + "\n"
+    body = ("01.01.2025," + ",".join("" for _ in columns) + "\n"
+            "01.02.2025," + ",".join("500.00" for _ in columns) + "\n"
+            "31.12.2025," + ",".join("700.00" for _ in columns) + "\n")
+    (tmp_path / "values.csv").write_text(header + body, encoding="utf-8")
+
+    (tmp_path / "sources.json").write_text(json.dumps({
+        "tax_year": 2025,
+        "fx_rates": [{"currency": "RUB", "units_per_usd": 81.996,
+                      "as_of": "2025-12-31", "source": "treasury"}],
+        "sources": [{
+            "filer": "primary",
+            "institution": "T-Bank",
+            "glob": "values.csv",
+            "reader": "daily_value_series",
+            "profile": "tbank_daily_values",
+            "account_key": "broker",
+            "currency": "RUB",
+            "contract_open_dates": {"broker_a": "2025-01-01",
+                                    "broker_b": "2025-01-15"},
+        }],
+    }), encoding="utf-8")
+    return tmp_path
+
+
+def test_the_series_reader_reports_how_many_accounts_the_file_listed(tmp_path):
+    """The count has to come from the DOCUMENT. A count typed by the same
+    person who wrote the roster reproduces the roster's blind spot."""
+    from statement_parser import load_sources, run_sources
+
+    workspace = _series_workspace(tmp_path)
+    config = load_sources(str(workspace / "sources.json"))
+    output = run_sources(config, str(workspace), filer="primary")
+
+    assert output["external_account_counts"] == [{
+        "institution": "T-Bank",
+        "account_type": "securities",
+        "count": 2,
+        "source_document": "values.csv",
+        "note": "account columns found in the daily value series",
+    }]
+
+
+def test_the_reported_count_is_columns_found_not_columns_matched(tmp_path):
+    """A column the matcher could not place still exists in the document, and
+    it is exactly the account nobody rostered. Counting only matched columns
+    would hide the finding V15 exists to surface.
+
+    Three columns, two contract-open dates: the matcher raises, the run records
+    the failure as a parser warning, and the COUNT is still 3.
+    """
+    from statement_parser import load_sources, run_sources
+
+    workspace = _series_workspace(
+        tmp_path, columns=("Брокерский счёт", "Брокерский счет 1", "ИИС"))
+    config = load_sources(str(workspace / "sources.json"))
+    output = run_sources(config, str(workspace), filer="primary")
+
+    assert output["external_account_counts"][0]["count"] == 3
+    # The unmatched column is reported as a PARSER warning, not as a key on the
+    # count entry: that entry is pasted straight into a roster, where
+    # `_reject_unknown` refuses any key outside EXTERNAL_COUNT_FIELDS.
+    assert any("contract-open date" in w for w in output["parser_warnings"])
