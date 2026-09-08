@@ -177,6 +177,15 @@ If a rate already in the workspace disagrees with the live query, the live
 query wins and every figure derived from the old rate is recomputed. Do not
 reconcile the difference by adjusting a maximum.
 
+### External account counts
+
+`external_account_counts[]` records account counts stated by documents *outside*
+the roster — a portfolio summary tab, a bank's own overview list. Each entry
+records `institution`, optional `account_type`, `count`, and `source_document`.
+V15 checks that the document does not list more accounts at that institution than
+the roster carries. A surplus on the document's side means an account exists that
+nobody has rostered.
+
 ---
 
 ## 4. Account-number normalization
@@ -363,6 +372,7 @@ retained with the five-year records.
 | V12 | Reportable account asserting a determined maximum on a basis weaker than full-year statements, without electing Item 15a. Quiet on `anchored_full_year` **only** when the anchor's cited document is present in the workspace; distinct wording for `non_negativity_floor`, which is a proven bound rather than an estimate | warn |
 | V13 | Every `source_documents[]` path exists in the workspace | warn |
 | V14 | Reportable account citing no source at all (no `source_documents`, no `max_value_anchor`) whose maximum sits within 15% of the prior year's filed maximum — the signature of a carried-forward placeholder | warn |
+| V15 | A document outside the roster (`external_account_counts[]`) lists more accounts at an institution than the roster carries | warn |
 
 **Severity contract:** `blocking` and `error` exit non-zero with
 `"isError": true` in the payload. `warn`, `info` and `ok` do not. Warnings never

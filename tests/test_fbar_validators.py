@@ -782,5 +782,74 @@ def test_v14_needs_a_prior_year():
     assert [f for f in run(current)["findings"] if f.id == "V14"] == []
 
 
+# ---------------------------------------------------------------------------
+# V15 — external account counts (Task 2.6)
+# ---------------------------------------------------------------------------
+
+
+def _inst(name):
+    return {"name": name, "country": "GE",
+            "address": {"street": "s", "city": "c", "postal_code": "p"}}
+
+
+def test_v15_flags_a_summary_listing_more_accounts_than_the_roster():
+    r = roster([account("a", institution=_inst("T-Bank"), account_type="securities"),
+                account("b", institution=_inst("T-Bank"), account_type="securities")],
+               external_account_counts=[
+                   {"institution": "T-Bank", "account_type": "securities", "count": 3,
+                    "source_document": "portfolio_values.xlsx"}])
+    v15 = [f for f in run(r)["findings"] if f.id == "V15"]
+    assert len(v15) == 1
+    assert "3" in v15[0].message and "2" in v15[0].message
+    assert v15[0].detail["surplus"] == 1
+
+
+def test_v15_is_quiet_when_the_counts_agree():
+    r = roster([account("a", institution=_inst("T-Bank"), account_type="securities")],
+               external_account_counts=[
+                   {"institution": "T-Bank", "account_type": "securities", "count": 1,
+                    "source_document": "portfolio_values.xlsx"}])
+    assert [f for f in run(r)["findings"] if f.id == "V15"] == []
+
+
+def test_v15_is_quiet_when_the_roster_has_more():
+    """A roster with MORE accounts than one summary tab is normal — a summary
+    covers the products it covers. Only a surplus on the document's side means
+    an account nobody has rostered."""
+    r = roster([account("a", institution=_inst("T-Bank"), account_type="securities"),
+                account("b", institution=_inst("T-Bank"), account_type="securities")],
+               external_account_counts=[
+                   {"institution": "T-Bank", "account_type": "securities", "count": 1,
+                    "source_document": "portfolio_values.xlsx"}])
+    assert [f for f in run(r)["findings"] if f.id == "V15"] == []
+
+
+def test_v15_counts_only_the_named_account_type_when_one_is_given():
+    r = roster([account("a", institution=_inst("T-Bank"), account_type="securities"),
+                account("b", institution=_inst("T-Bank"), account_type="bank")],
+               external_account_counts=[
+                   {"institution": "T-Bank", "account_type": "securities", "count": 2,
+                    "source_document": "portfolio_values.xlsx"}])
+    assert len([f for f in run(r)["findings"] if f.id == "V15"]) == 1
+
+
+def test_v15_matches_the_institution_through_homoglyph_drift():
+    """`_institution_key` folds Cyrillic/Latin confusables; a count keyed to
+    'Т-Bank' with a Cyrillic Т must still find 'T-Bank'."""
+    r = roster([account("a", institution=_inst("T-Bank"), account_type="securities")],
+               external_account_counts=[
+                   {"institution": "Т-Bank", "account_type": "securities", "count": 2,
+                    "source_document": "portfolio_values.xlsx"}])
+    assert len([f for f in run(r)["findings"] if f.id == "V15"]) == 1
+
+
+def test_external_count_rejects_an_unknown_key():
+    with pytest.raises(RosterError):
+        roster([account("a")],
+               external_account_counts=[{"institution": "T-Bank", "cnt": 2,
+                                         "source_document": "x.xlsx"}])
+
+
+
 
 

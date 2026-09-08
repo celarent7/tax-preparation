@@ -330,6 +330,19 @@ PRIOR_YEAR_FIELDS: Dict[str, Any] = {
     "source": "none",
 }
 
+#: An account count stated by a document OUTSIDE the roster — a portfolio
+#: summary tab, a bank's own account list. Recorded so a mismatch is mechanical
+#: rather than a matter of someone remembering how many there should be. One
+#: live cycle turned up a real, never-filed account this way, open since 2022
+#: and $0 throughout, found only because a person counted rows.
+EXTERNAL_COUNT_FIELDS: Dict[str, Any] = {
+    "institution": None,      # REQUIRED — matched by the same fold as account numbers
+    "account_type": None,     # optional; None counts every type at that institution
+    "count": None,            # REQUIRED — what the document lists
+    "source_document": None,  # REQUIRED — workspace-relative path to the document
+    "note": None,
+}
+
 ROSTER_FIELDS: Dict[str, Any] = {
     "schema_version": SCHEMA_VERSION,
     "tax_year": None,                    # REQUIRED
@@ -338,6 +351,7 @@ ROSTER_FIELDS: Dict[str, Any] = {
     "accounts": [],
     "identity_changes": [],
     "prior_year": None,
+    "external_account_counts": [],
 }
 
 
@@ -653,6 +667,37 @@ def _validate_prior_year(raw: Any) -> Optional[Dict[str, Any]]:
     return prior
 
 
+def _validate_external_count(raw: Any, index: int) -> Dict[str, Any]:
+    where = f"roster.external_account_counts[{index}]"
+    if not isinstance(raw, dict):
+        raise RosterError(f"{where} must be an object.")
+    _reject_unknown(raw, EXTERNAL_COUNT_FIELDS, where)
+    entry = {k: raw.get(k, v) for k, v in EXTERNAL_COUNT_FIELDS.items()}
+
+    if not entry["institution"]:
+        raise RosterError(f"{where}.institution is required.")
+    entry["institution"] = str(entry["institution"]).strip()
+
+    if entry["count"] is None:
+        raise RosterError(f"{where}.count is required.")
+    try:
+        count = int(entry["count"])
+        if count < 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise RosterError(f"{where}.count must be a non-negative integer.")
+    entry["count"] = count
+
+    if not entry["source_document"]:
+        raise RosterError(f"{where}.source_document is required.")
+    entry["source_document"] = str(entry["source_document"]).strip()
+
+    if entry["account_type"] is not None:
+        _require_enum(entry["account_type"], ACCOUNT_TYPES, f"{where}.account_type")
+
+    return entry
+
+
 # ---------------------------------------------------------------------------
 # Public loader
 # ---------------------------------------------------------------------------
@@ -688,7 +733,8 @@ def validate_roster(raw: Any, origin: str = "<roster>") -> Dict[str, Any]:
 
     for name, validator in (("fx_rates", _validate_fx_rate),
                             ("accounts", _validate_account),
-                            ("identity_changes", _validate_identity_change)):
+                            ("identity_changes", _validate_identity_change),
+                            ("external_account_counts", _validate_external_count)):
         items = roster[name] or []
         if not isinstance(items, list):
             raise RosterError(f"{origin}: roster.{name} must be a list.")

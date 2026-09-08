@@ -1166,12 +1166,52 @@ def v14_unsourced_figure_tracks_prior_year(
     return out
 
 
+def v15_external_account_count(roster: Dict[str, Any]) -> List[Finding]:
+    """A document that lists more accounts than the roster has.
+
+    Surplus in one direction only. A roster holding MORE accounts than a
+    summary tab is ordinary — a summary covers the products it covers, and the
+    filer may hold others elsewhere. A summary holding more than the roster
+    means an account exists that nobody has rostered, which is the one failure
+    this module cannot otherwise detect for itself.
+
+    It does not try to say WHICH account is missing; naming the surplus is
+    enough to prompt the manual follow-up, and guessing would be worse than the
+    count.
+    """
+    out = []
+    for entry in roster.get("external_account_counts", []):
+        wanted_type = entry["account_type"]
+        key = normalize_account_number(entry["institution"])
+        rostered = [a for a in roster["accounts"]
+                    if _institution_key(a) == key
+                    and (wanted_type is None or a["account_type"] == wanted_type)]
+        surplus = entry["count"] - len(rostered)
+        if surplus <= 0:
+            continue
+        scope = f"{wanted_type} " if wanted_type else ""
+        out.append(Finding(
+            id="V15", severity="warn",
+            message=(
+                f"{entry['source_document']} lists {entry['count']} {scope}account(s) at "
+                f"{entry['institution']!r}; the roster has {len(rostered)}. "
+                f"{surplus} account(s) appear in the document and on no roster entry. "
+                "Identify each one before filing — an account with no evidence and an "
+                "account nobody rostered look identical from here, and only one of them "
+                "is safe."),
+            detail={"institution": entry["institution"], "account_type": wanted_type,
+                    "document_count": entry["count"], "roster_count": len(rostered),
+                    "surplus": surplus, "source_document": entry["source_document"]},
+        ))
+    return out
+
+
 def validate(roster: Dict[str, Any],
              prior: Optional[Dict[str, Any]] = None,
              fbar: Optional[Dict[str, Any]] = None,
              workspace: Optional[str] = None,
              filing_date: Optional[date] = None) -> Dict[str, Any]:
-    """Run V1-V14. Returns findings plus the threshold arithmetic."""
+    """Run V1-V15. Returns findings plus the threshold arithmetic."""
     fbar = fbar or load_fbar_constants(str(roster["tax_year"]))
     findings: List[Finding] = []
     findings += v1_fx_source(roster, fbar)
@@ -1190,6 +1230,7 @@ def validate(roster: Dict[str, Any],
     findings += v12_max_value_basis(roster, workspace)
     findings += v13_source_documents(roster, workspace, fbar)
     findings += v14_unsourced_figure_tracks_prior_year(roster, prior, resolved)
+    findings += v15_external_account_count(roster)
     findings += _out_of_scope_notices(roster)
     return {"findings": findings, "threshold": threshold_result}
 
