@@ -2568,7 +2568,7 @@ self-contained algebra with its own test surface.
   non_negativity_floor(movements, tax_year: int) -> Tuple[Decimal, Decimal]
   ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_anchor_reconstruction.py`:
 
@@ -2714,12 +2714,12 @@ def test_carry_balance_refuses_a_movement_with_no_amount():
         carry_balance(anchor, [balance_row], date(2025, 1, 1))
 ```
 
-- [ ] **Step 2: Run and confirm they fail**
+- [x] **Step 2: Run and confirm they fail**
 
 Run: `python -m pytest tests/test_anchor_reconstruction.py -v`
 Expected: collection error — `ModuleNotFoundError: No module named 'anchor_reconstruction'`
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 Create `scripts/anchor_reconstruction.py`:
 
@@ -2893,12 +2893,12 @@ def non_negativity_floor(movements: Iterable[Any],
     return opening, replay_year(opening, ordered, tax_year).maximum
 ```
 
-- [ ] **Step 4: Run and confirm they pass**
+- [x] **Step 4: Run and confirm they pass**
 
 Run: `python -m pytest tests/test_anchor_reconstruction.py -v`
 Expected: 11 PASSED
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/anchor_reconstruction.py tests/test_anchor_reconstruction.py
