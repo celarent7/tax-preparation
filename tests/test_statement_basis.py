@@ -448,16 +448,26 @@ def _register_result(currency="RUB"):
 
     `totals_reconciled=True` because the bank's own period totals matched the
     parsed rows — the completeness proof every anchored reconstruction rests on.
+
+    It also carries a FULL-YEAR period. Reconciled totals prove a ledger
+    complete only within the periods present, so `build_timeline` declines both
+    reconstructions outright when coverage has a gap. Without a period here the
+    coverage gate fires first and the multi-currency and multi-anchor branches
+    below it are never reached — the tests would pass on the wrong reason.
     """
-    from statement_parser import EVIDENCE_RUNNING_BALANCE, MovementRecord, ReadResult
+    from statement_parser import (EVIDENCE_RUNNING_BALANCE, MovementRecord,
+                                  ReadResult, StatementPeriod)
     source = f"reg_{currency.lower()}.pdf"
-    return ReadResult(
+    result = ReadResult(
         movements=[MovementRecord(date=date(2025, 1, 10), description="txn",
                                   currency=currency, source_file=source,
                                   source_row=1, amount=Decimal("100"),
                                   balance_after=None)],
         source_file=source, currencies=[currency],
         evidence_kind=EVIDENCE_RUNNING_BALANCE, totals_reconciled=True)
+    result.periods = [StatementPeriod(start=date(2025, 1, 1),
+                                      end=date(2025, 12, 31), source_file=source)]
+    return result
 
 
 def _anchor_result(when=date(2025, 6, 1), balance=Decimal("1000"),
@@ -497,7 +507,7 @@ def test_a_register_with_no_anchor_but_full_reconciled_coverage_is_a_floor():
     basis, reasons = derive_basis(
         [_register_result()], gaps=[], continuity_breaks=[],
         interval_uncertainty=[], has_balances=False,
-        anchor_available=False, ledger_reconciled=True)
+        anchor_available=False, ledger_reconciled=True, floor_available=True)
     assert basis == "non_negativity_floor"
     assert any("cannot go negative" in r for r in reasons)
 

@@ -57,6 +57,11 @@ class Replay:
     #: account cannot actually go negative, so an excursion is either a
     #: same-timestamp ordering artefact (`same_timestamp: True`, harmless) or
     #: evidence the anchor or the ledger is wrong (`False`, not harmless).
+    #:
+    #: `recovered` says whether the balance came back above zero before the
+    #: ledger ended. An UNRECOVERED excursion is never harmless — a same-minute
+    #: cluster resolves within the minute — so it is reported as
+    #: `same_timestamp: False` however its rows are dated.
     negative_excursions: List[Dict[str, Any]] = field(default_factory=list)
 
 
@@ -119,7 +124,7 @@ def replay_year(opening: Decimal, movements: Iterable[Any],
         if running < 0 and open_excursion is None:
             open_excursion = {"date": movement.date, "start": movement.date,
                               "end": movement.date, "low": running,
-                              "same_timestamp": True}
+                              "same_timestamp": True, "recovered": False}
         elif running < 0:
             open_excursion["end"] = movement.date
             open_excursion["low"] = min(open_excursion["low"], running)
@@ -131,10 +136,20 @@ def replay_year(opening: Decimal, movements: Iterable[Any],
         elif open_excursion is not None:
             if movement.date != open_excursion["start"]:
                 open_excursion["same_timestamp"] = False
+            open_excursion["recovered"] = True
             excursions.append(open_excursion)
             open_excursion = None
 
     if open_excursion is not None:
+        # The ledger ENDS below zero. Whatever timestamps the rows carry, this
+        # is not a batch-processing artefact: a same-minute cluster resolves
+        # within the minute, and this one never resolves at all. The account
+        # cannot have closed the year owing the bank money it never repaid, so
+        # the anchor or the ledger is wrong and the figures are NOT safe.
+        # Leaving `same_timestamp` True here made the caller print the
+        # reassuring message for the one case that warrants the alarming one.
+        open_excursion["same_timestamp"] = False
+        open_excursion["recovered"] = False
         excursions.append(open_excursion)
 
     return Replay(opening=opening, closing=running, maximum=maximum,

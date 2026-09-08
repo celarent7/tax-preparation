@@ -60,6 +60,25 @@ class StatementParseError(ValueError):
     """
 
 
+class ColumnMatchError(StatementParseError):
+    """A wide export's columns could not be matched to accounts.
+
+    The one parse failure `run_sources` recovers from, and it is narrow on
+    purpose. An unmatched column means an account that may be on no roster —
+    which is validator V15's whole reason to exist — so aborting would hide the
+    finding the file arrived to surface, and the run still reports the column
+    COUNT that surfaces it.
+
+    Everything else stays fatal, because the module says so in its own words: a
+    source selecting no file is "a configuration error, not an empty account",
+    and `_assert_register_reconciles` keeps raising on "a total that reads
+    cleanly and DISAGREES with the rows" — a dropped row. Catching those as
+    warnings let a typo'd glob exit 0 with no accounts, and let one discarded
+    register leave a reconciled sibling asserting an EXACT replay over a ledger
+    missing every row of the file that failed.
+    """
+
+
 # ---------------------------------------------------------------------------
 # Number normalization (plan §9.4, §9.12)
 # ---------------------------------------------------------------------------
@@ -2097,23 +2116,35 @@ def match_columns_by_open_date(first_dates: Dict[str, date],
     opens = sorted(contract_open_dates.items(), key=lambda kv: kv[1])
     for index in range(len(opens) - 1):
         if opens[index][1] == opens[index + 1][1]:
-            raise StatementParseError(
+            raise ColumnMatchError(
                 f"{opens[index][0]!r} and {opens[index + 1][0]!r} were opened on the "
                 f"same date ({opens[index][1]}), so first-non-blank-date cannot tell "
                 "their columns apart. Obtain the account numbers rather than falling "
                 "back to magnitude or column order — a transposition preserves both.")
 
     columns = sorted(first_dates.items(), key=lambda kv: kv[1])
-    if len(columns) > len(opens):
-        raise StatementParseError(
-            f"The export has {len(columns)} account column(s) and only {len(opens)} "
-            "contract-open date(s) were supplied. An unmatched column is an account "
-            "that may be on no roster — see validator V15.")
+    if len(columns) != len(opens):
+        # EQUALITY, not "not too many". The pairing below is positional, so a
+        # count mismatch in EITHER direction slides every remaining column onto
+        # the wrong account. Too few is the dangerous direction and the one a
+        # `>` guard misses: a column blank on every row never reaches
+        # `first_dates`, and the surviving columns then pair against accounts
+        # opened EARLIER — which passes the `predates` check below, because an
+        # older account cannot be predated. That is the transposition class
+        # this function exists to prevent, arriving through the back door.
+        raise ColumnMatchError(
+            f"The export has {len(columns)} populated column(s) and "
+            f"{len(opens)} contract-open date(s) were supplied. These have to "
+            "match exactly: the pairing is positional, so any mismatch assigns "
+            "values to the wrong account rather than failing. A column blank on "
+            "every row still counts as an account here — and an unmatched "
+            "column is an account that may be on no roster, which is what "
+            "validator V15 exists to surface.")
 
     mapping = {}
     for (label, first_date), (key, opened) in zip(columns, opens):
         if first_date < opened:
-            raise StatementParseError(
+            raise ColumnMatchError(
                 f"Column {label!r} has a value on {first_date}, which predates when {key!r} was "
                 f"opened on {opened}. An account cannot hold value before it existed, "
                 "so this pairing is wrong and the contract-open dates or the column "
@@ -2238,7 +2269,8 @@ def derive_basis(read_results: List[ReadResult],
                  interval_uncertainty: List[Dict[str, Any]],
                  has_balances: bool,
                  anchor_available: bool = False,
-                 ledger_reconciled: bool = False) -> Tuple[str, List[str]]:
+                 ledger_reconciled: bool = False,
+                 floor_available: bool = False) -> Tuple[str, List[str]]:
     """Derive `max_value_basis` from what the files actually contain.
 
     **This is the single most important output.** `fbar_schema.MAX_VALUE_BASES`
@@ -2308,7 +2340,15 @@ def derive_basis(read_results: List[ReadResult],
                 "stated period totals. The opening is carried from the anchor and the "
                 "year replayed exactly — the records DO cover the year, via a citation "
                 "rather than a balance column.")
-        elif ledger_reconciled:
+        elif floor_available:
+            # `floor_available`, not `ledger_reconciled`. The floor is defined
+            # for a single-currency group with complete coverage, and only
+            # `build_timeline` knows both — re-deriving the condition from
+            # `ledger_reconciled` alone stamped `non_negativity_floor` on
+            # multi-currency groups where no floor had been computed at all,
+            # so the roster carried a basis meaning "a proven bound was
+            # derived" for a figure nothing derived, and V12 gave the
+            # floor-specific advice about a bound nobody held.
             basis = weaken_basis(basis, "non_negativity_floor")
             reasons.append(
                 "No row states a balance and no anchor was supplied, but every "
@@ -2413,9 +2453,32 @@ def build_timeline(account_key: str,
 
     reconstruction = None
     anchor_available = False
+    floor_available = False
     flow_movements = [m for m in movements if m.amount is not None]
 
-    if anchor_results and len(currencies) > 1:
+    # Reconciled totals prove a ledger is complete WITHIN the periods that
+    # arrived. Nothing there proves the periods span the year — so a gap or a
+    # continuity break means rows are missing between them, and BOTH
+    # reconstructions are wrong rather than merely weaker: an anchor carried
+    # across missing rows lands on the wrong opening, and a floor computed from
+    # part of a year is not a floor on the year.
+    #
+    # This has to be decided HERE, not by capping the basis afterwards.
+    # `non_negativity_floor` ranks weaker than `statement_partial` in
+    # BASIS_STRENGTH, so `weaken_basis(floor, statement_partial)` returns the
+    # floor and the gap branch in `derive_basis` is a structural no-op for it.
+    coverage_complete = not gaps and not breaks
+    if (anchor_results or ledger_reconciled) and not coverage_complete:
+        warnings.append(
+            f"{len(gaps)} coverage gap(s) and {len(breaks)} continuity break(s) mean "
+            "rows are missing from this ledger. Reconciled period totals prove a "
+            "ledger complete only WITHIN the periods present, so no anchored replay "
+            "or non-negativity floor is computed here — carrying a balance across "
+            "missing rows lands on the wrong opening rather than on a weaker one.")
+
+    if not coverage_complete:
+        pass  # already reported above
+    elif anchor_results and len(currencies) > 1:
         # `carry_balance` sums Decimals with no currency awareness, and this
         # group merges several currencies onto a USD axis. An anchor stated in
         # one currency has no defined meaning against that sum, so the honest
@@ -2438,63 +2501,98 @@ def build_timeline(account_key: str,
             for r in anchor_results for m in r.movements
             if m.balance_after is not None
         ]
-        boundary = date(tax_year, 1, 1)
-        openings = {a.source_file: carry_balance(a, flow_movements, boundary)
-                    for a in anchors}
-
-        # More than one anchor is a GIFT, not a complication: each is carried
-        # independently and they must agree. A disagreement means the ledger
-        # between them is incomplete — exactly the condition the exactness
-        # claim rests on — so it fails loudly here rather than producing a
-        # confident wrong opening.
-        distinct = set(openings.values())
-        if len(distinct) > 1:
-            detail = "; ".join(f"{f} -> {v}" for f, v in sorted(openings.items()))
+        if not anchors:
+            # `read_point_balance` emits a no-data result — zero movements,
+            # still stamped `declared_anchor` — when its profile regex misses
+            # the balance line. Entering the replay on that produced a
+            # `KeyError: pop from an empty set`, so one mistyped balance line
+            # aborted the entire run for every filer and every account.
             warnings.append(
-                f"{len(anchors)} anchors carry to DIFFERENT January 1 openings "
-                f"({detail}). They cannot all be right, and the ledger between them "
-                "must be incomplete. No reconstruction is applied.")
+                f"{len(anchor_results)} anchor document(s) were read but stated no "
+                "balance this parser could use, so there is nothing to carry. That "
+                "is a no-data finding, not a zero balance — check the document "
+                "against its profile's balance pattern.")
+            anchor_results = []
         else:
-            opening = distinct.pop()
-            replay = replay_year(opening, flow_movements, tax_year)
-            anchor_available = True
-            reconstruction = {
-                "method": "anchored_full_year",
-                "anchors": [{"as_of": a.when.isoformat(),
-                             "balance": money(a.balance),
-                             "source_file": a.source_file} for a in anchors],
-                "opening": money(replay.opening),
-                "closing": money(replay.closing),
-                "maximum": money(replay.maximum),
-                "date_of_maximum": (replay.date_of_maximum.isoformat()
-                                    if replay.date_of_maximum else None),
-                "minimum": money(replay.minimum),
-                # Informational, NEVER an error (fbar_guide.md §9). The opening,
-                # maximum and closing are conservation results and hold under
-                # every ordering; only the trajectory is affected, and the
-                # trajectory is not a filed figure.
-                "negative_excursions": [
-                    {"start": e["start"].isoformat(), "end": e["end"].isoformat(),
-                     "low": money(e["low"]), "same_timestamp": e["same_timestamp"]}
-                    for e in replay.negative_excursions],
-            }
-            for excursion in replay.negative_excursions:
+            # END of the PRIOR December 31, which is the opening of January 1.
+            #
+            # `carry_balance` excludes `m.date == target` from what it removes,
+            # because a bank's "balance as of D" is end-of-day D. Carrying to
+            # January 1 therefore returned a figure that ALREADY contained that
+            # day's movements, and `replay_year` — which replays every row
+            # dated in the tax year, January 1 included — added them a second
+            # time. A single +500 on January 1 overstated the filed maximum by
+            # 500.
+            boundary = date(tax_year - 1, 12, 31)
+            # Keyed per ANCHOR, not per source file: a document stating two
+            # balances collapsed to one entry, silently skipping the agreement
+            # check that is the entire reason a second anchor is worth having.
+            openings = {(a.source_file, a.when, a.balance):
+                        carry_balance(a, flow_movements, boundary)
+                        for a in anchors}
+
+            # More than one anchor is a GIFT, not a complication: each is
+            # carried independently and they must agree. A disagreement means
+            # the ledger between them is incomplete — exactly the condition the
+            # exactness claim rests on — so it fails loudly here rather than
+            # producing a confident wrong opening.
+            distinct = set(openings.values())
+            if len(distinct) > 1:
+                detail = "; ".join(
+                    f"{f} ({when}, {bal}) -> {value}"
+                    for (f, when, bal), value in sorted(openings.items()))
                 warnings.append(
-                    f"The replayed balance goes below zero {excursion['start']}.."
-                    f"{excursion['end']} (low {excursion['low']}). "
-                    + ("Every row in the excursion shares one date, so this is a "
-                       "same-timestamp batch-processing artefact: the opening, "
-                       "maximum and closing are conservation results and are "
-                       "unaffected. Do not reorder the rows to remove it."
-                       if excursion["same_timestamp"] else
-                       "The excursion spans more than one date, so it is NOT a "
-                       "same-timestamp artefact — the anchor or the ledger is "
-                       "wrong. Resolve this before using any figure here."))
+                    f"{len(anchors)} anchors carry to DIFFERENT January 1 openings "
+                    f"({detail}). They cannot all be right, and the ledger between "
+                    "them must be incomplete. No reconstruction is applied.")
+            else:
+                opening = distinct.pop()
+                replay = replay_year(opening, flow_movements, tax_year)
+                anchor_available = True
+                reconstruction = {
+                    "method": "anchored_full_year",
+                    "anchors": [{"as_of": a.when.isoformat(),
+                                 "balance": money(a.balance),
+                                 "source_file": a.source_file} for a in anchors],
+                    "opening": money(replay.opening),
+                    "closing": money(replay.closing),
+                    "maximum": money(replay.maximum),
+                    "date_of_maximum": (replay.date_of_maximum.isoformat()
+                                        if replay.date_of_maximum else None),
+                    "minimum": money(replay.minimum),
+                    # Informational where the excursion RECOVERED within one
+                    # date (fbar_guide.md §9): the opening, maximum and closing
+                    # are conservation results and hold under every ordering.
+                    # An excursion that never recovers is a different animal and
+                    # `replay_year` reports it as `same_timestamp: False`.
+                    "negative_excursions": [
+                        {"start": e["start"].isoformat(), "end": e["end"].isoformat(),
+                         "low": money(e["low"]), "same_timestamp": e["same_timestamp"],
+                         "recovered": e["recovered"]}
+                        for e in replay.negative_excursions],
+                }
+                for excursion in replay.negative_excursions:
+                    warnings.append(
+                        f"The replayed balance goes below zero {excursion['start']}.."
+                        f"{excursion['end']} (low {excursion['low']}). "
+                        + ("Every row in the excursion shares one date and the "
+                           "balance recovers, so this is a same-timestamp "
+                           "batch-processing artefact: the opening, maximum and "
+                           "closing are conservation results and are unaffected. "
+                           "Do not reorder the rows to remove it."
+                           if excursion["same_timestamp"] else
+                           "This is NOT a same-timestamp artefact"
+                           + ("" if excursion["recovered"] else
+                              " — the balance never recovers, so the ledger ENDS "
+                              "below zero")
+                           + ". The anchor or the ledger is wrong. Resolve this "
+                             "before using any figure here."))
 
     elif ledger_reconciled and not has_balances and len(currencies) == 1:
         # No anchor, but the ledger is complete: the account's own
         # non-negativity gives a PROVEN floor. Same single-currency restriction,
         # for the same reason.
+        floor_available = True
         opening, maximum_floor = non_negativity_floor(flow_movements, tax_year)
         reconstruction = {
             "method": "non_negativity_floor",
@@ -2504,7 +2602,8 @@ def build_timeline(account_key: str,
 
     basis, reasons = derive_basis(read_results, gaps, breaks, uncertainty,
                                   has_balances, anchor_available=anchor_available,
-                                  ledger_reconciled=ledger_reconciled)
+                                  ledger_reconciled=ledger_reconciled,
+                                  floor_available=floor_available)
 
     series: Dict[str, List[BalancePoint]] = {}
     for record in sorted(movements, key=MovementRecord.order_key):
@@ -2720,6 +2819,23 @@ def load_sources(path: str) -> Dict[str, Any]:
             raise StatementParseError(
                 f"{where}.reader is {source['reader']!r}; known readers: "
                 f"{', '.join(sorted(READERS))}.")
+        if source["reader"] == "daily_value_series" and not source["contract_open_dates"]:
+            # Mandatory for this reader and validated NOWHERE until now: an
+            # absent key became `{}`, and the failure surfaced at read time as
+            # a complaint about the FILE ("only 0 contract-open date(s) were
+            # supplied") rather than about the configuration that was missing.
+            # A wide export's columns carry no account number, so without these
+            # dates there is no way to say which column is which account — and
+            # the fallback this module refuses is exactly the positional one.
+            raise StatementParseError(
+                f"{where}.reader is 'daily_value_series', so contract_open_dates "
+                "is required: {\"<account_key>\": \"YYYY-MM-DD\", ...}. The "
+                "columns of a wide export are labelled by nickname and carry no "
+                "account number, so each one is matched to an account by its "
+                "first non-blank date against that account's contract-open date "
+                "(printed in the account's own report). Without these dates the "
+                "only remaining option is column order, which is the one signal "
+                "a transposition preserves.")
         if (source["reader"] != "daily_value_series"
                 and not source["account_key"]
                 and not source["account_key_pattern"]):
@@ -2860,12 +2976,22 @@ def run_sources(config: Dict[str, Any], workspace: str,
                             "source_document": os.path.basename(match),
                             "note": "account columns found in the daily value series",
                         })
-            except Exception as exc:
+            except ColumnMatchError as exc:
                 parser_warnings.append(str(exc))
 
         try:
             source_results = read_source(source, workspace)
-        except StatementParseError as exc:
+        except ColumnMatchError as exc:
+            # ONLY a column-match failure is recoverable, and only because the
+            # count above has already been recorded — that count is what
+            # surfaces an account on no roster (V15). Every other
+            # StatementParseError propagates: a source selecting no file is a
+            # configuration error, and a register whose stated totals disagree
+            # with its rows means a row was dropped. Swallowing the latter was
+            # the worse bug of the two — a discarded register left a reconciled
+            # SIBLING setting `ledger_reconciled`, so the anchored replay was
+            # reported as EXACT over a ledger missing every row of the file
+            # that failed.
             parser_warnings.append(str(exc))
             continue
 

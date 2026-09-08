@@ -674,3 +674,32 @@ def test_the_documented_reader_list_matches_the_registry():
         assert phrase in skill, f"SKILL.md does not mention the {phrase} reader"
         assert phrase in guide, f"fbar_guide.md does not mention the {phrase} reader"
 
+
+
+def test_fbar_guide_matching_ladder_matches_the_code_order():
+    """The published ladder is what a reviewer checks a match against.
+
+    The two disagreed: the code ran the contract-number pass before aliases,
+    the guide listed it after. Where both rungs would claim different current
+    accounts the orders give different answers, and the document was wrong.
+    """
+    import fbar_reconciler as fr  # noqa: E402
+
+    # Scoped to the ladder list itself. `aliases` and `account_key` are roster
+    # FIELD names too, discussed in §3 long before §4's ladder, so searching the
+    # whole document finds those mentions and compares the wrong positions.
+    guide_all = read_ref("fbar_guide.md")
+    start = guide_all.index("Matching resolves in this order:")
+    guide = guide_all[start:guide_all.index("\n\n", guide_all.index("7.", start))]
+    code = fr.match_accounts.__doc__
+    rungs = ["identity_changes", "account_key", "contract number",
+             "aliases", "account-number equality", "trailing"]
+    positions_code, positions_guide = [], []
+    for rung in rungs:
+        needle = rung.lower()
+        positions_code.append(code.lower().index(needle))
+        positions_guide.append(guide.lower().index(needle))
+    assert positions_code == sorted(positions_code), \
+        f"match_accounts docstring lists the rungs out of order: {rungs}"
+    assert positions_guide == sorted(positions_guide), \
+        f"fbar_guide.md lists the rungs in a different order than the code: {rungs}"

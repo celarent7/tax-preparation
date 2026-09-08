@@ -217,10 +217,12 @@ Matching resolves in this order:
 
 1. **Declared identity changes** (`identity_changes[]`).
 2. **Exact `account_key`**, unless already claimed by a declaration.
-3. **Alias membership** — the normalized number appears in the other record's `aliases[]`.
-4. **Contract number**, normalized, within the same institution. Scoped by
+3. **Contract number**, normalized, within the same institution. Scoped by
    institution because two banks may issue the same digits, and a false merge
    hides an account while a false split only produces a reviewable finding.
+   Ranked above the number rungs because a contract number survives a ledger
+   renumbering, which is exactly the case those rungs miss.
+4. **Alias membership** — the normalized number appears in the other record's `aliases[]`.
 5. **Normalized account-number equality**.
 6. **Same institution and trailing digits** — same institution and the same trailing four digits, which **suggests and never auto-accepts**.
 7. **No match**.
@@ -511,6 +513,36 @@ you actually cared about.
 Record which account was used as the control, and its agreement, in the
 reconstructed account's `notes`. Next year's reviewer cannot re-derive that the
 method was validated; they can only read that it was.
+
+### Configuring a daily value series
+
+A `daily_value_series` source **requires** `contract_open_dates` in
+`sources.json` — the reader refuses to load without it:
+
+```jsonc
+{
+  "filer": "primary", "institution": "T-Bank",
+  "glob": "portfolio_values.csv",
+  "reader": "daily_value_series", "profile": "tbank_daily_values",
+  "currency": "RUB",
+  "contract_open_dates": {
+    "broker_iis":  "2022-03-14",
+    "broker_main": "2025-06-01"
+  }
+}
+```
+
+Each date is the account's contract-open date, printed in that account's own
+broker report (`Инвестор: NAME / NUMBER от DATE`). The export's columns carry
+no account number, so these dates are the only thing that decides which column
+is which account — without them the sole remaining option is column order, and
+column order is precisely the signal a transposition preserves.
+
+The count of populated columns must equal the count of dates supplied. A
+mismatch is refused rather than paired positionally: a column blank on every
+row would otherwise drop out and slide every remaining column onto an
+older account, which passes the "cannot predate the account" check and
+produces exactly the misattribution the matching rule exists to prevent.
 
 ### When a broker report states holdings but no prices
 
