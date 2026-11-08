@@ -24,9 +24,9 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 from utils import SUPPORTED_YEARS, get_constant, load_tax_constants  # noqa: E402
 
 
-def test_supported_years_cover_2023_through_2026():
+def test_supported_years_cover_2023_through_2027():
     """Y2: amended-return years and the planning year are both present."""
-    assert SUPPORTED_YEARS == ["2023", "2024", "2025", "2026"]
+    assert SUPPORTED_YEARS == ["2023", "2024", "2025", "2026", "2027"]
 
 
 # ---------------------------------------------------------------------------
@@ -375,10 +375,15 @@ def test_2026_educator_expense_limit():
 
 @pytest.mark.parametrize("year,mfj,single", [
     ("2023", (43500, 47500, 73000), (21750, 23750, 36500)),
+    ("2024", (46000, 50000, 76500), (23000, 25000, 38250)),
+    ("2025", (47500, 51000, 79000), (23750, 25500, 39500)),
     ("2026", (48500, 52500, 80500), (24250, 26250, 40250)),
 ])
 def test_savers_credit_bands_by_year(year, mfj, single):
-    """Saver's Credit (IRC 25B) AGI bands, Notice 2022-55 / Notice 2025-67."""
+    """Saver's Credit (IRC 25B) AGI bands: Notice 2022-55 (2023), the IRS
+    Saver's Credit page table (2024), Notice 2024-80 (2025), Notice 2025-67
+    (2026). 2025 previously carried 49,000/53,000/81,500 and 24,500/26,500/
+    40,750, which no source supports."""
     sc = load_tax_constants(year)["credits"]["savers_credit"]
     assert (sc["mfj"]["50_percent"], sc["mfj"]["20_percent"], sc["mfj"]["10_percent"]) == mfj
     assert (sc["single"]["50_percent"], sc["single"]["20_percent"], sc["single"]["10_percent"]) == single

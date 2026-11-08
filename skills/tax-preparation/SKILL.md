@@ -18,7 +18,7 @@ metadata:
   last-updated: 2026-08-15
   target-users: individuals, families, self-employed
   tax-year: 2025
-  supported-tax-years: "2023-2026"
+  supported-tax-years: "2023-2027"
   state-coverage: "federal + California (2023–2025)"
 ---
 # Tax Preparation Skill
@@ -41,7 +41,7 @@ When the user provides PDF documents (W-2s, 1099s, brokerage statements), follow
 Use the `Read` tool to extract data from provided PDFs.
 - Categorize data using the field-mapping tables in `./references/form_processing.md`.
 - For ambiguous form fields, consult `./references/few_shots.md` for extraction examples.
-- **Required field — tax year**: every checkpoint must state the tax year explicitly. Supported years come from `supported_years` in `./scripts/tax_constants.json` (currently **2023–2026**).
+- **Required field — tax year**: every checkpoint must state the tax year explicitly. Supported years come from `supported_years` in `./scripts/tax_constants.json` (currently **2023–2027**).
   > **Tax-year stop rule**: if the requested year is not in `supported_years`, **stop and tell the user** rather than approximating with an adjacent year's figures. Bracket, deduction and credit amounts are indexed annually and OBBBA changed several of them mid-decade, so a neighbouring year is not a safe substitute.
 - **Required field — state of residence**: needed to decide whether the state layer (Step 3.5) applies.
 - **Checkpoint**: Present the extracted data in a structured JSON block to the user and ask: *"Please confirm these values match your documents before we proceed to calculations."*

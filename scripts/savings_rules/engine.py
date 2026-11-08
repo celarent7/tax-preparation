@@ -83,7 +83,8 @@ def niit_on_gain(tax_data: Dict[str, Any], filing_status: str,
     """
     threshold = get_status_value(tax_data["niit_thresholds"], filing_status,
                                  "NIIT threshold")
-    return calculate_niit(float(magi), max(0.0, float(gain)), threshold)["tax"]
+    return calculate_niit(float(magi), max(0.0, float(gain)), threshold,
+                          tax_data["niit_rate"])["tax"]
 
 
 def ca_marginal_rate(tax_data: Dict[str, Any], year: str, filing_status: str,
@@ -111,7 +112,7 @@ def ca_nonconformity(tax_data: Dict[str, Any]) -> Dict[str, Any]:
     `tax_year` in the constants is an int (2025); the per-year state keys are
     strings ("2025"). Coerce to str so the lookup hits.
     """
-    year = str(tax_data.get("tax_year", "2025"))
+    year = str(tax_data["tax_year"])
     return tax_data.get("states", {}).get("CA", {}).get(year, {}).get("nonconformity", {})
 
 

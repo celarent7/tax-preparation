@@ -124,45 +124,40 @@ def additional_medicare_8959(wages: float, se_net_profit: float,
     }
 
 
-#: AGI above which the prior-year safe harbor rises from 100% to 110%.
-#: Source: IRS Form 1040-ES, https://www.irs.gov/pub/irs-pdf/f1040es.pdf —
-#: "If your adjusted gross income (AGI) ... was more than $150,000 ($75,000 if
-#: your filing status ... is married filing separately), substitute 110% for
-#: 100%". Statutory (IRC 6654(d)(1)(C)), not inflation-indexed.
-HIGH_INCOME_THRESHOLD = 150000
-HIGH_INCOME_THRESHOLD_MFS = 75000
+def high_income_threshold(filing_status: str, safe_harbor: Dict) -> float:
+    """Prior-year AGI threshold that triggers the higher prior-year percentage.
 
-
-def high_income_threshold(filing_status: str) -> float:
-    """Prior-year AGI threshold that triggers the 110% safe harbor.
-
-    Married filing separately uses half the general threshold. Applying the
-    $150,000 figure to an MFS filer understated the required payment and would
-    have caused an underpayment penalty (finding F9).
+    `safe_harbor` is the year's `estimated_tax_safe_harbor` block (Form 1040-ES:
+    "more than $150,000 ($75,000 if ... married filing separately)"; IRC
+    6654(d)(1)(C)). Married filing separately uses its own, half-size figure;
+    applying the general figure to an MFS filer understated the required
+    payment (finding F9).
     """
     status = normalize_filing_status(filing_status)
     if status == "married_separately":
-        return HIGH_INCOME_THRESHOLD_MFS
-    return HIGH_INCOME_THRESHOLD
+        return safe_harbor["high_income_agi_mfs"]
+    return safe_harbor["high_income_agi"]
 
 
 def calculate_safe_harbor(prior_year_tax: float, prior_year_agi: float,
-                          filing_status: str) -> Dict:
+                          filing_status: str, safe_harbor: Dict) -> Dict:
     """Calculate safe harbor amounts to avoid the underpayment penalty.
 
     Required annual payment (Form 1040-ES General Rule) is the LESSER of:
-      (a) 90% of the tax shown on the current-year return, and
-      (b) 100% of the tax shown on the prior-year return — substituting 110%
-          when prior-year AGI exceeded the high-income threshold.
+      (a) `current_year_pct` (90%) of the tax shown on the current-year return, and
+      (b) 100% of the tax shown on the prior-year return, substituting
+          `high_income_prior_year_pct` (110%) when prior-year AGI exceeded the
+          high-income threshold.
     This function computes leg (b); the caller applies the min() against leg (a).
     """
-    threshold = high_income_threshold(filing_status)
+    threshold = high_income_threshold(filing_status, safe_harbor)
     # The statute says "more than", so AGI exactly at the threshold does not
     # trigger the higher percentage.
     applies_high_income = prior_year_agi > threshold
 
     standard_safe_harbor = prior_year_tax
-    high_income_safe_harbor = prior_year_tax * 1.10 if applies_high_income else prior_year_tax
+    high_income_safe_harbor = (prior_year_tax * safe_harbor["high_income_prior_year_pct"]
+                               if applies_high_income else prior_year_tax)
 
     return {
         "standard": round(standard_safe_harbor, 2),
@@ -373,6 +368,7 @@ def main():
     niit = calculate_niit(
         agi, args.net_investment_income,
         get_status_value(tax_data["niit_thresholds"], args.filing_status, "NIIT threshold"),
+        tax_data["niit_rate"],
     )
 
     # Total estimated tax liability
@@ -380,12 +376,14 @@ def main():
                            + add_medicare["tax"] + niit["tax"])
 
     # Safe Harbor analysis
+    safe_harbor_rules = tax_data["estimated_tax_safe_harbor"]
     safe_harbor = calculate_safe_harbor(
-        args.prior_year_tax, args.prior_year_agi, args.filing_status
+        args.prior_year_tax, args.prior_year_agi, args.filing_status, safe_harbor_rules
     )
 
     # Calculate remaining amount to pay
-    total_target = min(total_estimated_tax * 0.90, safe_harbor["minimum_required"])
+    total_target = min(total_estimated_tax * safe_harbor_rules["current_year_pct"],
+                       safe_harbor["minimum_required"])
     remaining_to_pay = max(0, total_target - args.withholding_to_date)
     quarterly_payment = remaining_to_pay / 4
 
@@ -466,7 +464,7 @@ def main():
                   f"taxable income — Form {qbi_result.form})")
         print("-" * 45)
         print(f"Safe Harbor Requirement:    ${safe_harbor['minimum_required']:,.2f}")
-        print(f"Target Total Payment:       ${total_target:,.2f} (90% of current or safe harbor)")
+        print(f"Target Total Payment:       ${total_target:,.2f} ({safe_harbor_rules['current_year_pct']:.0%} of current or safe harbor)")
         print(f"Federal Withholding:        ${args.withholding_to_date:,.2f}")
         print("-" * 45)
         print(f"REMAINING TO PAY:           ${remaining_to_pay:,.2f}")

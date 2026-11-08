@@ -33,6 +33,12 @@ from estimated_tax_calculator import (  # noqa: E402
     calculate_safe_harbor,
     high_income_threshold,
 )
+from utils import SUPPORTED_YEARS, load_tax_constants  # noqa: E402
+
+
+def _sh_2025():
+    """The 2025 federal safe-harbor block (estimated_tax_safe_harbor)."""
+    return load_tax_constants("2025")["estimated_tax_safe_harbor"]
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +55,7 @@ from estimated_tax_calculator import (  # noqa: E402
 ])
 def test_high_income_threshold_by_status(status, expected):
     """F9: MFS uses $75,000; every other status uses $150,000."""
-    assert high_income_threshold(status) == expected
+    assert high_income_threshold(status, _sh_2025()) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +68,7 @@ def test_mfs_above_75k_requires_110_percent():
     Prior-year tax $20,000, prior-year AGI $80,000, MFS.
     Correct: 110% x 20,000 = $22,000. The old code said $20,000.
     """
-    result = calculate_safe_harbor(20000, 80000, "married_separately")
+    result = calculate_safe_harbor(20000, 80000, "married_separately", _sh_2025())
     assert result["applies_high_income"] is True
     assert result["minimum_required"] == 22000
     assert result["threshold_used"] == 75000
@@ -70,7 +76,7 @@ def test_mfs_above_75k_requires_110_percent():
 
 def test_mfs_below_75k_requires_100_percent():
     """MFS with prior-year AGI under $75,000 stays at 100%."""
-    result = calculate_safe_harbor(20000, 70000, "married_separately")
+    result = calculate_safe_harbor(20000, 70000, "married_separately", _sh_2025())
     assert result["applies_high_income"] is False
     assert result["minimum_required"] == 20000
 
@@ -80,7 +86,7 @@ def test_non_mfs_between_75k_and_150k_stays_at_100_percent():
 
     A single filer with $80,000 prior AGI is NOT a high-income taxpayer.
     """
-    result = calculate_safe_harbor(20000, 80000, "single")
+    result = calculate_safe_harbor(20000, 80000, "single", _sh_2025())
     assert result["applies_high_income"] is False
     assert result["minimum_required"] == 20000
     assert result["threshold_used"] == 150000
@@ -88,7 +94,7 @@ def test_non_mfs_between_75k_and_150k_stays_at_100_percent():
 
 def test_non_mfs_above_150k_requires_110_percent():
     """Prior tax $30,000, AGI $160,000, single -> 110% x 30,000 = $33,000."""
-    result = calculate_safe_harbor(30000, 160000, "single")
+    result = calculate_safe_harbor(30000, 160000, "single", _sh_2025())
     assert result["applies_high_income"] is True
     assert result["minimum_required"] == 33000
 
@@ -101,14 +107,29 @@ def test_non_mfs_above_150k_requires_110_percent():
 ])
 def test_threshold_boundary_is_strictly_greater_than(status, agi, applies):
     """The statute says 'more than', so equality does not trigger 110%."""
-    result = calculate_safe_harbor(10000, agi, status)
+    result = calculate_safe_harbor(10000, agi, status, _sh_2025())
     assert result["applies_high_income"] is applies
 
 
 def test_unknown_filing_status_raises():
     """D2: no silent fallback when computing the threshold."""
     with pytest.raises(ValueError):
-        calculate_safe_harbor(10000, 200000, "not_a_status")
+        calculate_safe_harbor(10000, 200000, "not_a_status", _sh_2025())
+
+
+def test_safe_harbor_reads_figures_from_block():
+    """Threshold and 110% come from the constants block, not module literals."""
+    block = {"high_income_agi": 1, "high_income_agi_mfs": 1,
+             "high_income_prior_year_pct": 1.5, "current_year_pct": 0.9}
+    assert calculate_safe_harbor(1000, 2, "single", block)["minimum_required"] == 1500.0
+
+
+@pytest.mark.parametrize("year", SUPPORTED_YEARS)
+def test_every_year_has_estimated_tax_safe_harbor(year):
+    block = load_tax_constants(year)["estimated_tax_safe_harbor"]
+    for key in ("high_income_agi", "high_income_agi_mfs",
+                "high_income_prior_year_pct", "current_year_pct"):
+        assert block[key] is not None, key
 
 
 # ---------------------------------------------------------------------------

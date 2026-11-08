@@ -8,7 +8,7 @@ Calculates federal and state tax liability for RSU compensation including:
 - Net Investment Income Tax (NIIT)
 - Additional Medicare Tax
 
-Uses 2025 IRS tax brackets and rates.
+Uses the brackets for `--year` (default: `default_tax_year` in tax_constants.json).
 
 DEPRECATED (audit finding F13)
 ------------------------------
@@ -25,7 +25,8 @@ Prefer the main calculators; do not add new logic here.
 
 Usage:
     python calculate_rsu_tax.py --filing-status single --total-income 300000 \
-        --rsu-vesting-income 100000 --short-term-gains 5000 --long-term-gains 20000
+        --rsu-vesting-income 100000 --short-term-gains 5000 --long-term-gains 20000 \
+        --year 2026
 """
 
 import argparse
@@ -37,45 +38,60 @@ from typing import Dict, List, Tuple
 # Add the scripts directory to the path to import utils
 # This is in a subdirectory scripts/rsu/, so we need to go up two levels
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import load_tax_constants, additional_medicare_threshold, select_for_status
-
-# Load 2025 Tax Data
-TAX_DATA = load_tax_constants()
-MAP = TAX_DATA["filing_status_map"]
-
-# Helper to map status to standard names used in tax_constants.json
-def get_std_status(status: str) -> str:
-    return MAP.get(status, status)
-
-# Centralized constants from config
-TAX_BRACKETS = {s: TAX_DATA["tax_brackets_processed"][get_std_status(s)] for s in MAP}
-LTCG_BRACKETS = {s: TAX_DATA["ltcg_brackets_processed"][get_std_status(s)] for s in MAP}
-NIIT_THRESHOLDS = {s: TAX_DATA["niit_thresholds"][get_std_status(s)] for s in MAP}
-# NIIT and Additional Medicare thresholds are NOT the same table: a qualifying
-# surviving spouse takes $250,000 for NIIT but $200,000 for Additional Medicare.
-# This previously aliased niit_thresholds for both.
-ADDITIONAL_MEDICARE_THRESHOLDS = {
-    s: additional_medicare_threshold(get_std_status(s), TAX_DATA["se_tax"]) for s in MAP
-}
-STANDARD_DEDUCTION = {s: TAX_DATA["standard_deductions"][get_std_status(s)] for s in MAP}
-# Top MARGINAL rates for rough estimation only — never effective rates. The old
-# flat `state_tax_rates` table (with CA at 13.3%) was removed in finding C1.
-STATE_TAX_RATES = TAX_DATA.get("state_top_marginal_rates", {}).get("rates", {})
-STATES = TAX_DATA.get("states", {})
+from utils import (
+    DEFAULT_TAX_YEAR,
+    additional_medicare_threshold,
+    load_tax_constants,
+    make_year_arg,
+    select_for_status,
+)
 
 
-def calculate_ordinary_income_tax(taxable_income: float, filing_status: str) -> Tuple[float, List[Dict]]:
+def load_tables(year: str) -> Dict:
+    """Every figure this module needs for one tax year, keyed by canonical status.
+
+    Replaces the module-level tables that were loaded once, for one year, at
+    import. Lookups go through `select_for_status`, so CLI aliases (mfj, hoh)
+    resolve and an unknown status raises instead of defaulting.
+    """
+    data = load_tax_constants(year)
+    statuses = list(data["standard_deductions"])
+    return {
+        "year": str(data["tax_year"]),
+        "tax_brackets": data["tax_brackets_processed"],
+        "ltcg_brackets": data["ltcg_brackets_processed"],
+        "niit_thresholds": data["niit_thresholds"],
+        # NIIT and Additional Medicare thresholds are NOT the same table: a
+        # qualifying surviving spouse takes $250,000 for NIIT but $200,000 for
+        # Additional Medicare.
+        "additional_medicare_thresholds": {
+            s: additional_medicare_threshold(s, data["se_tax"]) for s in statuses
+        },
+        "standard_deduction": data["standard_deductions"],
+        "niit_rate": data["niit_rate"],
+        "additional_medicare_rate": data["se_tax"]["additional_medicare_rate"],
+        # Top MARGINAL rates for rough estimation only - never effective rates.
+        # The old flat `state_tax_rates` table (with CA at 13.3%) was removed in
+        # finding C1.
+        "state_tax_rates": data.get("state_top_marginal_rates", {}).get("rates", {}),
+        "states": data.get("states", {}),
+    }
+
+
+def calculate_ordinary_income_tax(taxable_income: float, filing_status: str,
+                                  tables: Dict) -> Tuple[float, List[Dict]]:
     """
     Calculate federal ordinary income tax using marginal brackets.
 
     Args:
         taxable_income: Taxable income after deductions
         filing_status: single, mfj, mfs, or hoh
+        tables: per-year figures from load_tables()
 
     Returns:
         Tuple of (total_tax, breakdown_by_bracket)
     """
-    brackets = select_for_status(TAX_BRACKETS, filing_status, "tax brackets")
+    brackets = select_for_status(tables["tax_brackets"], filing_status, "tax brackets")
     total_tax = 0
     breakdown = []
     prev_limit = 0
@@ -101,7 +117,7 @@ def calculate_ordinary_income_tax(taxable_income: float, filing_status: str) -> 
 
 
 def calculate_ltcg_tax(taxable_income_before_gains: float, long_term_gains: float,
-                       filing_status: str) -> Tuple[float, List[Dict]]:
+                       filing_status: str, tables: Dict) -> Tuple[float, List[Dict]]:
     """
     Calculate long-term capital gains tax.
     LTCG is stacked on top of ordinary income.
@@ -110,11 +126,12 @@ def calculate_ltcg_tax(taxable_income_before_gains: float, long_term_gains: floa
         taxable_income_before_gains: Ordinary taxable income
         long_term_gains: Long-term capital gains
         filing_status: single, mfj, mfs, or hoh
+        tables: per-year figures from load_tables()
 
     Returns:
         Tuple of (total_ltcg_tax, breakdown_by_bracket)
     """
-    brackets = select_for_status(LTCG_BRACKETS, filing_status, "LTCG brackets")
+    brackets = select_for_status(tables["ltcg_brackets"], filing_status, "LTCG brackets")
     total_tax = 0
     breakdown = []
 
@@ -151,19 +168,22 @@ def calculate_ltcg_tax(taxable_income_before_gains: float, long_term_gains: floa
     return round(total_tax, 2), breakdown
 
 
-def calculate_niit(magi: float, net_investment_income: float, filing_status: str) -> Dict:
+def calculate_niit(magi: float, net_investment_income: float, filing_status: str,
+                   tables: Dict) -> Dict:
     """
-    Calculate Net Investment Income Tax (3.8%).
+    Calculate Net Investment Income Tax (`tables["niit_rate"]`, 3.8%).
 
     Args:
         magi: Modified Adjusted Gross Income
         net_investment_income: Total investment income (cap gains, dividends, etc.)
         filing_status: single, mfj, mfs, or hoh
+        tables: per-year figures from load_tables()
 
     Returns:
         Dictionary with NIIT calculation
     """
-    threshold = NIIT_THRESHOLDS.get(filing_status, 200000)
+    threshold = select_for_status(tables["niit_thresholds"], filing_status, "NIIT threshold")
+    rate = tables["niit_rate"]
 
     if magi <= threshold:
         return {
@@ -177,7 +197,7 @@ def calculate_niit(magi: float, net_investment_income: float, filing_status: str
 
     excess_magi = magi - threshold
     niit_base = min(excess_magi, net_investment_income)
-    niit = niit_base * 0.038
+    niit = niit_base * rate
 
     return {
         "applies": True,
@@ -186,23 +206,26 @@ def calculate_niit(magi: float, net_investment_income: float, filing_status: str
         "excess_over_threshold": round(excess_magi, 2),
         "net_investment_income": net_investment_income,
         "niit_base": round(niit_base, 2),
-        "rate": "3.8%",
+        "rate": f"{rate:.1%}",
         "niit": round(niit, 2)
     }
 
 
-def calculate_additional_medicare_tax(wages: float, filing_status: str) -> Dict:
+def calculate_additional_medicare_tax(wages: float, filing_status: str, tables: Dict) -> Dict:
     """
-    Calculate Additional Medicare Tax (0.9%) on wages.
+    Calculate Additional Medicare Tax (`tables["additional_medicare_rate"]`, 0.9%) on wages.
 
     Args:
         wages: Total wages including RSU vesting income
         filing_status: single, mfj, mfs, or hoh
+        tables: per-year figures from load_tables()
 
     Returns:
         Dictionary with additional medicare tax calculation
     """
-    threshold = ADDITIONAL_MEDICARE_THRESHOLDS.get(filing_status, 200000)
+    threshold = select_for_status(tables["additional_medicare_thresholds"], filing_status,
+                                  "Additional Medicare threshold")
+    rate = tables["additional_medicare_rate"]
 
     if wages <= threshold:
         return {
@@ -214,19 +237,20 @@ def calculate_additional_medicare_tax(wages: float, filing_status: str) -> Dict:
         }
 
     excess_wages = wages - threshold
-    additional_tax = excess_wages * 0.009
+    additional_tax = excess_wages * rate
 
     return {
         "applies": True,
         "threshold": threshold,
         "wages": wages,
         "excess_over_threshold": round(excess_wages, 2),
-        "rate": "0.9%",
+        "rate": f"{rate:.1%}",
         "additional_medicare_tax": round(additional_tax, 2)
     }
 
 
-def estimate_state_tax(taxable_income: float, state: str, long_term_gains: float = 0) -> Dict:
+def estimate_state_tax(taxable_income: float, state: str, tables: Dict,
+                       long_term_gains: float = 0) -> Dict:
     """
     Estimate state income tax (simplified calculation).
 
@@ -239,11 +263,11 @@ def estimate_state_tax(taxable_income: float, state: str, long_term_gains: float
         Dictionary with state tax estimate
     """
     state = state.upper()
-    rate = STATE_TAX_RATES.get(state, 0)
+    rate = tables["state_tax_rates"].get(state, 0)
 
     # Special handling for Washington's capital gains excise tax.
     if state == "WA":
-        excise = (STATES.get("WA") or {}).get("capital_gains_excise") or {}
+        excise = (tables["states"].get("WA") or {}).get("capital_gains_excise") or {}
         deduction = excise.get("standard_deduction_2025")
         if deduction is None:
             return {
@@ -316,7 +340,8 @@ def calculate_full_rsu_tax(
     long_term_gains: float = 0,
     other_investment_income: float = 0,
     state: str = "NONE",
-    itemized_deductions: float = 0
+    itemized_deductions: float = 0,
+    year: str = DEFAULT_TAX_YEAR,
 ) -> Dict:
     """
     Calculate comprehensive RSU tax liability.
@@ -330,12 +355,16 @@ def calculate_full_rsu_tax(
         other_investment_income: Dividends, interest, etc.
         state: State code for state tax estimate
         itemized_deductions: If itemizing (0 = use standard)
+        year: tax year whose figures apply
 
     Returns:
         Dictionary with complete tax calculation
     """
+    tables = load_tables(year)
+
     # Determine deduction
-    standard_deduction = select_for_status(STANDARD_DEDUCTION, filing_status, "standard deduction")
+    standard_deduction = select_for_status(tables["standard_deduction"], filing_status,
+                                           "standard deduction")
     deduction = max(itemized_deductions, standard_deduction)
     deduction_type = "itemized" if itemized_deductions > standard_deduction else "standard"
 
@@ -349,24 +378,24 @@ def calculate_full_rsu_tax(
 
     # Calculate ordinary income tax
     ordinary_tax, ordinary_breakdown = calculate_ordinary_income_tax(
-        taxable_ordinary_income, filing_status
+        taxable_ordinary_income, filing_status, tables
     )
 
     # Calculate LTCG tax (stacked on top of ordinary income)
     ltcg_tax, ltcg_breakdown = calculate_ltcg_tax(
-        taxable_ordinary_income, long_term_gains, filing_status
+        taxable_ordinary_income, long_term_gains, filing_status, tables
     )
 
     # Calculate NIIT
     net_investment_income = short_term_gains + long_term_gains + other_investment_income
-    niit_result = calculate_niit(magi, net_investment_income, filing_status)
+    niit_result = calculate_niit(magi, net_investment_income, filing_status, tables)
 
     # Calculate Additional Medicare Tax
-    additional_medicare = calculate_additional_medicare_tax(total_income, filing_status)
+    additional_medicare = calculate_additional_medicare_tax(total_income, filing_status, tables)
 
     # State tax estimate
     total_taxable = taxable_ordinary_income + long_term_gains
-    state_tax = estimate_state_tax(total_taxable, state, long_term_gains)
+    state_tax = estimate_state_tax(total_taxable, state, tables, long_term_gains)
 
     # Total federal tax
     total_federal_tax = (
@@ -383,6 +412,7 @@ def calculate_full_rsu_tax(
 
     return {
         "inputs": {
+            "tax_year": tables["year"],
             "filing_status": filing_status,
             "total_income": total_income,
             "rsu_vesting_income": rsu_vesting_income,
@@ -471,6 +501,7 @@ Filing status options: single, mfj (married filing jointly), mfs (married filing
     parser.add_argument('--itemized-deductions', type=float, default=0,
                         help='Itemized deductions (0 = use standard deduction)')
     parser.add_argument('--output', type=str, help='Output file path (optional)')
+    make_year_arg(parser)
 
     args = parser.parse_args()
 
@@ -482,7 +513,8 @@ Filing status options: single, mfj (married filing jointly), mfs (married filing
         long_term_gains=args.long_term_gains,
         other_investment_income=args.other_investment_income,
         state=args.state,
-        itemized_deductions=args.itemized_deductions
+        itemized_deductions=args.itemized_deductions,
+        year=args.year,
     )
 
     output_json = json.dumps(result, indent=2)

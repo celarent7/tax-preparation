@@ -162,7 +162,7 @@ def rule_tax_loss_harvesting(profile: Dict[str, Any],
     if str(profile.get("state", "")).upper() == "CA":
         nc = ca_nonconformity(tax_data)
         if not nc.get("capital_gains_preferential", True):
-            ca_rate = ca_marginal_rate(tax_data, str(tax_data.get("tax_year", "2025")),
+            ca_rate = ca_marginal_rate(tax_data, str(tax_data["tax_year"]),
                                        fs, profile["agi"]) or 0.0
             ca_saved = ((before["taxable_st"] - after["taxable_st"])
                         + (before["taxable_lt"] - after["taxable_lt"])

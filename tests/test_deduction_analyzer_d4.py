@@ -30,8 +30,24 @@ from deduction_analyzer import (  # noqa: E402
     analyze_medical_deduction,
     analyze_mortgage_interest,
     mortgage_debt_limit_for,
+    mortgage_limits,
 )
 from utils import load_tax_constants  # noqa: E402
+
+
+def _limits_2025():
+    return mortgage_limits(load_tax_constants("2025"))
+
+
+def _rates_2025():
+    """The four 2025 charitable AGI-ceiling rates, as analyze_charitable keywords."""
+    d = load_tax_constants("2025")
+    return {
+        "cash_limit_rate": d["credits"]["charitable_cash_limit"],
+        "property_limit_rate": d["charitable_property_agi_limit"],
+        "cash_30_org_rate": d["charitable_30_org_cash_agi_limit"],
+        "property_30_org_rate": d["charitable_30_org_property_agi_limit"],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +65,7 @@ from utils import load_tax_constants  # noqa: E402
 ])
 def test_debt_limit_grandfathering(status, date, expected_limit, grandfathered):
     """D4: pre-TCJA debt keeps the $1M limit; the cutoff is inclusive."""
-    limit, is_grandfathered = mortgage_debt_limit_for(status, date, 750000, 375000)
+    limit, is_grandfathered = mortgage_debt_limit_for(status, date, _limits_2025())
     assert limit == expected_limit
     assert is_grandfathered is grandfathered
 
@@ -63,9 +79,9 @@ def test_grandfathered_mortgage_deducts_more_interest():
     The old code always applied the $750,000 limit, costing this filer $6,000
     of deduction.
     """
-    new = analyze_mortgage_interest(36000, 900000, "married_jointly",
+    new = analyze_mortgage_interest(36000, 900000, "married_jointly", _limits_2025(),
                                     origination_date="2020-01-01")
-    old = analyze_mortgage_interest(36000, 900000, "married_jointly",
+    old = analyze_mortgage_interest(36000, 900000, "married_jointly", _limits_2025(),
                                     origination_date="2016-01-01")
 
     assert new["deductible_amount"] == 30000.00
@@ -82,9 +98,9 @@ def test_average_balance_method_is_more_favorable():
       by original balance: 750,000/900,000 x 36,000 = $30,000.00
       by average balance:  750,000/800,000 x 36,000 = $33,750.00
     """
-    by_original = analyze_mortgage_interest(36000, 900000, "single",
+    by_original = analyze_mortgage_interest(36000, 900000, "single", _limits_2025(),
                                             origination_date="2020-01-01")
-    by_average = analyze_mortgage_interest(36000, 900000, "single",
+    by_average = analyze_mortgage_interest(36000, 900000, "single", _limits_2025(),
                                            origination_date="2020-01-01",
                                            average_balance=800000)
 
@@ -108,7 +124,7 @@ def test_public_charity_limits_unchanged():
     together (90,000) exceed the 60,000 aggregate cap, so only 60,000 is
     deductible this year and the remaining 30,000 carries over.
     """
-    r = analyze_charitable(70000, 40000, 100000)
+    r = analyze_charitable(70000, 40000, 100000, **_rates_2025())
     assert r["cash_limit"] == 60000
     assert r["property_limit"] == 30000
     assert r["overall_agi_limit"] == 60000
@@ -125,7 +141,7 @@ def test_thirty_percent_organization_limits():
       cash:     min(40,000, 30% x 100,000 = 30,000) = 30,000 (10,000 carryover)
       property: min(30,000, 20% x 100,000 = 20,000) = 20,000 (10,000 carryover)
     """
-    r = analyze_charitable(0, 0, 100000,
+    r = analyze_charitable(0, 0, 100000, **_rates_2025(),
                            cash_to_30_percent_orgs=40000,
                            property_to_30_percent_orgs=30000)
     assert r["cash_30_percent_org_limit"] == 30000
@@ -137,9 +153,23 @@ def test_thirty_percent_organization_limits():
 def test_charitable_rates_come_from_constants():
     """Rule 5: the AGI ceilings are read from the constants, not hard-coded."""
     data = load_tax_constants("2025")
-    r = analyze_charitable(100000, 0, 100000,
-                           cash_limit_rate=data["credits"]["charitable_cash_limit"])
+    r = analyze_charitable(100000, 0, 100000, **_rates_2025())
     assert r["cash_limit"] == 100000 * data["credits"]["charitable_cash_limit"]
+
+
+def test_grandfathered_limit_read_from_constants():
+    limits = {"mortgage_debt_limit": 750000, "mortgage_debt_limit_mfs": 375000,
+              "mortgage_debt_limit_grandfathered": 2,
+              "mortgage_debt_limit_grandfathered_mfs": 1,
+              "mortgage_grandfather_cutoff": "2017-12-15"}
+    assert mortgage_debt_limit_for("single", "2017-01-01", limits) == (2, True)
+
+
+def test_30_org_caps_read_from_arguments():
+    r = analyze_charitable(0, 0, 100000, cash_limit_rate=0.6, property_limit_rate=0.3,
+                           cash_30_org_rate=0.1, property_30_org_rate=0.05,
+                           cash_to_30_percent_orgs=50000)
+    assert r["cash_30_percent_org_limit"] == 10000.0
 
 
 # ---------------------------------------------------------------------------

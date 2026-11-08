@@ -154,15 +154,43 @@ def get_supported_years() -> List[str]:
 SUPPORTED_YEARS: List[str] = get_supported_years()
 
 
-def make_year_arg(parser: argparse.ArgumentParser, default: str = "2025") -> None:
+def get_default_tax_year() -> str:
+    """The configured default tax year (`default_tax_year` in the constants).
+
+    One place decides which year a script, tool or helper uses when the caller
+    names none. Raises if the configured year has no data block, rather than
+    silently falling back to some other year.
+    """
+    full_data = load_raw_constants()
+    default = full_data.get("default_tax_year")
+    supported = full_data.get("supported_years") or _year_blocks(full_data)
+    if default not in supported:
+        raise ValueError(
+            f"tax_constants.json default_tax_year={default!r} is not one of "
+            f"supported_years={list(supported)}. Update both together."
+        )
+    return default
+
+
+#: The year used whenever a caller does not name one. Read once at import.
+DEFAULT_TAX_YEAR: str = get_default_tax_year()
+
+
+def make_year_arg(parser: argparse.ArgumentParser, default: Optional[str] = None) -> None:
     """Register a `--year` argument whose choices track the constants file.
 
     Using this everywhere prevents the class of bug where a year is added to
     the data but a script's hard-coded `choices` list still rejects it, or
     where a script silently falls through to another year's figures (Y5).
+    `default=None` means DEFAULT_TAX_YEAR; an unsupported default raises.
     """
+    if default is None:
+        default = DEFAULT_TAX_YEAR
     if default not in SUPPORTED_YEARS:
-        default = SUPPORTED_YEARS[-1]
+        raise ValueError(
+            f"Default tax year {default!r} is not supported "
+            f"(supported: {', '.join(SUPPORTED_YEARS)})."
+        )
     parser.add_argument(
         "--year",
         type=str,
@@ -249,10 +277,13 @@ def _process_brackets(bracket_list: Sequence[Dict[str, Any]]):
     ]
 
 
-def load_tax_constants(year: str = "2025") -> Dict[str, Any]:
-    """Load tax constants for a specific year from the centralized JSON file."""
+def load_tax_constants(year: Optional[str] = None) -> Dict[str, Any]:
+    """Load tax constants for a specific year from the centralized JSON file.
+
+    `year=None` means DEFAULT_TAX_YEAR.
+    """
     full_data = load_raw_constants()
-    year = str(year)
+    year = DEFAULT_TAX_YEAR if year is None else str(year)
 
     if year not in full_data or not year.isdigit():
         supported = ", ".join(_year_blocks(full_data))

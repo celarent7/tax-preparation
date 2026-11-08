@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Tax Calculator - Calculate federal income tax based on filing status and income.
-Supports 2024 and 2025 tax year brackets and standard deductions.
+Supports every tax year listed in `supported_years` in tax_constants.json.
 """
 
 import argparse
@@ -106,10 +106,11 @@ def calculate_preferential_tax(ordinary_income: float, preferential_income: floa
 
 
 def calculate_niit(magi: float, net_investment_income: float, threshold: float,
-                   rate: float = 0.038) -> Dict:
-    """Net Investment Income Tax: 3.8% of the LESSER of NII or MAGI over threshold.
+                   rate: float) -> Dict:
+    """Net Investment Income Tax: `rate` (3.8%) of the LESSER of NII or MAGI over threshold.
 
-    IRC 1411. Thresholds are statutory and not inflation-indexed. The plugin
+    IRC 1411. Rate and thresholds come from the constants (`niit_rate`,
+    `niit_thresholds`); both are statutory and not inflation-indexed. The plugin
     carried niit_thresholds in its constants but never used them (finding F3).
     """
     excess_magi = max(0.0, magi - threshold)
@@ -377,7 +378,7 @@ def calculate_california_tax(federal_agi: float, filing_status: str, state_data:
                         + age_65_plus * ex["senior"]
                         + blind * ex["blind"]
                         + dependents * ex["dependent"])
-    exemption_phased_out = federal_agi > ex["phaseout_federal_agi_start"]
+    exemption_phased_out = federal_agi > get_constant(ex, "phaseout_federal_agi_start")
     if exemption_phased_out:
         # The FTB worksheet reduces the credit as AGI rises; flag rather than
         # approximate, so the user is told to run the worksheet.
@@ -695,6 +696,7 @@ def main():
     niit = calculate_niit(
         magi, net_investment_income,
         get_status_value(tax_data["niit_thresholds"], args.filing_status, "NIIT threshold"),
+        tax_data["niit_rate"],
     )
 
     wages = args.wages if args.wages is not None else args.gross_income
@@ -751,17 +753,21 @@ def main():
             print(f"Error: {e}")
             sys.exit(1)
         if state_data.get("type") == "progressive" and args.state.upper() == "CA":
-            state_result = calculate_california_tax(
-                federal_agi=agi, filing_status=args.filing_status, state_data=state_data,
-                hsa_contributions=args.hsa_contributions,
-                qbi_deduction=qbi_deduction,
-                obbba_deductions=args.obbba_deductions,
-                itemized_deductions=args.deductions,
-                state_income_tax_in_itemized=args.state_income_tax_paid,
-                dependents=args.dependents,
-                age_65_plus=args.age_65_plus, blind=args.blind,
-                is_renter=args.renter,
-            )
+            try:
+                state_result = calculate_california_tax(
+                    federal_agi=agi, filing_status=args.filing_status, state_data=state_data,
+                    hsa_contributions=args.hsa_contributions,
+                    qbi_deduction=qbi_deduction,
+                    obbba_deductions=args.obbba_deductions,
+                    itemized_deductions=args.deductions,
+                    state_income_tax_in_itemized=args.state_income_tax_paid,
+                    dependents=args.dependents,
+                    age_65_plus=args.age_65_plus, blind=args.blind,
+                    is_renter=args.renter,
+                )
+            except UnverifiedConstantError as e:
+                print(f"Error: {e}")
+                sys.exit(1)
         elif state_data.get("type") == "none":
             state_result = {"state": args.state.upper(), "type": "none",
                             "ca_tax": 0, "state_tax": 0,
@@ -842,7 +848,7 @@ def main():
         if preferential_income > 0:
             print(f"Preferential Rate Tax:  ${preferential_tax:,.2f}")
         if niit["tax"] > 0:
-            print(f"NIIT (3.8%):            ${niit['tax']:,.2f}")
+            print(f"NIIT ({tax_data['niit_rate']:.1%}):            ${niit['tax']:,.2f}")
         if add_medicare["tax"] > 0:
             print(f"Additional Medicare:    ${add_medicare['tax']:,.2f}")
         print(f"Tax Before Credits:     ${tax_before_credits:,.2f}")

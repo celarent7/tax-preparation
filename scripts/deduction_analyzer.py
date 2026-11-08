@@ -7,7 +7,7 @@ import argparse
 import json
 import os
 import sys
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # Add the scripts directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -113,37 +113,44 @@ def analyze_salt_deduction(
     }
 
 
-#: Debt incurred on or before this date keeps the pre-TCJA $1,000,000 limit
-#: ($500,000 MFS). IRC 163(h)(3)(F); see IRS Pub 936 "Grandfathered debt" and
-#: "Home acquisition debt limit".
-GRANDFATHER_CUTOFF = "2017-12-15"
-GRANDFATHERED_LIMIT = 1000000
-GRANDFATHERED_LIMIT_MFS = 500000
+#: The mortgage-limit keys read from a year's constants block (Pub 936).
+MORTGAGE_LIMIT_KEYS = (
+    "mortgage_debt_limit",
+    "mortgage_debt_limit_mfs",
+    "mortgage_debt_limit_grandfathered",
+    "mortgage_debt_limit_grandfathered_mfs",
+    "mortgage_grandfather_cutoff",
+)
+
+
+def mortgage_limits(tax_data: Dict) -> Dict[str, Any]:
+    """The five acquisition-debt limit figures for a tax year."""
+    return {key: tax_data[key] for key in MORTGAGE_LIMIT_KEYS}
 
 
 def mortgage_debt_limit_for(filing_status: str, origination_date: Optional[str],
-                            mortgage_debt_limit: float,
-                            mortgage_debt_limit_mfs: float) -> Tuple[float, bool]:
+                            limits: Dict[str, Any]) -> Tuple[float, bool]:
     """Resolve the acquisition-debt limit, honoring pre-TCJA grandfathering.
 
-    Debt incurred on or before December 15, 2017 keeps the $1,000,000 limit
-    ($500,000 MFS); later debt is capped at $750,000 ($375,000 MFS). The script
-    previously applied $750,000 unconditionally, understating the deduction for
-    anyone with an older mortgage (finding D4).
+    Debt incurred on or before `mortgage_grandfather_cutoff` (December 15,
+    2017; IRC 163(h)(3)(F)) keeps the grandfathered limit ($1,000,000, or
+    $500,000 MFS); later debt gets the current limit ($750,000 / $375,000).
+    The script previously applied the current limit unconditionally,
+    understating the deduction for anyone with an older mortgage (finding D4).
     """
     is_mfs = normalize_filing_status(filing_status) == "married_separately"
 
-    if origination_date and str(origination_date) <= GRANDFATHER_CUTOFF:
-        return (GRANDFATHERED_LIMIT_MFS if is_mfs else GRANDFATHERED_LIMIT), True
-    return (mortgage_debt_limit_mfs if is_mfs else mortgage_debt_limit), False
+    if origination_date and str(origination_date) <= limits["mortgage_grandfather_cutoff"]:
+        key = "mortgage_debt_limit_grandfathered_mfs" if is_mfs else "mortgage_debt_limit_grandfathered"
+        return limits[key], True
+    return (limits["mortgage_debt_limit_mfs"] if is_mfs else limits["mortgage_debt_limit"]), False
 
 
 def analyze_mortgage_interest(
     interest_paid: float,
     acquisition_debt: float,
     filing_status: str,
-    mortgage_debt_limit: float = 750000,
-    mortgage_debt_limit_mfs: float = 375000,
+    limits: Dict[str, Any],
     origination_date: Optional[str] = None,
     average_balance: Optional[float] = None
 ) -> Dict:
@@ -154,7 +161,7 @@ def analyze_mortgage_interest(
     average balance rather than the original balance, which is more favorable.
     """
     debt_limit, grandfathered = mortgage_debt_limit_for(
-        filing_status, origination_date, mortgage_debt_limit, mortgage_debt_limit_mfs
+        filing_status, origination_date, limits
     )
 
     # Pub 936 applies the limit against the average balance when one is given.
@@ -186,8 +193,11 @@ def analyze_charitable(
     cash_donations: float,
     appreciated_property: float,
     agi: float,
-    cash_limit_rate: float = 0.60,
-    property_limit_rate: float = 0.30,
+    *,
+    cash_limit_rate: float,
+    property_limit_rate: float,
+    cash_30_org_rate: float,
+    property_30_org_rate: float,
     cash_to_30_percent_orgs: float = 0,
     property_to_30_percent_orgs: float = 0
 ) -> Dict:
@@ -206,7 +216,7 @@ def analyze_charitable(
     — the exact combined ceiling depends on which category mix is present
     (e.g. cash-only tops out at 60% of AGI; cash plus capital-gain property to
     50%-limit orgs is bounded more tightly). This function applies a single
-    conservative aggregate cap of `cash_limit_rate` (60% of AGI by default)
+    conservative aggregate cap of `cash_limit_rate` (60% of AGI for 2023-2027)
     across ALL categories combined as a simplification — NOT a full Worksheet
     2 replication — specifically to rule out the previously-possible >100%-
     of-AGI result (finding: per-category limits alone summed unbounded). Any
@@ -215,8 +225,8 @@ def analyze_charitable(
     """
     cash_limit = agi * cash_limit_rate
     property_limit = agi * property_limit_rate
-    cash_30_limit = agi * 0.30
-    property_20_limit = agi * 0.20
+    cash_30_limit = agi * cash_30_org_rate
+    property_20_limit = agi * property_30_org_rate
     overall_limit = agi * cash_limit_rate
 
     deductible_cash = min(cash_donations, cash_limit)
@@ -357,8 +367,7 @@ def main():
     standard_deductions = tax_data["standard_deductions"]
     additional_deductions = tax_data["additional_deduction_65_blind"]
     salt_constants = tax_data["salt"]
-    mortgage_debt_limit = tax_data["mortgage_debt_limit"]
-    mortgage_debt_limit_mfs = tax_data["mortgage_debt_limit_mfs"]
+    federal_mortgage_limits = mortgage_limits(tax_data)
 
     # MAGI drives the SALT phase-down; absent an explicit figure, AGI is the
     # best available proxy (they differ only by a few uncommon add-backs).
@@ -374,7 +383,7 @@ def main():
     )
     mortgage = analyze_mortgage_interest(
         args.mortgage_interest, args.acquisition_debt, args.filing_status,
-        mortgage_debt_limit, mortgage_debt_limit_mfs,
+        federal_mortgage_limits,
         origination_date=args.loan_origination_date,
         average_balance=args.average_mortgage_balance,
     )
@@ -382,6 +391,8 @@ def main():
         args.charitable_cash, args.charitable_property, args.agi,
         cash_limit_rate=tax_data["credits"]["charitable_cash_limit"],
         property_limit_rate=tax_data["charitable_property_agi_limit"],
+        cash_30_org_rate=tax_data["charitable_30_org_cash_agi_limit"],
+        property_30_org_rate=tax_data["charitable_30_org_property_agi_limit"],
         cash_to_30_percent_orgs=args.charitable_cash_30_org,
         property_to_30_percent_orgs=args.charitable_property_30_org,
     )
@@ -472,11 +483,20 @@ def main():
         #   - removes state income tax entirely (not deductible for CA)
         #   - adds back SALT lost to the federal cap that CA would allow
         #     (property tax remains deductible for CA)
-        #   + allows mortgage interest on up to $1,000,000 of debt
+        #   + allows mortgage interest on up to its own (pre-TCJA) debt limit.
+        #     CA never adopted the TCJA cut, so its grandfathered and current
+        #     limits are the same figure.
+        ca_lim = ca["nonconformity"]["mortgage_debt_limit"]
+        ca_limits = {
+            **mortgage_limits(tax_data),
+            "mortgage_debt_limit": ca_lim,
+            "mortgage_debt_limit_mfs": ca_lim / 2,
+            "mortgage_debt_limit_grandfathered": ca_lim,
+            "mortgage_debt_limit_grandfathered_mfs": ca_lim / 2,
+        }
         ca_mortgage = analyze_mortgage_interest(
             args.mortgage_interest, args.acquisition_debt, args.filing_status,
-            ca["nonconformity"]["mortgage_debt_limit"],
-            ca["nonconformity"]["mortgage_debt_limit"] / 2,
+            ca_limits,
             origination_date=args.loan_origination_date,
             average_balance=args.average_mortgage_balance,
         )
@@ -494,7 +514,7 @@ def main():
             "ca_itemized_total": ca_itemized,
             "state_income_tax_excluded": salt["state_income_tax"],
             "mortgage_deduction_delta_vs_federal": mortgage_delta,
-            "ca_mortgage_debt_limit": ca["nonconformity"]["mortgage_debt_limit"],
+            "ca_mortgage_debt_limit": ca_lim,
             "use_itemized_for_ca": ca_use_itemized,
             "recommendation": ("Itemize for California" if ca_use_itemized
                                else "Take the California standard deduction"),
@@ -503,8 +523,10 @@ def main():
                 "California's standard deduction is far smaller than the federal one, "
                 "so the itemize decision must be made separately for CA.",
                 "State income tax is NOT deductible on the California return.",
-                "California allows mortgage interest on up to $1,000,000 of "
-                "acquisition debt (federal is $750,000), which can make itemizing "
+                f"California allows mortgage interest on up to ${ca_lim:,.0f} of "
+                f"acquisition debt (federal is ${federal_mortgage_limits['mortgage_debt_limit']:,.0f} "
+                f"for debt incurred after {federal_mortgage_limits['mortgage_grandfather_cutoff']}), "
+                "which can make itemizing "
                 "worthwhile for CA even when the federal return takes the standard "
                 "deduction.",
             ],

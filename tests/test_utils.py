@@ -177,3 +177,35 @@ def test_load_state_constants_rejects_unknown_state():
 def test_load_state_constants_requires_state():
     with pytest.raises(ValueError):
         load_state_constants("", "2025")
+
+
+# ---------------------------------------------------------------------------
+# One configured default tax year (plan CC Task 1)
+# ---------------------------------------------------------------------------
+
+import utils as _utils  # noqa: E402
+
+
+def test_default_tax_year_comes_from_constants():
+    raw = _utils.load_raw_constants()
+    assert _utils.DEFAULT_TAX_YEAR == raw["default_tax_year"]
+    assert _utils.DEFAULT_TAX_YEAR in SUPPORTED_YEARS
+
+
+def test_default_tax_year_outside_supported_years_raises(monkeypatch):
+    monkeypatch.setattr(
+        _utils,
+        "load_raw_constants",
+        lambda: {"supported_years": ["2025"], "2025": {}, "default_tax_year": "2031"},
+    )
+    with pytest.raises(ValueError, match="2031"):
+        _utils.get_default_tax_year()
+
+
+def test_make_year_arg_rejects_unsupported_default():
+    with pytest.raises(ValueError):
+        make_year_arg(argparse.ArgumentParser(), default="1999")
+
+
+def test_load_tax_constants_without_year_uses_default():
+    assert load_tax_constants()["tax_year"] == int(_utils.DEFAULT_TAX_YEAR)

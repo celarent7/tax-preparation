@@ -3,8 +3,10 @@
     "2023",
     "2024",
     "2025",
-    "2026"
+    "2026",
+    "2027"
   ],
+  "default_tax_year": "2026",
   "_sources": {
     "_note": "Every statutory figure must trace to a primary source: IRS Rev. Proc. / newsroom / form instructions for federal, FTB for California. URL + retrieval date + the keys each source backs.",
     "amt_statutory_rates": {
@@ -94,8 +96,87 @@
       "2023.credits.savers_credit": "Saver's Credit AGI bands for 2023 not verified.",
       "2023.mileage_rate": "Standard mileage rate is announced in a separate IRS Notice.",
       "states.WA.capital_gains_excise.standard_deduction_2025": "WA capital gains excise standard deduction indexes annually; the 2025 figure was not verified (finding F13).",
-      "states.CA.2026": "FTB 2026 rate schedules not yet published as of 2026-08-05 (the 2026 540-ES instructions reference the 2025 tax table; FTB publishes indexed amounts in late December). Requesting CA 2026 raises — do not extrapolate from 2025 with an assumed inflation factor.",
-      "fbar.penalties_by_assessment_date.2026": "31 CFR 1010.821 is adjusted annually no later than January 15. As of 2026-08-15 the current eCFR/LII text of the table still shows the January 17, 2025 column ($16,536 / $165,353) as the operative one for 31 U.S.C. 5321(a)(5); no separately verified 2026 column was located in a primary source. `fbar_penalty_maximum` therefore returns the 2025-01-17 figures and reports the assessment-date column it used. If a 2026 Federal Register adjustment exists, add it as a new key rather than editing the 2025 one — the columns are cumulative by assessment date, not replacements."
+      "states.CA.2026": "Taken from FTB Tax News October 2026 ('2026 Indexing'); FTB says the complete 2026 rates and exemption amounts appear on its website in late December. NOT in that article and therefore null: exemption_credit.phaseout_federal_agi_start (the Form 540 line 32 federal-AGI threshold; 2025 was 252,203) - calculations that need it raise UnverifiedConstantError. Carried forward from 2025 without a 2026 source: BHST 1% over $1M, renters' credit 60/120, supplemental withholding 10.23%/6.6%, estimated-tax rules, and every nonconformity flag. FTB reports the CA conformity date moved from 2015-01-01 to 2025-01-01 for taxable years beginning on or after 2025-01-01 (SB 711 / SB 1435); the flags were NOT re-reviewed against the new date, and the 2025 block still says 2015-01-01. Confirm against the late-December FTB publication and the 2026 Form 540 booklet.",
+      "fbar.penalties_by_assessment_date.2026": "31 CFR 1010.821 is adjusted annually no later than January 15. As of 2026-08-15 the current eCFR/LII text of the table still shows the January 17, 2025 column ($16,536 / $165,353) as the operative one for 31 U.S.C. 5321(a)(5); no separately verified 2026 column was located in a primary source. `fbar_penalty_maximum` therefore returns the 2025-01-17 figures and reports the assessment-date column it used. If a 2026 Federal Register adjustment exists, add it as a new key rather than editing the 2025 one — the columns are cumulative by assessment date, not replacements.",
+      "2027.retirement_limits": "401(k)/403(b)/457/TSP deferral, 50+ catch-up, 60-63 super catch-up, 415(c) and IRA limit/catch-up come from the IRS retirement-plan Notice for 2027, which was not published as of 2026-11-06 (the 2026 Notice 2025-67 appeared mid-November). Only the HSA limits are filled (Rev. Proc. 2026-24). Do not use a projection.",
+      "2027.ira": "Roth IRA and traditional-IRA-deduction MAGI phase-out ranges come from the same unpublished 2027 retirement-plan Notice.",
+      "2027.qcd_limit": "The indexed QCD limit is announced in the same unpublished 2027 retirement-plan Notice.",
+      "2027.credits.savers_credit": "Saver's Credit AGI bands are published in the 2027 retirement-plan Notice, not in Rev. Proc. 2026-35; not published as of 2026-11-08 (IRS COLA page still ends at 2026, Notice 2025-67). For 2027+ the bands matter only for ABLE-account contributions (P.L. 119-21 sec. 70116), which the checker does not model, so a null here no longer blocks a 2027 credit check.",
+      "2027.mileage_rate": "The 2027 standard mileage rate is announced in a separate IRS Notice; none found as of 2026-11-06.",
+      "states.CA.2027": "FTB 2027 rate schedules, standard deduction, exemption credits and renters' credit are not published (FTB issues the indexed amounts in the autumn of the tax year itself; the 2025 amounts appeared in the October 2025 Tax News), and ftb.ca.gov returns HTTP 403 to automated fetches, so none could be checked on 2026-11-06. Requesting CA 2027 must keep raising. Do not extrapolate from 2025. The only verified 2027 California figure is the EDD SDI withholding rate of 1.4% with no wage cap (see _sources.edd_sdi_2026_2027); it is deliberately not stored as a states.CA.2027 block because a partial block would turn the clean 'no CA data' error into missing-key failures. Add it as states.CA.2027.sdi together with the FTB figures when they exist. Checked in a real browser on 2026-11-06: FTB Tax News October 2026 covers 2026 indexing only; there is no 2027 article."
+    },
+    "rev_proc_2026_35_ty2027": {
+      "url": "https://www.irs.gov/pub/irs-drop/rp-26-35.pdf",
+      "title": "Rev. Proc. 2026-35 (inflation adjustments for tax year 2027)",
+      "retrieved": "2026-11-06",
+      "backs": [
+        "2027.tax_brackets",
+        "2027.standard_deductions",
+        "2027.additional_deduction_65_blind",
+        "2027.ltcg_brackets",
+        "2027.ctc.per_child",
+        "2027.ctc.refundable_max",
+        "2027.amt",
+        "2027.qbi",
+        "2027.credits.eitc",
+        "2027.section_179",
+        "2027.educator_expense_limit",
+        "2027.student_loan_interest_phaseout"
+      ],
+      "note": "Published 2026-11-05 (IR-2026-133, https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2027-taxpayers-continue-to-benefit-from-the-working-families-tax-cuts, corroborates the headline figures). The fetched PDF still carries the placeholder '[Release Date, 2026]' in section 1. Sec .01 rate tables; .03 LTCG zero/15% ceilings (MFJ 102,100/633,600; MFS 51,050/316,800; HoH 68,350/598,400; other 51,050/563,200); .05 CTC 2,300 with 1,800 refundable; .06 EITC table + 12,600 investment limit; .11 AMT exemptions 144,700 / 93,000 / 72,350, 28% breakpoint 252,500 (126,250 MFS), phase-out starts 1,031,900 / 515,950 / 515,950; .13 educator expense 350; .15 standard deduction 33,200 / 24,925 / 16,600 / 16,600, aged-or-blind add-on 1,700 (2,100 unmarried); .26 sec 179 2,640,000 with phase-out above 4,230,000; .28 QBI thresholds 416,600 / 208,325 / 208,300, phase-in ranges end at 566,600 / 283,325 / 283,300 (widths 150,000 / 75,000 unchanged), minimum deduction 415 over 1,030 QBI; .31 student-loan interest phase-out 90,000-105,000 single, 180,000-210,000 joint. Unchanged statutory figures were carried forward from 2026, not re-derived: CTC other-dependent 500 and phase-out, EITC rates, OBBBA deductions, NIIT, Additional Medicare, supplemental withholding, mortgage and capital-loss limits."
+    },
+    "rev_proc_2026_24_ty2027_hsa": {
+      "url": "https://www.irs.gov/pub/irs-drop/rp-26-24.pdf",
+      "title": "Rev. Proc. 2026-24, 2027 HSA/HDHP inflation adjustments",
+      "retrieved": "2026-11-06",
+      "backs": [
+        "2027.retirement_limits.hsa"
+      ],
+      "note": "Sec 3.01(1): self-only $4,500, family $9,000 for calendar year 2027. The age-55 catch-up ($1,000) is statutory and not indexed. HDHP minimum deductible 1,750 / 3,500 and out-of-pocket maximum 8,700 / 17,400 are not stored in the constants."
+    },
+    "ssa_2027_wage_base": {
+      "url": "https://www.journalofaccountancy.com/news/2026/oct/social-security-wage-base-and-cola-announced-for-2027/",
+      "title": "Social Security wage base and COLA announced for 2027 (Journal of Accountancy; same wire story in The Tax Adviser)",
+      "retrieved": "2026-11-06",
+      "backs": [
+        "2027.se_tax.ss_wage_base"
+      ],
+      "note": "2027 taxable maximum $192,300, up from $184,500; SSA announced 2026-10-14 with a 3.6% COLA. Direct fetch of ssa.gov returned HTTP 403, so this rests on two independent publications (Journal of Accountancy and The Tax Adviser) that agree exactly, the same corroboration standard used for 2026.ss_wage_base. Re-check against https://www.ssa.gov/oact/cola/cbb.html when reachable."
+    },
+    "obbba_salt_2027": {
+      "url": "https://www.law.cornell.edu/uscode/text/26/164",
+      "title": "IRC 164(b)(7) - 2027 SALT cap and phase-down threshold (statutory derivation)",
+      "retrieved": "2026-11-06",
+      "backs": [
+        "2027.salt.cap",
+        "2027.salt.cap_mfs",
+        "2027.salt.phasedown_magi_start",
+        "2027.salt.phasedown_magi_start_mfs"
+      ],
+      "note": "Not in Rev. Proc. 2026-35; derived from the statute quoted under obbba_salt_2026: for taxable years after 2026 and before 2030 both the cap and the MAGI threshold are 101 percent of the preceding year's amount. 40,400 x 1.01 = 40,804 (MFS half: 20,402); 505,000 x 1.01 = 510,050 (MFS half: 255,025). The statute states no rounding. Floor stays 10,000 (5,000 MFS)."
+    },
+    "edd_sdi_2026_2027": {
+      "url": "https://edd.ca.gov/en/payroll_taxes/rates_and_withholding/",
+      "title": "EDD, Contribution Rates, Withholding Schedules, and Meals and Lodging Values",
+      "retrieved": "2026-11-06",
+      "backs": [
+        "states.CA.2027.sdi (not yet stored; see TODO_VERIFY states.CA.2027)"
+      ],
+      "note": "Page states: 'The SDI withholding rate for 2027 is 1.4 percent' and 'The SDI withholding rate for 2026 is 1.3 percent' (2025 1.2%, 2024 1.1%). All wages are subject to SDI since 2024-01-01 (SB 951), so wage_cap stays null. The page shows no last-updated date. One third-party article calls the 2027 figure a projection, but the EDD page states it as the rate."
+    },
+    "ftb_2026_tax_news_indexing": {
+      "url": "https://www.ftb.ca.gov/about-ftb/newsroom/tax-news/2026/10.html",
+      "title": "FTB Tax News, October 2026 - '2026 Indexing' (last updated 10/13/2026)",
+      "retrieved": "2026-11-06",
+      "backs": [
+        "states.CA.2026.brackets",
+        "states.CA.2026.standard_deduction",
+        "states.CA.2026.exemption_credit",
+        "states.CA.2026.renters_credit",
+        "states.CA.2026.nonconformity.conformity_date",
+        "states.CA.2026.estimated_tax.due_dates"
+      ],
+      "note": "Fetched in a real Chrome session because ftb.ca.gov returns 403 to automated fetches. CCPI inflation June 2025-June 2026 = 3.4%. Standard deduction 5,900 single/MFS, 11,800 joint/QSS/HoH. Exemption credits 158 personal (316 joint), 491 dependent; the repo stores the per-person 158 and doubles it for joint filers. Renter's credit AGI limits 55,830 single / 111,660 joint. Schedules X/Y/Z transcribed from the article; every bracket's cumulative-tax constant was recomputed from the rates and matches to the cent, and each Schedule Y boundary is exactly twice Schedule X (R&TC 17041). Same article: SB 1435 (enacted 2026-09-14) and SB 711 (2025) moved the conformity date to 2025-01-01 for taxable years beginning on or after 2025-01-01; FTB had not yet released adjusted excess-business-loss thresholds. Due dates follow the federal calendar (04-15, 06-15, 09-15, 2027-01-15)."
     },
     "cfr_1010_821_fbar_penalties": {
       "url": "https://www.law.cornell.edu/cfr/text/31/1010.821",
@@ -207,11 +288,11 @@
     "form_1040es": {
       "url": "https://www.irs.gov/pub/irs-pdf/f1040es.pdf",
       "title": "Form 1040-ES, Estimated Tax for Individuals",
-      "retrieved": "2026-07-29",
+      "retrieved": "2026-11-06",
       "backs": [
-        "estimated_tax.safe_harbor_thresholds"
+        "estimated_tax_safe_harbor"
       ],
-      "note": "110% safe harbor applies when prior-year AGI exceeded $150,000 ($75,000 if MFS)."
+      "note": "110% safe harbor applies when prior-year AGI exceeded $150,000 ($75,000 if MFS); otherwise the prior-year leg is 100%. The current-year leg is 90% of this year's tax. Not inflation-indexed, so every year block carries the same figures. Re-read 2026-11-06 in the 2026 Form 1040-ES: 'If your adjusted gross income (AGI) for 2025 was more than $150,000 ($75,000 if your filing status for 2026 is married filing separately), substitute 110% for 100% in (2b)'; General Rule (2a) is '90% of the tax to be shown on your 2026 tax return'."
     },
     "statutory_non_indexed_credits": {
       "url": "https://www.irs.gov/credits-deductions/individuals/aotc",
@@ -219,10 +300,84 @@
       "retrieved": "2026-07-30",
       "backs": [
         "credits_static.aotc",
-        "credits_static.lifetime_learning",
-        "credits_static.child_dependent_care"
+        "credits_static.lifetime_learning"
       ],
-      "note": "AOTC ($2,500 max, 40% refundable, $80k-$90k / $160k-$180k phase-out) and the Child and Dependent Care Credit ($3,000/$6,000 expense limits, 35% to 20% between $15,000 and $43,000 AGI) are fixed by statute and are NOT inflation-indexed, so one shared block serves every year."
+      "note": "AOTC ($2,500 max, 40% refundable, $80k-$90k / $160k-$180k phase-out) and the Lifetime Learning Credit are fixed by statute and are NOT inflation-indexed, so one shared block serves every year. The Child and Dependent Care Credit is no longer here: P.L. 119-21 changed its rate schedule from 2026, so it lives per year in credits.child_dependent_care (see irc_21_obbba_70405 and irc_21_pre_2026)."
+    },
+    "irs_pub_15_supplemental_wages": {
+      "url": "https://www.irs.gov/publications/p15",
+      "title": "IRS Publication 15 (2026), (Circular E), Employer's Tax Guide - section 7, Supplemental Wages",
+      "retrieved": "2026-11-06",
+      "backs": [
+        "2023.withholding.supplemental_over_1m_threshold",
+        "2024.withholding.supplemental_over_1m_threshold",
+        "2025.withholding.supplemental_over_1m_threshold",
+        "2026.withholding.supplemental_over_1m_threshold",
+        "2027.withholding.supplemental_over_1m_threshold"
+      ],
+      "note": "'The withholding rate on supplemental wages remains 22% (37% if supplemental wages paid to an employee during the calendar year exceed $1 million)'. The code applies 37% to the part of the year's supplemental wages above $1,000,000 and 22% to the rest. The $1M threshold is statutory and not indexed. The 22% / 37% rates themselves were not re-sourced here."
+    },
+    "irs_pub_936_grandfathered_debt": {
+      "url": "https://www.irs.gov/publications/p936",
+      "title": "IRS Publication 936 (2025), Home Mortgage Interest Deduction",
+      "retrieved": "2026-11-06",
+      "backs": [
+        "2023.mortgage_debt_limit_grandfathered",
+        "2024.mortgage_debt_limit_grandfathered",
+        "2025.mortgage_debt_limit_grandfathered",
+        "2026.mortgage_debt_limit_grandfathered",
+        "2027.mortgage_debt_limit_grandfathered",
+        "2023.mortgage_debt_limit_grandfathered_mfs",
+        "2024.mortgage_debt_limit_grandfathered_mfs",
+        "2025.mortgage_debt_limit_grandfathered_mfs",
+        "2026.mortgage_debt_limit_grandfathered_mfs",
+        "2027.mortgage_debt_limit_grandfathered_mfs",
+        "2023.mortgage_grandfather_cutoff",
+        "2024.mortgage_grandfather_cutoff",
+        "2025.mortgage_grandfather_cutoff",
+        "2026.mortgage_grandfather_cutoff",
+        "2027.mortgage_grandfather_cutoff"
+      ],
+      "note": "'higher limitations ($1 million ($500,000 if married filing separately)) apply if you are deducting mortgage interest from indebtedness incurred before December 16, 2017' (IRC 163(h)(3)(F)). The cutoff is stored as the last grandfathered date, 2017-12-15, and compared inclusively. A binding contract before December 15, 2017 closed before April 1, 2018 also counts (not modeled). Not indexed. For 2026+: P.L. 119-21 sec. 70108 (govinfo PLAW-119publ21, read 2026-11-06) amends IRC 163(h)(3)(F) 'by striking \", and before January 1, 2026\"' in clause (i) and redesignates its subclauses, effective for taxable years beginning after December 31, 2025. The amended 163(h)(3)(F) text itself was not read, so the 2026-2027 grandfathered figures rest on Pub 936 (2025) plus that amendment."
+    },
+    "irs_pub_526_30_percent_orgs": {
+      "url": "https://www.irs.gov/publications/p526",
+      "title": "IRS Publication 526 (2025), Charitable Contributions",
+      "retrieved": "2026-11-06",
+      "backs": [
+        "2023.charitable_30_org_cash_agi_limit",
+        "2024.charitable_30_org_cash_agi_limit",
+        "2025.charitable_30_org_cash_agi_limit",
+        "2026.charitable_30_org_cash_agi_limit",
+        "2027.charitable_30_org_cash_agi_limit",
+        "2023.charitable_30_org_property_agi_limit",
+        "2024.charitable_30_org_property_agi_limit",
+        "2025.charitable_30_org_property_agi_limit",
+        "2026.charitable_30_org_property_agi_limit",
+        "2027.charitable_30_org_property_agi_limit"
+      ],
+      "note": "Contributions to an organization in the second category of qualified organizations (not 50% limit organizations, e.g. private non-operating foundations, veterans' and fraternal organizations) are 'limited to 30% of your AGI' (cash and ordinary property) and capital gain property to them 'is limited to 20% of your AGI', each also subject to the interaction limits in the same section. 2026+ OBBBA charitable changes are out of scope here and were not modeled."
+    },
+    "irc_21_obbba_70405": {
+      "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ21/html/PLAW-119publ21.htm",
+      "title": "Public Law 119-21 sec. 70405, Enhancement of Child and Dependent Care Tax Credit (amends IRC 21(a)(2))",
+      "retrieved": "2026-11-06",
+      "backs": [
+        "2026.credits.child_dependent_care",
+        "2027.credits.child_dependent_care"
+      ],
+      "note": "Sec. 70405(a): applicable percentage is 50 percent, (A) reduced (not below 35) by 1 point for each $2,000 or fraction thereof of AGI over $15,000, and (B) further reduced (not below 20) by 1 point for each $2,000 ($4,000 joint) or fraction thereof of AGI over $75,000 ($150,000 joint). Sec. 70405(b): applies to taxable years beginning after December 31, 2025. IRC 21 has no inflation adjustment, so 2027 equals 2026. Expense limits $3,000/$6,000 are IRC 21(c), unchanged. The IRS DRAFT 2026 Form 2441 instructions (https://www.irs.gov/pub/irs-dft/i2441--dft.pdf, dated Aug 21, 2026) print a 2026 phaseout schedule that matches these tiers (20% after $206,000 joint / $103,000 other). uscode.house.gov returned HTTP 404 for 26 USC 21 on 2026-11-06; the current text was read at https://www.law.cornell.edu/uscode/text/26/21."
+    },
+    "irc_21_pre_2026": {
+      "url": "https://www.law.cornell.edu/uscode/text/26/21",
+      "title": "26 U.S. Code 21 - Expenses for household and dependent care services necessary for gainful employment (LII), with the pre-2026 text of 21(a)(2) in the 2025 amendment note",
+      "retrieved": "2026-11-06",
+      "backs": [
+        "2023.credits.child_dependent_care",
+        "2024.credits.child_dependent_care",
+        "2025.credits.child_dependent_care"
+      ],
+      "note": "Before P.L. 119-21 the applicable percentage 'means 35 percent reduced (but not below 20 percent) by 1 percentage point for each $2,000 (or fraction thereof) by which the taxpayer's adjusted gross income for the taxable year exceeds $15,000' - one tier, same for joint returns, so 20% applies above $43,000. 21(c): $3,000 / $6,000 limits, reduced by amounts excludable under section 129 (Form 2441 lines 27-29). 21(e)(2): married taxpayers must file jointly; 21(e)(4): a separately filing spouse who kept up the qualifying person's home and whose spouse was not in the household for the last 6 months is treated as unmarried. Not inflation-indexed."
     },
     "ftc_904j": {
       "url": "https://www.irs.gov/instructions/i1116",
@@ -259,11 +414,12 @@
     "irs_niit": {
       "url": "https://www.irs.gov/individuals/net-investment-income-tax",
       "title": "Net Investment Income Tax (IRC 1411)",
-      "retrieved": "2026-07-30",
+      "retrieved": "2026-11-06",
       "backs": [
-        "niit_thresholds"
+        "niit_thresholds",
+        "niit_rate"
       ],
-      "note": "MFJ $250,000; MFS $125,000; single or head of household $200,000; qualifying widow(er) with a child $250,000. NOTE the asymmetry with the Additional Medicare Tax, where QSS takes the $200,000 'any other case' threshold. Statutory, not indexed."
+      "note": "Rate: 'individual taxpayers are liable for a 3.8 percent Net Investment Income Tax' (IRC 1411(a)(1): 'a tax equal to 3.8 percent of the lesser of' NII or MAGI over the threshold; re-read 2026-11-06). MFJ $250,000; MFS $125,000; single or head of household $200,000; qualifying widow(er) with a child $250,000. NOTE the asymmetry with the Additional Medicare Tax, where QSS takes the $200,000 'any other case' threshold. Statutory, not indexed."
     },
     "ftb_2025_rate_schedules": {
       "url": "https://www.ftb.ca.gov/forms/2025/2025-540-tax-rate-schedules.pdf",
@@ -473,6 +629,28 @@
         "2025.qcd_limit"
       ],
       "note": "Age-60-63 super catch-up for 2025 is $11,250 (this is the primary source the audit blueprint referenced but which was never actually fetched during Phase 2 -- now verified directly). \u00a7415(c) DC limit $70,000 for 2025."
+    },
+    "notice_2024_80_ty2025_savers_credit": {
+      "url": "https://www.irs.gov/pub/irs-drop/n-24-80.pdf",
+      "title": "Notice 2024-80, 2025 Amounts Relating to Retirement Plans and IRAs - section 25B(b) AGI limitations",
+      "retrieved": "2026-11-06",
+      "backs": [
+        "2025.credits.savers_credit"
+      ],
+      "note": "Joint return: 25B(b)(1)(A) 'increased from $46,000 to $47,500', (B) 'from $50,000 to $51,000', (C)/(D) 'from $76,500 to $79,000'. All other taxpayers: $23,750 / $25,500 / $39,500. Head of household ($35,625 / $38,250 / $59,250) is 75% of the joint figures, which is how the code derives it. Replaces 49,000/53,000/81,500 and 24,500/26,500/40,750, which had no source and were wrong since the initial release."
+    },
+    "pl_119_21_70116_savers_credit": {
+      "url": "https://www.govinfo.gov/content/pkg/PLAW-119publ21/html/PLAW-119publ21.htm",
+      "title": "Public Law 119-21 sec. 70116, Extension and Enhancement of Savers Credit Allowed for ABLE Contributions (amends IRC 25B(d)(1) and 25B(a))",
+      "retrieved": "2026-11-06",
+      "backs": [
+        "2023.credits.savers_credit_retirement_contributions_creditable",
+        "2024.credits.savers_credit_retirement_contributions_creditable",
+        "2025.credits.savers_credit_retirement_contributions_creditable",
+        "2026.credits.savers_credit_retirement_contributions_creditable",
+        "2027.credits.savers_credit_retirement_contributions_creditable"
+      ],
+      "note": "New 25B(d)(1): qualified retirement savings contributions are (A) contributions to the individual's own ABLE account, plus (B) 'in the case of any taxable year beginning before January 1, 2027' IRA contributions, elective deferrals and voluntary employee contributions. Sec. 70116(a)(2) repeals SECURE 2.0 sec. 103(e)(1) 'as though such paragraph were never enacted'. Sec. 70116(b): the 25B(a) cap goes from $2,000 to $2,100 for taxable years beginning after December 31, 2026. So for 2027+ retirement contributions earn no Saver's Credit (they count toward the Saver's Match, IRC 6433, paid as a contribution to the account), while ABLE contributions still do. The checker does not model ABLE contributions, so credits_static.savers_credit_max_contribution (2000) is not used for 2027+."
     },
     "rev_proc_2025_19_ty2026_hsa": {
       "url": "https://www.irs.gov/pub/irs-drop/rp-25-19.pdf",
@@ -795,6 +973,9 @@
     },
     "mortgage_debt_limit": 750000,
     "mortgage_debt_limit_mfs": 375000,
+    "mortgage_debt_limit_grandfathered": 1000000,
+    "mortgage_debt_limit_grandfathered_mfs": 500000,
+    "mortgage_grandfather_cutoff": "2017-12-15",
     "capital_loss_limit": 3000,
     "capital_loss_limit_mfs": 1500,
     "educator_expense_limit": 300,
@@ -806,6 +987,8 @@
       "magi_end_mfj": 185000
     },
     "charitable_property_agi_limit": 0.3,
+    "charitable_30_org_cash_agi_limit": 0.3,
+    "charitable_30_org_property_agi_limit": 0.2,
     "ltcg_brackets": {
       "single": [
         {
@@ -885,6 +1068,7 @@
       "head_of_household": 200000,
       "qualifying_surviving_spouse": 250000
     },
+    "niit_rate": 0.038,
     "se_tax": {
       "ss_rate": 0.124,
       "medicare_rate": 0.029,
@@ -903,7 +1087,8 @@
     },
     "withholding": {
       "supplemental_rate": 0.22,
-      "supplemental_rate_over_1m": 0.37
+      "supplemental_rate_over_1m": 0.37,
+      "supplemental_over_1m_threshold": 1000000
     },
     "mileage_rate": 0.655,
     "home_office_simplified_rate": 5.0,
@@ -972,6 +1157,14 @@
     "credits": {
       "medical_threshold": 0.075,
       "charitable_cash_limit": 0.6,
+      "child_dependent_care": {
+        "expense_limit_one": 3000,
+        "expense_limit_two_plus": 6000,
+        "max_percentage": 35,
+        "reductions": [
+          {"floor_percentage": 20, "agi_threshold": 15000, "agi_threshold_joint": 15000, "step": 2000, "step_joint": 2000}
+        ]
+      },
       "eitc": {
         "0": {
           "earned_income_amount": 7840,
@@ -1026,7 +1219,14 @@
           "20_percent": 23750,
           "10_percent": 36500
         }
-      }
+      },
+      "savers_credit_retirement_contributions_creditable": true
+    },
+    "estimated_tax_safe_harbor": {
+      "high_income_agi": 150000,
+      "high_income_agi_mfs": 75000,
+      "high_income_prior_year_pct": 1.1,
+      "current_year_pct": 0.9
     },
     "estimated_tax_due_dates": [
       [
@@ -1309,6 +1509,9 @@
     },
     "mortgage_debt_limit": 750000,
     "mortgage_debt_limit_mfs": 375000,
+    "mortgage_debt_limit_grandfathered": 1000000,
+    "mortgage_debt_limit_grandfathered_mfs": 500000,
+    "mortgage_grandfather_cutoff": "2017-12-15",
     "capital_loss_limit": 3000,
     "capital_loss_limit_mfs": 1500,
     "educator_expense_limit": 300,
@@ -1320,6 +1523,8 @@
       "magi_end_mfj": 195000
     },
     "charitable_property_agi_limit": 0.3,
+    "charitable_30_org_cash_agi_limit": 0.3,
+    "charitable_30_org_property_agi_limit": 0.2,
     "ltcg_brackets": {
       "single": [
         {
@@ -1399,6 +1604,7 @@
       "head_of_household": 200000,
       "qualifying_surviving_spouse": 250000
     },
+    "niit_rate": 0.038,
     "se_tax": {
       "ss_rate": 0.124,
       "medicare_rate": 0.029,
@@ -1417,7 +1623,8 @@
     },
     "withholding": {
       "supplemental_rate": 0.22,
-      "supplemental_rate_over_1m": 0.37
+      "supplemental_rate_over_1m": 0.37,
+      "supplemental_over_1m_threshold": 1000000
     },
     "mileage_rate": 0.67,
     "home_office_simplified_rate": 5.0,
@@ -1440,6 +1647,14 @@
     "credits": {
       "medical_threshold": 0.075,
       "charitable_cash_limit": 0.6,
+      "child_dependent_care": {
+        "expense_limit_one": 3000,
+        "expense_limit_two_plus": 6000,
+        "max_percentage": 35,
+        "reductions": [
+          {"floor_percentage": 20, "agi_threshold": 15000, "agi_threshold_joint": 15000, "step": 2000, "step_joint": 2000}
+        ]
+      },
       "eitc": {
         "0": {
           "earned_income_amount": 8260,
@@ -1494,7 +1709,14 @@
           "20_percent": 25000,
           "10_percent": 38250
         }
-      }
+      },
+      "savers_credit_retirement_contributions_creditable": true
+    },
+    "estimated_tax_safe_harbor": {
+      "high_income_agi": 150000,
+      "high_income_agi_mfs": 75000,
+      "high_income_prior_year_pct": 1.1,
+      "current_year_pct": 0.9
     },
     "estimated_tax_due_dates": [
       [
@@ -1826,6 +2048,9 @@
     },
     "mortgage_debt_limit": 750000,
     "mortgage_debt_limit_mfs": 375000,
+    "mortgage_debt_limit_grandfathered": 1000000,
+    "mortgage_debt_limit_grandfathered_mfs": 500000,
+    "mortgage_grandfather_cutoff": "2017-12-15",
     "capital_loss_limit": 3000,
     "capital_loss_limit_mfs": 1500,
     "educator_expense_limit": 300,
@@ -1837,6 +2062,8 @@
       "magi_end_mfj": 200000
     },
     "charitable_property_agi_limit": 0.3,
+    "charitable_30_org_cash_agi_limit": 0.3,
+    "charitable_30_org_property_agi_limit": 0.2,
     "ltcg_brackets": {
       "single": [
         {
@@ -1916,6 +2143,7 @@
       "head_of_household": 200000,
       "qualifying_surviving_spouse": 250000
     },
+    "niit_rate": 0.038,
     "se_tax": {
       "ss_rate": 0.124,
       "medicare_rate": 0.029,
@@ -1934,7 +2162,8 @@
     },
     "withholding": {
       "supplemental_rate": 0.22,
-      "supplemental_rate_over_1m": 0.37
+      "supplemental_rate_over_1m": 0.37,
+      "supplemental_over_1m_threshold": 1000000
     },
     "mileage_rate": 0.7,
     "home_office_simplified_rate": 5.0,
@@ -1959,6 +2188,14 @@
     "credits": {
       "medical_threshold": 0.075,
       "charitable_cash_limit": 0.6,
+      "child_dependent_care": {
+        "expense_limit_one": 3000,
+        "expense_limit_two_plus": 6000,
+        "max_percentage": 35,
+        "reductions": [
+          {"floor_percentage": 20, "agi_threshold": 15000, "agi_threshold_joint": 15000, "step": 2000, "step_joint": 2000}
+        ]
+      },
       "eitc": {
         "0": {
           "earned_income_amount": 8490,
@@ -2004,16 +2241,17 @@
       },
       "savers_credit": {
         "mfj": {
-          "50_percent": 49000,
-          "20_percent": 53000,
-          "10_percent": 81500
+          "50_percent": 47500,
+          "20_percent": 51000,
+          "10_percent": 79000
         },
         "single": {
-          "50_percent": 24500,
-          "20_percent": 26500,
-          "10_percent": 40750
+          "50_percent": 23750,
+          "20_percent": 25500,
+          "10_percent": 39500
         }
-      }
+      },
+      "savers_credit_retirement_contributions_creditable": true
     },
     "ctc": {
       "per_child": 2200,
@@ -2106,6 +2344,12 @@
       "wage_limit_pct": 0.5,
       "wage_ubia_pct": 0.25,
       "ubia_pct": 0.025
+    },
+    "estimated_tax_safe_harbor": {
+      "high_income_agi": 150000,
+      "high_income_agi_mfs": 75000,
+      "high_income_prior_year_pct": 1.1,
+      "current_year_pct": 0.9
     },
     "estimated_tax_due_dates": [
       [
@@ -2398,6 +2642,9 @@
     },
     "mortgage_debt_limit": 750000,
     "mortgage_debt_limit_mfs": 375000,
+    "mortgage_debt_limit_grandfathered": 1000000,
+    "mortgage_debt_limit_grandfathered_mfs": 500000,
+    "mortgage_grandfather_cutoff": "2017-12-15",
     "capital_loss_limit": 3000,
     "capital_loss_limit_mfs": 1500,
     "educator_expense_limit": 350,
@@ -2409,6 +2656,8 @@
       "magi_end_mfj": 205000
     },
     "charitable_property_agi_limit": 0.3,
+    "charitable_30_org_cash_agi_limit": 0.3,
+    "charitable_30_org_property_agi_limit": 0.2,
     "ltcg_brackets": {
       "single": [
         {
@@ -2488,6 +2737,7 @@
       "head_of_household": 200000,
       "qualifying_surviving_spouse": 250000
     },
+    "niit_rate": 0.038,
     "se_tax": {
       "ss_rate": 0.124,
       "medicare_rate": 0.029,
@@ -2506,7 +2756,8 @@
     },
     "withholding": {
       "supplemental_rate": 0.22,
-      "supplemental_rate_over_1m": 0.37
+      "supplemental_rate_over_1m": 0.37,
+      "supplemental_over_1m_threshold": 1000000
     },
     "mileage_rate": 0.725,
     "home_office_simplified_rate": 5.0,
@@ -2577,6 +2828,15 @@
     "credits": {
       "medical_threshold": 0.075,
       "charitable_cash_limit": 0.6,
+      "child_dependent_care": {
+        "expense_limit_one": 3000,
+        "expense_limit_two_plus": 6000,
+        "max_percentage": 50,
+        "reductions": [
+          {"floor_percentage": 35, "agi_threshold": 15000, "agi_threshold_joint": 15000, "step": 2000, "step_joint": 2000},
+          {"floor_percentage": 20, "agi_threshold": 75000, "agi_threshold_joint": 150000, "step": 2000, "step_joint": 4000}
+        ]
+      },
       "eitc": {
         "0": {
           "earned_income_amount": 8680,
@@ -2631,7 +2891,14 @@
           "20_percent": 26250,
           "10_percent": 40250
         }
-      }
+      },
+      "savers_credit_retirement_contributions_creditable": true
+    },
+    "estimated_tax_safe_harbor": {
+      "high_income_agi": 150000,
+      "high_income_agi_mfs": 75000,
+      "high_income_prior_year_pct": 1.1,
+      "current_year_pct": 0.9
     },
     "estimated_tax_due_dates": [
       [
@@ -2762,6 +3029,540 @@
       }
     }
   },
+  "2027": {
+    "tax_year": 2027,
+    "tax_brackets": {
+      "single": [
+        {
+          "top": 12800,
+          "rate": 0.1
+        },
+        {
+          "top": 52025,
+          "rate": 0.12
+        },
+        {
+          "top": 109125,
+          "rate": 0.22
+        },
+        {
+          "top": 208325,
+          "rate": 0.24
+        },
+        {
+          "top": 264550,
+          "rate": 0.32
+        },
+        {
+          "top": 661375,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ],
+      "married_jointly": [
+        {
+          "top": 25600,
+          "rate": 0.1
+        },
+        {
+          "top": 104050,
+          "rate": 0.12
+        },
+        {
+          "top": 218250,
+          "rate": 0.22
+        },
+        {
+          "top": 416650,
+          "rate": 0.24
+        },
+        {
+          "top": 529100,
+          "rate": 0.32
+        },
+        {
+          "top": 793650,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ],
+      "married_separately": [
+        {
+          "top": 12800,
+          "rate": 0.1
+        },
+        {
+          "top": 52025,
+          "rate": 0.12
+        },
+        {
+          "top": 109125,
+          "rate": 0.22
+        },
+        {
+          "top": 208325,
+          "rate": 0.24
+        },
+        {
+          "top": 264550,
+          "rate": 0.32
+        },
+        {
+          "top": 396825,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ],
+      "head_of_household": [
+        {
+          "top": 18250,
+          "rate": 0.1
+        },
+        {
+          "top": 69650,
+          "rate": 0.12
+        },
+        {
+          "top": 109100,
+          "rate": 0.22
+        },
+        {
+          "top": 208300,
+          "rate": 0.24
+        },
+        {
+          "top": 264550,
+          "rate": 0.32
+        },
+        {
+          "top": 661350,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ],
+      "qualifying_surviving_spouse": [
+        {
+          "top": 25600,
+          "rate": 0.1
+        },
+        {
+          "top": 104050,
+          "rate": 0.12
+        },
+        {
+          "top": 218250,
+          "rate": 0.22
+        },
+        {
+          "top": 416650,
+          "rate": 0.24
+        },
+        {
+          "top": 529100,
+          "rate": 0.32
+        },
+        {
+          "top": 793650,
+          "rate": 0.35
+        },
+        {
+          "top": null,
+          "rate": 0.37
+        }
+      ]
+    },
+    "standard_deductions": {
+      "single": 16600,
+      "married_jointly": 33200,
+      "married_separately": 16600,
+      "head_of_household": 24925,
+      "qualifying_surviving_spouse": 33200
+    },
+    "additional_deduction_65_blind": {
+      "single": 2100,
+      "married_jointly": 1700,
+      "married_separately": 1700,
+      "head_of_household": 2100,
+      "qualifying_surviving_spouse": 1700
+    },
+    "salt": {
+      "cap": 40804,
+      "cap_mfs": 20402,
+      "phasedown": true,
+      "phasedown_magi_start": 510050,
+      "phasedown_magi_start_mfs": 255025,
+      "phasedown_rate": 0.3,
+      "floor": 10000,
+      "floor_mfs": 5000
+    },
+    "mortgage_debt_limit": 750000,
+    "mortgage_debt_limit_mfs": 375000,
+    "mortgage_debt_limit_grandfathered": 1000000,
+    "mortgage_debt_limit_grandfathered_mfs": 500000,
+    "mortgage_grandfather_cutoff": "2017-12-15",
+    "capital_loss_limit": 3000,
+    "capital_loss_limit_mfs": 1500,
+    "educator_expense_limit": 350,
+    "student_loan_interest_limit": 2500,
+    "student_loan_interest_phaseout": {
+      "magi_start": 90000,
+      "magi_end": 105000,
+      "magi_start_mfj": 180000,
+      "magi_end_mfj": 210000
+    },
+    "charitable_property_agi_limit": 0.3,
+    "charitable_30_org_cash_agi_limit": 0.3,
+    "charitable_30_org_property_agi_limit": 0.2,
+    "ltcg_brackets": {
+      "single": [
+        {
+          "top": 51050,
+          "rate": 0.0
+        },
+        {
+          "top": 563200,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "married_jointly": [
+        {
+          "top": 102100,
+          "rate": 0.0
+        },
+        {
+          "top": 633600,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "married_separately": [
+        {
+          "top": 51050,
+          "rate": 0.0
+        },
+        {
+          "top": 316800,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "head_of_household": [
+        {
+          "top": 68350,
+          "rate": 0.0
+        },
+        {
+          "top": 598400,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ],
+      "qualifying_surviving_spouse": [
+        {
+          "top": 102100,
+          "rate": 0.0
+        },
+        {
+          "top": 633600,
+          "rate": 0.15
+        },
+        {
+          "top": null,
+          "rate": 0.2
+        }
+      ]
+    },
+    "niit_thresholds": {
+      "single": 200000,
+      "married_jointly": 250000,
+      "married_separately": 125000,
+      "head_of_household": 200000,
+      "qualifying_surviving_spouse": 250000
+    },
+    "niit_rate": 0.038,
+    "se_tax": {
+      "ss_rate": 0.124,
+      "medicare_rate": 0.029,
+      "ss_wage_base": 192300,
+      "additional_medicare_rate": 0.009,
+      "additional_medicare_threshold_single": 200000,
+      "additional_medicare_threshold_married": 250000,
+      "additional_medicare_threshold_married_separately": 125000,
+      "additional_medicare_threshold_head_of_household": 200000,
+      "additional_medicare_threshold_qualifying_surviving_spouse": 200000,
+      "se_adjustment_factor": 0.9235
+    },
+    "fica_employee": {
+      "ss_rate": 0.062,
+      "medicare_rate": 0.0145
+    },
+    "withholding": {
+      "supplemental_rate": 0.22,
+      "supplemental_rate_over_1m": 0.37,
+      "supplemental_over_1m_threshold": 1000000
+    },
+    "mileage_rate": null,
+    "home_office_simplified_rate": 5.0,
+    "home_office_max_sqft": 300,
+    "retirement_limits": {
+      "hsa": {
+        "single": 4500,
+        "family": 9000,
+        "catchup_55_plus": 1000
+      },
+      "ira": {
+        "limit": null,
+        "catchup_50_plus": null
+      },
+      "401k": {
+        "limit": null,
+        "catchup_50_plus": null,
+        "super_catchup_60_63": null,
+        "total_415c": null
+      }
+    },
+    "ctc": {
+      "per_child": 2300,
+      "refundable_max": 1800,
+      "other_dependent": 500,
+      "phaseout_start_single": 200000,
+      "phaseout_start_mfj": 400000,
+      "phaseout_per_1000": 50,
+      "phaseout_rounding": "up",
+      "actc_earned_income_floor": 2500,
+      "actc_rate": 0.15
+    },
+    "amt": {
+      "exemption_single": 93000,
+      "exemption_mfj": 144700,
+      "exemption_mfs": 72350,
+      "phaseout_start_single": 515950,
+      "phaseout_start_mfj": 1031900,
+      "phaseout_start_mfs": 515950,
+      "phaseout_rate": 0.5,
+      "rate_28_threshold": 252500,
+      "rate_28_threshold_mfs": 126250,
+      "rates": [
+        {
+          "top": 252500,
+          "rate": 0.26
+        },
+        {
+          "top": null,
+          "rate": 0.28
+        }
+      ]
+    },
+    "qbi": {
+      "rate": 0.2,
+      "reit_ptp_rate": 0.2,
+      "threshold_single": 208300,
+      "threshold_mfs": 208325,
+      "threshold_mfj": 416600,
+      "phase_in_range_single": 75000,
+      "phase_in_range_mfj": 150000,
+      "wage_limit_pct": 0.5,
+      "wage_ubia_pct": 0.25,
+      "ubia_pct": 0.025,
+      "min_deduction": 415,
+      "min_deduction_qbi_floor": 1030
+    },
+    "credits": {
+      "medical_threshold": 0.075,
+      "charitable_cash_limit": 0.6,
+      "child_dependent_care": {
+        "expense_limit_one": 3000,
+        "expense_limit_two_plus": 6000,
+        "max_percentage": 50,
+        "reductions": [
+          {"floor_percentage": 35, "agi_threshold": 15000, "agi_threshold_joint": 15000, "step": 2000, "step_joint": 2000},
+          {"floor_percentage": 20, "agi_threshold": 75000, "agi_threshold_joint": 150000, "step": 2000, "step_joint": 4000}
+        ]
+      },
+      "eitc": {
+        "0": {
+          "earned_income_amount": 8960,
+          "max_credit": 685,
+          "phase_in_rate": 0.0765,
+          "phase_out_rate": 0.0765,
+          "threshold_phaseout_mfj": 18730,
+          "completed_phaseout_mfj": 27684,
+          "threshold_phaseout_other": 11210,
+          "completed_phaseout_other": 20164
+        },
+        "1": {
+          "earned_income_amount": 13450,
+          "max_credit": 4573,
+          "phase_in_rate": 0.34,
+          "phase_out_rate": 0.1598,
+          "threshold_phaseout_mfj": 32170,
+          "completed_phaseout_mfj": 60787,
+          "threshold_phaseout_other": 24660,
+          "completed_phaseout_other": 53277
+        },
+        "2": {
+          "earned_income_amount": 18880,
+          "max_credit": 7552,
+          "phase_in_rate": 0.4,
+          "phase_out_rate": 0.2106,
+          "threshold_phaseout_mfj": 32170,
+          "completed_phaseout_mfj": 68029,
+          "threshold_phaseout_other": 24660,
+          "completed_phaseout_other": 60519
+        },
+        "3": {
+          "earned_income_amount": 18880,
+          "max_credit": 8496,
+          "phase_in_rate": 0.45,
+          "phase_out_rate": 0.2106,
+          "threshold_phaseout_mfj": 32170,
+          "completed_phaseout_mfj": 72512,
+          "threshold_phaseout_other": 24660,
+          "completed_phaseout_other": 65002
+        },
+        "investment_income_limit": 12600
+      },
+      "savers_credit": {
+        "mfj": {
+          "50_percent": null,
+          "20_percent": null,
+          "10_percent": null
+        },
+        "single": {
+          "50_percent": null,
+          "20_percent": null,
+          "10_percent": null
+        }
+      },
+      "savers_credit_retirement_contributions_creditable": false
+    },
+    "estimated_tax_safe_harbor": {
+      "high_income_agi": 150000,
+      "high_income_agi_mfs": 75000,
+      "high_income_prior_year_pct": 1.1,
+      "current_year_pct": 0.9
+    },
+    "estimated_tax_due_dates": [
+      [
+        "Q1",
+        "2027-04-15",
+        "Jan 1 - Mar 31"
+      ],
+      [
+        "Q2",
+        "2027-06-15",
+        "Apr 1 - May 31"
+      ],
+      [
+        "Q3",
+        "2027-09-15",
+        "Jun 1 - Aug 31"
+      ],
+      [
+        "Q4",
+        "2028-01-18",
+        "Sep 1 - Dec 31"
+      ]
+    ],
+    "ira": {
+      "roth_magi_phaseout": {
+        "single": null,
+        "head_of_household": null,
+        "married_jointly": null,
+        "qualifying_surviving_spouse": null,
+        "married_separately": null
+      },
+      "deduction_magi_phaseout_active": {
+        "single": null,
+        "head_of_household": null,
+        "married_jointly": null,
+        "qualifying_surviving_spouse": null,
+        "married_separately": null,
+        "spouse_covered_mfj": null
+      }
+    },
+    "qcd_limit": null,
+    "section_179": {
+      "limit": 2640000,
+      "phaseout_start": 4230000
+    },
+    "bonus_depreciation_rate": {
+      "rate": 1.0
+    },
+    "obbba_deductions": {
+      "senior_bonus": {
+        "amount": 6000,
+        "magi_phaseout_start_single": 75000,
+        "magi_phaseout_start_mfj": 150000,
+        "phaseout_rate": 0.06,
+        "effective_years": [
+          "2025",
+          "2026",
+          "2027",
+          "2028"
+        ]
+      },
+      "tips": {
+        "max": 25000,
+        "magi_phaseout_start_single": 150000,
+        "magi_phaseout_start_mfj": 300000,
+        "phaseout_per_1000": 100,
+        "phaseout_rounding": "down",
+        "effective_years": [
+          "2025",
+          "2026",
+          "2027",
+          "2028"
+        ]
+      },
+      "overtime": {
+        "max_single": 12500,
+        "max_mfj": 25000,
+        "magi_phaseout_start_single": 150000,
+        "magi_phaseout_start_mfj": 300000,
+        "phaseout_per_1000": 100,
+        "phaseout_rounding": "down",
+        "effective_years": [
+          "2025",
+          "2026",
+          "2027",
+          "2028"
+        ]
+      },
+      "car_loan_interest": {
+        "max": 10000,
+        "magi_phaseout_start_single": 100000,
+        "magi_phaseout_start_mfj": 200000,
+        "phaseout_per_1000": 200,
+        "phaseout_rounding": "up"
+      }
+    }
+  },
   "filing_status_map": {
     "mfj": "married_jointly",
     "mfs": "married_separately",
@@ -2788,14 +3589,6 @@
       "phaseout_end_single": 90000,
       "phaseout_start_mfj": 160000,
       "phaseout_end_mfj": 180000
-    },
-    "child_dependent_care": {
-      "expense_limit_one": 3000,
-      "expense_limit_two_plus": 6000,
-      "max_percentage": 35,
-      "min_percentage": 20,
-      "agi_for_max": 15000,
-      "agi_for_min": 43000
     },
     "savers_credit_max_contribution": 2000,
     "ftc_no_1116_limit": {
@@ -2838,6 +3631,291 @@
   "states": {
     "CA": {
       "type": "progressive",
+      "2026": {
+        "brackets": {
+          "single": [
+            {
+              "top": 11456,
+              "rate": 0.01
+            },
+            {
+              "top": 27157,
+              "rate": 0.02
+            },
+            {
+              "top": 42861,
+              "rate": 0.04
+            },
+            {
+              "top": 59498,
+              "rate": 0.06
+            },
+            {
+              "top": 75197,
+              "rate": 0.08
+            },
+            {
+              "top": 384109,
+              "rate": 0.093
+            },
+            {
+              "top": 460927,
+              "rate": 0.103
+            },
+            {
+              "top": 768213,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "married_separately": [
+            {
+              "top": 11456,
+              "rate": 0.01
+            },
+            {
+              "top": 27157,
+              "rate": 0.02
+            },
+            {
+              "top": 42861,
+              "rate": 0.04
+            },
+            {
+              "top": 59498,
+              "rate": 0.06
+            },
+            {
+              "top": 75197,
+              "rate": 0.08
+            },
+            {
+              "top": 384109,
+              "rate": 0.093
+            },
+            {
+              "top": 460927,
+              "rate": 0.103
+            },
+            {
+              "top": 768213,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "married_jointly": [
+            {
+              "top": 22912,
+              "rate": 0.01
+            },
+            {
+              "top": 54314,
+              "rate": 0.02
+            },
+            {
+              "top": 85722,
+              "rate": 0.04
+            },
+            {
+              "top": 118996,
+              "rate": 0.06
+            },
+            {
+              "top": 150394,
+              "rate": 0.08
+            },
+            {
+              "top": 768218,
+              "rate": 0.093
+            },
+            {
+              "top": 921854,
+              "rate": 0.103
+            },
+            {
+              "top": 1536426,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "qualifying_surviving_spouse": [
+            {
+              "top": 22912,
+              "rate": 0.01
+            },
+            {
+              "top": 54314,
+              "rate": 0.02
+            },
+            {
+              "top": 85722,
+              "rate": 0.04
+            },
+            {
+              "top": 118996,
+              "rate": 0.06
+            },
+            {
+              "top": 150394,
+              "rate": 0.08
+            },
+            {
+              "top": 768218,
+              "rate": 0.093
+            },
+            {
+              "top": 921854,
+              "rate": 0.103
+            },
+            {
+              "top": 1536426,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ],
+          "head_of_household": [
+            {
+              "top": 22927,
+              "rate": 0.01
+            },
+            {
+              "top": 54316,
+              "rate": 0.02
+            },
+            {
+              "top": 70018,
+              "rate": 0.04
+            },
+            {
+              "top": 86654,
+              "rate": 0.06
+            },
+            {
+              "top": 102356,
+              "rate": 0.08
+            },
+            {
+              "top": 522385,
+              "rate": 0.093
+            },
+            {
+              "top": 626864,
+              "rate": 0.103
+            },
+            {
+              "top": 1044771,
+              "rate": 0.113
+            },
+            {
+              "top": null,
+              "rate": 0.123
+            }
+          ]
+        },
+        "behavioral_health_tax": {
+          "name": "Behavioral Health Services Tax",
+          "former_name": "Mental Health Services Tax",
+          "rate": 0.01,
+          "threshold": 1000000
+        },
+        "standard_deduction": {
+          "single": 5900,
+          "married_separately": 5900,
+          "married_jointly": 11800,
+          "head_of_household": 11800,
+          "qualifying_surviving_spouse": 11800
+        },
+        "exemption_credit": {
+          "personal": 158,
+          "blind": 158,
+          "senior": 158,
+          "dependent": 491,
+          "phaseout_federal_agi_start": null
+        },
+        "renters_credit": {
+          "amount_single": 60,
+          "amount_joint": 120,
+          "agi_limit_single": 55830,
+          "agi_limit_joint": 111660
+        },
+        "sdi": {
+          "rate": 0.013,
+          "wage_cap": null,
+          "excess_credit_multiple_employers": true
+        },
+        "supplemental_withholding": {
+          "rsu_bonus_stock_options": 0.1023,
+          "other": 0.066
+        },
+        "nonconformity": {
+          "hsa_deductible": false,
+          "hsa_earnings_taxable": true,
+          "qbi_deductible": false,
+          "capital_gains_preferential": false,
+          "mortgage_debt_limit": 1000000,
+          "heloc_limit": 100000,
+          "bonus_depreciation": false,
+          "salt_deductible_on_state_return": false,
+          "obbba_tips_overtime_senior": false,
+          "conformity_date": "2025-01-01",
+          "plan_529": {
+            "state_deduction_for_contributions": false,
+            "additional_tax_rate_on_nonqualified_earnings": 0.025,
+            "federal_qualified_but_ca_nonqualified": [
+              "K-12 elementary/secondary education expenses (federally qualified under TCJA and OBBBA 2025; CA does not conform)",
+              "529-to-Roth IRA rollovers (SECURE 2.0 Act section 126 / CAA 2023; CA does not conform per R&TC 17140.3(f))"
+            ],
+            "ca_conformed_federal_expansions": [
+              "Registered apprenticeship program expenses (R&TC 17140.3(e)(1), effective 2021)",
+              "Qualified education loan repayment up to $10,000 lifetime (R&TC 17140.3(e)(2), effective 2021)"
+            ]
+          }
+        },
+        "estimated_tax": {
+          "installment_pct": [
+            0.3,
+            0.4,
+            0.0,
+            0.3
+          ],
+          "high_income_agi": 150000,
+          "high_income_agi_mfs": 75000,
+          "high_income_prior_year_pct": 1.1,
+          "current_year_pct": 0.9,
+          "safe_harbor_unavailable_agi": 1000000,
+          "safe_harbor_unavailable_agi_mfs": 500000,
+          "due_dates": [
+            [
+              "Q1",
+              "2026-04-15"
+            ],
+            [
+              "Q2",
+              "2026-06-15"
+            ],
+            [
+              "Q3",
+              "2026-09-15"
+            ],
+            [
+              "Q4",
+              "2027-01-15"
+            ]
+          ]
+        }
+      },
       "2025": {
         "brackets": {
           "single": [

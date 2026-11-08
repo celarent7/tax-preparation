@@ -140,3 +140,17 @@ def test_refundable_portion_uses_15_percent_over_2500():
 def test_no_refundable_portion_below_2500_earned_income():
     result = ctc(children_under_17=1, agi=2000, earned_income=2000)
     assert result.refundable_amount == 0
+
+
+def test_actc_uses_constants_not_literals():
+    """ACTC floor and rate come from ctc.actc_earned_income_floor / actc_rate."""
+    from credit_eligibility_checker import calculate_child_tax_credit
+    from utils import load_tax_constants
+
+    params = {**load_tax_constants("2026")["ctc"],
+              "actc_earned_income_floor": 3000, "actc_rate": 0.10}
+    r = calculate_child_tax_credit({"filing_status": "single", "agi": 13000,
+                                    "earned_income": 13000, "children_under_17": 1},
+                                   params)
+    # (13,000 - 3,000) x 10% = 1,000; the literals 2,500 / 15% would give 1,575.
+    assert r.refundable_amount == 1000.0

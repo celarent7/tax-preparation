@@ -84,3 +84,21 @@ def test_rsu_lot_sale_long_term():
     assert sale_result.form_8949_code == ""
     assert sale_result.basis_missing_on_1099b is True
     assert sale_result.column_g_adjustment == 0.0
+
+
+def test_supplemental_withholding_splits_at_1m(tax_data_2025):
+    """Pub 15 sec. 7: 22% up to $1M of supplemental wages, 37% on the excess.
+    1,000,000 x 22% + 200,000 x 37% = 220,000 + 74,000 = 294,000."""
+    result = calculate_withholding_estimate(
+        1200000, 0, "single", state_rate=0.0, tax_data=tax_data_2025,
+        ytd_supplemental_wages=0)
+    assert result["withholding"]["federal"] == 294000.0
+
+
+def test_supplemental_withholding_with_prior_supplemental(tax_data_2025):
+    """$900,000 of supplemental wages already paid: 100,000 x 22% + 100,000 x 37%
+    = 22,000 + 37,000 = 59,000."""
+    result = calculate_withholding_estimate(
+        200000, 0, "single", state_rate=0.0, tax_data=tax_data_2025,
+        ytd_supplemental_wages=900000)
+    assert result["withholding"]["federal"] == 59000.0

@@ -106,11 +106,11 @@ def test_cli_no_tax_state_message():
 
 
 def test_cli_ca_unsupported_year_raises_cleanly():
-    # CA 2026 is not yet published by the FTB (see _sources.TODO_VERIFY
-    # states.CA.2026); requesting it must raise rather than fall back to 2025.
-    args = [a if a != "2025" else "2026" for a in BASE]
+    # CA 2027 is not yet published by the FTB (see _sources.TODO_VERIFY
+    # states.CA.2027); requesting it must raise rather than fall back to 2025.
+    args = [a if a != "2025" else "2027" for a in BASE]
     p = subprocess.run([sys.executable, SCRIPT, *args, "--state", "CA",
                         "--projected-ca-tax", "20000",
                         "--prior-year-ca-tax", "30000", "--ca-agi", "200000"],
                        capture_output=True, text=True)
-    assert p.returncode == 1  # CA 2026 constants absent -> standard error
+    assert p.returncode == 1  # CA 2027 constants absent -> standard error

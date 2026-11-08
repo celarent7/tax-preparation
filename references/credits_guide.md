@@ -86,39 +86,56 @@ Detailed eligibility requirements and calculations for major federal tax credits
 ### Expense Limits
 - One qualifying person: $3,000
 - Two or more qualifying persons: $6,000
-- Reduced by employer-provided dependent care benefits (Form 2441)
+- IRC 21(c): the dollar limit itself is reduced by dependent care benefits excluded from income under IRC 129 (e.g. a dependent-care FSA, W-2 box 10). Expenses paid with those benefits don't count either. Form 2441 Part III, lines 27-31, applies both reductions.
+- The limits are set by statute and are not inflation-indexed.
 
-### Credit Percentage
-| AGI | Credit Percentage |
-|-----|-------------------|
+### Credit Rate
+
+The rate is one point lower for each $2,000 of AGI, **or fraction thereof**, above a threshold. AGI exactly at a threshold gets no reduction; $1 over it loses one point.
+
+**Tax years 2023-2025** (IRC 21(a)(2) before P.L. 119-21). This is one schedule for every filing status.
+
+| AGI | Credit rate |
+|-----|-------------|
 | $0 - $15,000 | 35% |
-| $15,001 - $17,000 | 34% |
-| $17,001 - $19,000 | 33% |
-| $19,001 - $21,000 | 32% |
-| $21,001 - $23,000 | 31% |
-| $23,001 - $25,000 | 30% |
-| $25,001 - $27,000 | 29% |
-| $27,001 - $29,000 | 28% |
-| $29,001 - $31,000 | 27% |
-| $31,001 - $33,000 | 26% |
-| $33,001 - $35,000 | 25% |
-| $35,001 - $37,000 | 24% |
-| $37,001 - $39,000 | 23% |
-| $39,001 - $41,000 | 22% |
+| Each $2,000 or part of $2,000 over $15,000 | 1 point lower |
 | $41,001 - $43,000 | 21% |
 | Over $43,000 | 20% |
 
+**Tax years 2026 and later** (IRC 21(a)(2) as amended by P.L. 119-21 §70405; applies to taxable years beginning after December 31, 2025):
+- The rate starts at 50%.
+- It drops 1 point for each $2,000 or fraction of $2,000 of AGI over $15,000, but not below 35%.
+- It then drops 1 more point for each $2,000 ($4,000 on a joint return) or fraction of that over $75,000 ($150,000 joint), but not below 20%.
+- Only married filing jointly uses the joint figures. Head of household and qualifying surviving spouse use the other column.
+- The thresholds aren't indexed, so 2027 uses the same schedule.
+
+| Credit rate | Married filing jointly: AGI | Every other filer: AGI |
+|-------------|-----------------------------|------------------------|
+| 50% | $0 - $15,000 | $0 - $15,000 |
+| 49% ... 36% | 1 point lower per $2,000 over $15,000 | 1 point lower per $2,000 over $15,000 |
+| 35% | $43,001 - $150,000 | $43,001 - $75,000 |
+| 34% ... 21% | 1 point lower per $4,000 over $150,000 | 1 point lower per $2,000 over $75,000 |
+| 20% | Over $206,000 | Over $103,000 |
+
+These rows match the 2026 phaseout schedule in the IRS draft 2026 Form 2441 instructions (line 8).
+
 ### Calculation Example
-- 2 children in daycare, $12,000 total expenses
-- AGI: $50,000
-- Expense limit: $6,000 (capped)
-- Credit percentage: 20%
-- Credit: $6,000 x 20% = $1,200
+2 children in daycare, $12,000 of expenses, married filing jointly, AGI $50,000, no FSA:
+
+| Tax year | Expense limit | Credit rate | Credit |
+|----------|---------------|-------------|--------|
+| 2025 | $6,000 (capped) | 20% | $6,000 x 20% = $1,200 |
+| 2026 | $6,000 (capped) | 35% | $6,000 x 35% = $2,100 |
+
+With a $5,000 dependent-care FSA, the 2025 limit falls to $6,000 - $5,000 = $1,000 and the credit to $200. From 2026 the FSA exclusion can be up to $7,500. At that level it uses up the whole $6,000 limit, and no credit is left.
 
 ### Requirements
-- Must report care provider's name, address, and SSN/EIN on Form 2441
-- Must have earned income (both spouses if married)
-- If married, must file jointly (few exceptions)
+- Report each care provider's name, address and SSN/EIN on Form 2441.
+- You must have earned income, and so must your spouse if you're married.
+- A married couple must file jointly (IRC 21(e)(2)). There is one exception, IRC 21(e)(4). A spouse filing separately is treated as unmarried if all of these are true:
+  - they maintained the qualifying person's home for more than half the year;
+  - they paid over half the cost of that home;
+  - the other spouse didn't live in the household for the last 6 months of the year.
 
 ---
 
@@ -217,6 +234,13 @@ Detailed eligibility requirements and calculations for major federal tax credits
 | Single | $0 - $23,000 | $23,001 - $25,000 | $25,001 - $38,250 | Over $38,250 |
 | Head of Household | $0 - $34,500 | $34,501 - $37,500 | $37,501 - $57,375 | Over $57,375 |
 | MFJ | $0 - $46,000 | $46,001 - $50,000 | $50,001 - $76,500 | Over $76,500 |
+
+Other years: 2023 per Notice 2022-55, 2025 per Notice 2024-80 (MFJ $47,500 / $51,000 / $79,000; all other filers $23,750 / $25,500 / $39,500; head of household is 75% of MFJ), 2026 per Notice 2025-67. The figures live in `credits.savers_credit` in `scripts/tax_constants.json`.
+
+### 2027 and later: retirement contributions no longer count
+- P.L. 119-21 §70116 rewrote IRC 25B(d)(1). For tax years beginning after December 31, 2026, IRA contributions, 401(k)/403(b)/457 deferrals and voluntary employee contributions **earn no Saver's Credit**.
+- Those contributions count toward the **Saver's Match** (IRC 6433) instead. Treasury pays the match as a contribution to the retirement account, not as a credit on the return.
+- Contributions to the taxpayer's own **ABLE account** still earn the Saver's Credit, with the contribution cap raised to $2,100 from 2027. The checker doesn't model ABLE contributions, and it reports the Saver's Credit as not available for retirement contributions in 2027+.
 
 ### Credit Calculation
 - Maximum contribution eligible: $2,000 ($4,000 MFJ)

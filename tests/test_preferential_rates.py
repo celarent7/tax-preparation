@@ -35,6 +35,7 @@ from utils import load_tax_constants  # noqa: E402
 TAX_2025 = load_tax_constants("2025")
 LTCG_MFJ = TAX_2025["ltcg_brackets_processed"]["married_jointly"]
 LTCG_SINGLE = TAX_2025["ltcg_brackets_processed"]["single"]
+NIIT_RATE_2025 = TAX_2025["niit_rate"]
 
 
 def run_calc(*args):
@@ -193,7 +194,7 @@ def test_niit_is_lesser_of_nii_and_magi_excess():
     NII 50,000 -> base = min(50,000, 50,000) = 50,000.
     Tax = 0.038 x 50,000 = $1,900.
     """
-    niit = calculate_niit(300000, 50000, 250000)
+    niit = calculate_niit(300000, 50000, 250000, NIIT_RATE_2025)
     assert niit["taxable_base"] == 50000
     assert niit["tax"] == 1900.00
 
@@ -201,7 +202,7 @@ def test_niit_is_lesser_of_nii_and_magi_excess():
 def test_niit_limited_by_magi_excess_when_nii_is_larger():
     """MAGI 260,000 -> excess 10,000; NII 50,000. Base is the SMALLER: 10,000.
     Tax = 0.038 x 10,000 = $380."""
-    niit = calculate_niit(260000, 50000, 250000)
+    niit = calculate_niit(260000, 50000, 250000, NIIT_RATE_2025)
     assert niit["taxable_base"] == 10000
     assert niit["tax"] == 380.00
 
@@ -209,14 +210,14 @@ def test_niit_limited_by_magi_excess_when_nii_is_larger():
 def test_niit_limited_by_nii_when_magi_excess_is_larger():
     """MAGI 500,000 -> excess 250,000; NII 20,000. Base = 20,000.
     Tax = 0.038 x 20,000 = $760."""
-    niit = calculate_niit(500000, 20000, 250000)
+    niit = calculate_niit(500000, 20000, 250000, NIIT_RATE_2025)
     assert niit["taxable_base"] == 20000
     assert niit["tax"] == 760.00
 
 
 def test_niit_does_not_apply_below_threshold():
-    assert calculate_niit(200000, 50000, 250000)["tax"] == 0
-    assert calculate_niit(250000, 50000, 250000)["applies"] is False
+    assert calculate_niit(200000, 50000, 250000, NIIT_RATE_2025)["tax"] == 0
+    assert calculate_niit(250000, 50000, 250000, NIIT_RATE_2025)["applies"] is False
 
 
 def test_niit_end_to_end():
@@ -302,3 +303,8 @@ def test_amt_risk_is_a_flag_not_a_computation():
                  "--year", "2025", "--iso-bargain-element", "200000")
     assert "does not compute Form 6251" in r["amt_risk"]["note"]
     assert "amt_tax" not in r["tax"]
+
+
+def test_niit_uses_given_rate():
+    """The NIIT rate is an argument read from constants, not a literal default."""
+    assert calculate_niit(300000, 50000, 250000, 0.05)["tax"] == 2500.0

@@ -46,10 +46,12 @@ def get_credit_params(tax_data: Dict) -> Dict:
         "eitc": tax_data["credits"]["eitc"],
         "aotc": tax_data["credits_static"]["aotc"],
         "lifetime_learning": tax_data["credits_static"]["lifetime_learning"],
-        "child_dependent_care": tax_data["credits_static"]["child_dependent_care"],
+        "child_dependent_care": tax_data["credits"]["child_dependent_care"],
         "savers_credit": {
             "max_contribution": tax_data["credits_static"]["savers_credit_max_contribution"],
             "bands": tax_data["credits"]["savers_credit"],
+            "retirement_contributions_creditable":
+                tax_data["credits"]["savers_credit_retirement_contributions_creditable"],
         },
     }
 
@@ -104,8 +106,9 @@ def calculate_child_tax_credit(data: Dict, params: Dict) -> CreditResult:
         notes.append(f"Credit reduced by ${reduction:,.0f} due to income phaseout")
 
     # Calculate refundable portion (Additional Child Tax Credit)
-    if earned_income > 2500:
-        potential_refund = (earned_income - 2500) * 0.15
+    actc_floor = params["actc_earned_income_floor"]
+    if earned_income > actc_floor:
+        potential_refund = (earned_income - actc_floor) * params["actc_rate"]
         refundable = min(potential_refund, params["refundable_max"] * qualifying_children, base_credit)
     else:
         refundable = 0
@@ -226,9 +229,31 @@ def calculate_eitc(data: Dict, eitc_table: Dict) -> CreditResult:
     )
 
 
-def calculate_child_dependent_care(data: Dict, params: Dict) -> CreditResult:
-    """Calculate Child and Dependent Care Credit."""
+def cdcc_applicable_percentage(agi: float, filing_status: str, params: Dict) -> int:
+    """IRC 21(a)(2) applicable percentage for the Child and Dependent Care Credit.
 
+    Starts at `max_percentage` and applies each reduction tier in order: one
+    point for each `step` "or fraction thereof" by which AGI exceeds the tier's
+    threshold, never below the tier's floor. The `_joint` threshold and step
+    apply only to a joint return; head of household and qualifying surviving
+    spouse are not joint returns.
+    """
+    joint = normalize_filing_status(filing_status) == "married_jointly"
+    percentage = params["max_percentage"]
+    for tier in params["reductions"]:
+        threshold = tier["agi_threshold_joint"] if joint else tier["agi_threshold"]
+        step = tier["step_joint"] if joint else tier["step"]
+        floor = tier["floor_percentage"]
+        if agi > threshold and percentage > floor:
+            points = math.ceil((agi - threshold) / step)
+            percentage = max(floor, percentage - points)
+    return percentage
+
+
+def calculate_child_dependent_care(data: Dict, params: Dict) -> CreditResult:
+    """Calculate Child and Dependent Care Credit (IRC 21, Form 2441)."""
+
+    filing_status = normalize_filing_status(data["filing_status"])
     qualifying_persons = data.get("qualifying_dependents_care", 0)
     expenses = data.get("childcare_expenses", 0)
     agi = data.get("agi", 0)
@@ -255,39 +280,46 @@ def calculate_child_dependent_care(data: Dict, params: Dict) -> CreditResult:
         return CreditResult("Child and Dependent Care Credit", False, 0, 0, False,
                            ["No qualifying childcare expenses"], requirements, docs)
 
-    # Expense limit
-    expense_limit = params["expense_limit_two_plus"] if qualifying_persons >= 2 else params["expense_limit_one"]
+    if filing_status == "married_separately":
+        requirements["filing_status_allowed"] = False
+        return CreditResult(
+            "Child and Dependent Care Credit", False, 0, 0, False,
+            ["Not allowed when married filing separately: IRC 21(e)(2) requires "
+             "a married taxpayer to file a joint return. Exception, IRC 21(e)(4): "
+             "a spouse filing separately who maintained the qualifying person's "
+             "home for more than half the year, paid over half its cost, and whose "
+             "spouse was not a member of the household during the last 6 months of "
+             "the year is treated as unmarried (and would usually file as head of "
+             "household)."],
+            requirements, docs)
 
-    # Reduce by dependent care FSA
+    # Dollar limit, IRC 21(c): $3,000 / $6,000, reduced by benefits excluded
+    # under section 129 such as a dependent-care FSA (Form 2441 lines 27-29).
+    expense_limit = params["expense_limit_two_plus"] if qualifying_persons >= 2 else params["expense_limit_one"]
+    reduced_limit = max(0, expense_limit - dependent_care_fsa)
+
+    # Expenses paid with excluded benefits don't count either (Form 2441 line 30).
     net_expenses = max(0, expenses - dependent_care_fsa)
 
     # Limit by earned income (lower of taxpayer or spouse)
     lower_earned = min(earned_income, spouse_earned_income)
-    eligible_expenses = min(net_expenses, expense_limit, lower_earned)
+    eligible_expenses = min(reduced_limit, net_expenses, lower_earned)
 
-    # Determine credit percentage based on AGI
-    if agi <= params["agi_for_max"]:
-        percentage = params["max_percentage"]
-    elif agi >= params["agi_for_min"]:
-        percentage = params["min_percentage"]
-    else:
-        # Gradual reduction
-        reduction = ((agi - params["agi_for_max"]) // 2000)
-        percentage = max(params["min_percentage"], params["max_percentage"] - reduction)
-
-    credit = eligible_expenses * (percentage / 100)
+    percentage = cdcc_applicable_percentage(agi, filing_status, params)
+    credit = round(eligible_expenses * percentage / 100, 2)
 
     notes.append(f"Credit rate: {percentage}% of eligible expenses")
     notes.append(f"Expense limit: ${expense_limit:,}")
     if dependent_care_fsa > 0:
-        notes.append(f"Reduced by ${dependent_care_fsa:,} FSA contributions")
+        notes.append(f"Dollar limit and expenses each reduced by ${dependent_care_fsa:,} "
+                     "of excluded dependent-care benefits (IRC 21(c), Form 2441 Part III)")
 
     return CreditResult(
         name="Child and Dependent Care Credit",
         eligible=credit > 0,
         amount=credit,
         refundable_amount=0,  # Non-refundable
-        phaseout_applied=agi > params["agi_for_max"],
+        phaseout_applied=percentage < params["max_percentage"],
         notes=notes,
         requirements_met=requirements,
         documentation_needed=docs
@@ -417,10 +449,43 @@ def calculate_savers_credit(data: Dict, params: Dict) -> CreditResult:
     age = data.get("age", 30)
     is_student = data.get("is_full_time_student", False)
 
+    requirements = {
+        "has_contributions": contributions > 0,
+        "age_18_plus": age >= 18,
+        "not_full_time_student": not is_student,
+        "not_dependent": not data.get("is_dependent", False),
+    }
+
+    notes = []
+    docs = ["Form 5498 (IRA)", "W-2 Box 12 (401k)", "Retirement account statements"]
+
+    # IRC 25B(d)(1)(B) as amended by P.L. 119-21 sec. 70116: retirement
+    # contributions count only for taxable years beginning before 2027.
+    if not params["retirement_contributions_creditable"]:
+        requirements["contributions_creditable_this_year"] = False
+        return CreditResult(
+            "Saver's Credit", False, 0, 0, False,
+            ["Retirement contributions (IRA, 401(k)/403(b)/457 deferrals, voluntary "
+             "employee contributions) earn no Saver's Credit for tax years beginning "
+             "after December 31, 2026: IRC 25B(d)(1)(B) as amended by P.L. 119-21 "
+             "sec. 70116. They count toward the Saver's Match (IRC 6433), which "
+             "Treasury pays as a contribution to the retirement account rather than "
+             "as a credit on the return.",
+             "Contributions to the taxpayer's own ABLE account still earn the credit "
+             "(IRC 25B(d)(1)(A)). This checker does not model "
+             "ABLE contributions."],
+            requirements, docs)
+
+    if not requirements["has_contributions"]:
+        return CreditResult("Saver's Credit", False, 0, 0, False,
+                           ["No retirement contributions"], requirements, docs)
+
     # Constants carry mfj/single AGI bands; HoH bands are 75% of the MFJ ones
     # per IRC 25B(b). Only mfj/single are stored, so HoH derives from MFJ.
     # Single, married-separately, and qualifying-surviving-spouse all use the
     # "single" bands unscaled per the IRS Saver's Credit table.
+    # Read only when there is something to credit, so an unpublished year's
+    # null bands don't block every other credit.
     status_key = "mfj" if filing_status in ("married_jointly", "head_of_household") else "single"
     bands = params["bands"][status_key]
     if any(v is None for v in bands.values()):
@@ -434,21 +499,7 @@ def calculate_savers_credit(data: Dict, params: Dict) -> CreditResult:
         (bands["20_percent"] * scale, 0.20),
         (bands["10_percent"] * scale, 0.10),
     ]
-
-    requirements = {
-        "has_contributions": contributions > 0,
-        "age_18_plus": age >= 18,
-        "not_full_time_student": not is_student,
-        "not_dependent": not data.get("is_dependent", False),
-        "income_under_limit": agi <= rates[-1][0]
-    }
-
-    notes = []
-    docs = ["Form 5498 (IRA)", "W-2 Box 12 (401k)", "Retirement account statements"]
-
-    if not requirements["has_contributions"]:
-        return CreditResult("Saver's Credit", False, 0, 0, False,
-                           ["No retirement contributions"], requirements, docs)
+    requirements["income_under_limit"] = agi <= rates[-1][0]
 
     if not requirements["income_under_limit"]:
         return CreditResult("Saver's Credit", False, 0, 0, False,

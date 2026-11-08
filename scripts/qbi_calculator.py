@@ -712,7 +712,7 @@ def build_parser() -> argparse.ArgumentParser:
                         "pointer to docs/limitations.md (exit 1).")
     p.add_argument("--filing-status", type=str, default=None)
     p.add_argument("--output-format", choices=["json", "text"], default="text")
-    utils.make_year_arg(p, default="2025")
+    utils.make_year_arg(p)
     return p
 
 

@@ -665,9 +665,9 @@ def roster_to_json(roster: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def load_fbar_constants(year: str = "2025") -> Dict[str, Any]:
+def load_fbar_constants(year: Optional[str] = None) -> Dict[str, Any]:
     """The shared `fbar` block from tax_constants.json."""
-    return get_constant(load_tax_constants(str(year)), "fbar")
+    return get_constant(load_tax_constants(year), "fbar")
 
 
 def fbar_threshold(fbar: Dict[str, Any]) -> float:

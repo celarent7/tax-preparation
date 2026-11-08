@@ -14,7 +14,7 @@ from mcp.server.fastmcp import FastMCP
 # Add scripts directory to path to import local modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from utils import load_tax_constants
+from utils import get_status_value, load_tax_constants, normalize_filing_status
 import tax_calculator
 import rsu_calculator
 import espp_calculator
@@ -40,7 +40,7 @@ def format_error(message: str, category: str = "system", is_retryable: bool = Fa
 @mcp.tool()
 def calculate_federal_tax(
     gross_income: float,
-    year: str = "2025",
+    year: Optional[str] = None,
     filing_status: str = "single",
     deductions: float = 0,
     adjustments: float = 0,
@@ -57,6 +57,7 @@ def calculate_federal_tax(
             tax_data = load_tax_constants(year)
         except ValueError as e:
             return format_error(str(e), "validation")
+        year = str(tax_data["tax_year"])
 
         tax_brackets = tax_data["tax_brackets_processed"]
         standard_deductions = tax_data["standard_deductions"]
@@ -128,21 +129,32 @@ def analyze_rsu_withholding(
     vesting_income: float,
     ytd_wages: float = 0,
     filing_status: str = "single",
-    state_rate: float = 0.05,
-    year: str = "2025"
+    state_rate: Optional[float] = None,
+    year: Optional[str] = None,
+    ytd_supplemental_wages: float = 0
 ) -> Union[str, Dict[str, Any]]:
     """
     Estimate tax withholding shortfall for RSU vesting events.
     Helps identify if you will owe additional tax at year-end due to the 22% flat withholding.
+    `state_rate` is required (e.g. 0.1023 for California RSU/bonus, 0.0 for no state tax).
+    `ytd_supplemental_wages` is supplemental pay already received this year; federal
+    withholding rises to the over-$1M rate above the $1M threshold.
     """
     try:
+        if state_rate is None:
+            return format_error(
+                "state_rate is required: pass the state's supplemental withholding "
+                "rate (0.0 if the state has no income tax).", "validation")
         try:
             tax_data = load_tax_constants(year)
         except ValueError as e:
             return format_error(str(e), "validation")
+        year = str(tax_data["tax_year"])
 
         result = rsu_calculator.calculate_withholding_estimate(
-            vesting_income, ytd_wages, filing_status, state_rate, tax_data
+            vesting_income, ytd_wages, filing_status,
+            state_rate=state_rate, tax_data=tax_data,
+            ytd_supplemental_wages=ytd_supplemental_wages,
         )
         return json.dumps(result, indent=2)
     except Exception as e:
@@ -219,7 +231,7 @@ def compare_deductions(
     medical_expenses: float = 0,
     age_65_plus: int = 0,
     blind: int = 0,
-    year: str = "2025"
+    year: Optional[str] = None
 ) -> Union[str, Dict[str, Any]]:
     """
     Compare standard deduction vs itemized deductions.
@@ -230,25 +242,37 @@ def compare_deductions(
             tax_data = load_tax_constants(year)
         except ValueError as e:
             return format_error(str(e), "validation")
+        year = str(tax_data["tax_year"])
 
-        sd_table = tax_data["standard_deductions"]
-        add_table = tax_data["additional_deduction_65_blind"]
-        
-        salt_res = deduction_analyzer.analyze_salt_deduction(
-            property_taxes, state_income_tax, state_sales_tax, filing_status
-        )
-        
-        medical_res = deduction_analyzer.analyze_medical_deduction(medical_expenses, agi)
-        
-        # Simplified charitable for tool output
-        total_charitable = charitable_cash + min(charitable_property, agi * 0.3)
-        
-        total_itemized = salt_res["deductible_amount"] + medical_res["deductible_amount"] + mortgage_interest + total_charitable
-        
-        sd_base = sd_table.get(filing_status, 15000)
-        additional = add_table.get(filing_status, 2000)
+        try:
+            filing_status = normalize_filing_status(filing_status)
+            sd_base = get_status_value(tax_data["standard_deductions"], filing_status,
+                                       "standard deduction")
+            additional = get_status_value(tax_data["additional_deduction_65_blind"],
+                                          filing_status, "additional 65/blind deduction")
+        except ValueError as e:
+            return format_error(str(e), "validation")
         standard_deduction = sd_base + (additional * age_65_plus) + (additional * blind)
-        
+
+        # MAGI = AGI, as deduction_analyzer.main does absent an explicit MAGI.
+        salt_res = deduction_analyzer.analyze_salt_deduction(
+            property_taxes, state_income_tax, state_sales_tax, filing_status,
+            tax_data["salt"], agi
+        )
+        medical_res = deduction_analyzer.analyze_medical_deduction(
+            medical_expenses, agi, tax_data["credits"]["medical_threshold"]
+        )
+        charitable_res = deduction_analyzer.analyze_charitable(
+            charitable_cash, charitable_property, agi,
+            cash_limit_rate=tax_data["credits"]["charitable_cash_limit"],
+            property_limit_rate=tax_data["charitable_property_agi_limit"],
+            cash_30_org_rate=tax_data["charitable_30_org_cash_agi_limit"],
+            property_30_org_rate=tax_data["charitable_30_org_property_agi_limit"],
+        )
+
+        total_itemized = (salt_res["deductible_amount"] + medical_res["deductible_amount"]
+                          + mortgage_interest + charitable_res["deductible_amount"])
+
         use_itemized = total_itemized > standard_deduction
         
         result = {
@@ -268,7 +292,7 @@ def compare_deductions(
 def review_draft_return(
     draft_json: str,
     computed_json: str,
-    year: str = "2025"
+    year: Optional[str] = None
 ) -> Union[str, Dict[str, Any]]:
     """
     Review a draft tax return by cross-checking it against computed data.
@@ -286,6 +310,7 @@ def review_draft_return(
             tax_data = load_tax_constants(year)
         except ValueError as e:
             return format_error(str(e), "validation")
+        year = str(tax_data["tax_year"])
 
         # Initialize Review Context
         ctx = draft_reviewer.ReviewContext(

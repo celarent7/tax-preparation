@@ -90,7 +90,7 @@ def test_every_year_has_required_blocks(year):
     data = load_tax_constants(year)
     for key in ("tax_brackets", "standard_deductions", "additional_deduction_65_blind",
                 "salt", "ltcg_brackets", "niit_thresholds", "se_tax",
-                "retirement_limits", "credits"):
+                "retirement_limits", "credits", "niit_rate"):
         assert key in data, f"{year} missing {key!r}"
 
 

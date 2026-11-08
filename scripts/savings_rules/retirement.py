@@ -60,7 +60,7 @@ def _state_rate_if_ca(tax_data: Dict[str, Any], profile: Dict[str, Any],
     # CA taxable income proxy: AGI less the CA standard deduction. The bracket
     # marginal rate is what matters for a per-dollar savings estimate.
     ca_taxable = max(0.0, profile["agi"])  # standard deduction folded into the bracket floor
-    rate = ca_marginal_rate(tax_data, str(tax_data.get("tax_year", "2025")),
+    rate = ca_marginal_rate(tax_data, str(tax_data["tax_year"]),
                             filing_status_of(profile), ca_taxable)
     return rate or 0.0
 
@@ -88,7 +88,7 @@ def _m1_for_person(tax_data, profile, age, contributed, label) -> List[TaxOpport
     # SECURE 2.0 Roth catch-up mandate (effective 2026+): high-earning catch-up
     # contributors must make catch-up contributions as Roth (no current-year
     # deduction on the catch-up slice). Informational, not a savings claim.
-    if age >= 50 and str(tax_data.get("tax_year", "2025")) >= "2026" and profile.get("wages", 0) > 0:
+    if age >= 50 and str(tax_data["tax_year"]) >= "2026" and profile.get("wages", 0) > 0:
         notes.append(
             "SECURE 2.0 Roth catch-up mandate: for 2026+, if your prior-year FICA wages "
             "exceeded the SECURE 2.0 threshold (check with your plan administrator), your "

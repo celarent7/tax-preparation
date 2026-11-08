@@ -71,7 +71,7 @@ def rule_appreciated_stock_donation(profile: Dict[str, Any],
     if str(profile.get("state", "")).upper() == "CA":
         nc = ca_nonconformity(tax_data)
         if not nc.get("capital_gains_preferential", True):
-            ca_rate = ca_marginal_rate(tax_data, str(tax_data.get("tax_year", "2025")),
+            ca_rate = ca_marginal_rate(tax_data, str(tax_data["tax_year"]),
                                        fs, agi) or 0.0
             avoided_ca = gain * ca_rate
 

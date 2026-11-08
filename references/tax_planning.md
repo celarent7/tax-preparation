@@ -77,7 +77,7 @@ If total itemized deductions are near the standard deduction threshold, consider
 
 ### Multi-Year Projections
 There is no dedicated projector script. Model each year by running the
-calculator with that year's constants (2023–2026 are supported):
+calculator with that year's constants (2023–2027 are supported):
 ```bash
 python ./scripts/tax_calculator.py --gross-income <amt> --filing-status <status> --year 2025
 python ./scripts/tax_calculator.py --gross-income <amt> --filing-status <status> --year 2026

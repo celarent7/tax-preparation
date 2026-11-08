@@ -131,19 +131,21 @@ def calculate_marginal_rate(taxable_income: float, filing_status: str, tax_brack
 
 def calculate_withholding_estimate(
     vesting_income: float,
-    ytd_wages: float = 0,
-    filing_status: str = "single",
-    state_rate: float = 0.05,
-    tax_data: Dict = None
+    ytd_wages: float,
+    filing_status: str,
+    state_rate: float,
+    tax_data: Dict,
+    ytd_supplemental_wages: float = 0,
 ) -> Dict:
     """
     Estimate withholding on RSU vesting and compare to actual tax owed.
 
+    `ytd_supplemental_wages` is supplemental pay already received this calendar
+    year (earlier vests, bonuses). Federal withholding is the supplemental rate
+    up to the $1M threshold and the over-$1M rate on the rest (Pub 15 sec. 7).
+
     Returns dict with typical withholding vs estimated actual tax.
     """
-    if tax_data is None:
-        tax_data = load_tax_constants("2025")
-        
     tax_brackets = tax_data["tax_brackets_processed"]
     standard_deductions = tax_data["standard_deductions"]
     
@@ -151,13 +153,15 @@ def calculate_withholding_estimate(
     fica_rates = tax_data["fica_employee"]
     se_tax_data = tax_data["se_tax"]
 
-    # Typical employer withholding
-    if vesting_income > 1000000:
-        federal_withholding_rate = withholding_rates["supplemental_rate_over_1m"]
-    else:
-        federal_withholding_rate = withholding_rates["supplemental_rate"]
-
-    federal_withheld = vesting_income * federal_withholding_rate
+    # Typical employer withholding: the flat supplemental rate up to the
+    # threshold, the mandatory higher rate on supplemental wages above it.
+    threshold = withholding_rates["supplemental_over_1m_threshold"]
+    in_band = min(vesting_income, max(0, threshold - ytd_supplemental_wages))
+    over = vesting_income - in_band
+    federal_withheld = (in_band * withholding_rates["supplemental_rate"]
+                        + over * withholding_rates["supplemental_rate_over_1m"])
+    federal_withholding_rate = (round(federal_withheld / vesting_income, 4) if vesting_income
+                                else withholding_rates["supplemental_rate"])
 
     # Social Security (check if over wage base)
     ss_wage_base = se_tax_data["ss_wage_base"]
@@ -385,6 +389,9 @@ def main():
     withhold_parser = subparsers.add_parser("withholding", help="Calculate withholding shortfall")
     withhold_parser.add_argument("--vesting-income", type=float, required=True, help="Total income from vesting")
     withhold_parser.add_argument("--ytd-wages", type=float, default=0, help="Year-to-date wages before this vesting")
+    withhold_parser.add_argument("--ytd-supplemental-wages", type=float, default=0,
+                                 help="Supplemental wages (vests, bonuses) already paid this "
+                                      "calendar year; withholding rises above the $1M threshold")
     make_year_arg(withhold_parser)
     withhold_parser.add_argument("--filing-status", default="single",
                                 help="Filing status (single, mfj, mfs, hoh, qss or canonical form)")
@@ -423,7 +430,7 @@ def main():
     args = parser.parse_args()
 
     if args.command == "withholding":
-        if args.vesting_income < 0 or args.ytd_wages < 0:
+        if args.vesting_income < 0 or args.ytd_wages < 0 or args.ytd_supplemental_wages < 0:
             print("Error: Income and wages must be non-negative.")
             sys.exit(1)
             
@@ -453,7 +460,8 @@ def main():
 
         try:
             result = calculate_withholding_estimate(
-                args.vesting_income, args.ytd_wages, args.filing_status, state_rate, tax_data
+                args.vesting_income, args.ytd_wages, args.filing_status, state_rate, tax_data,
+                ytd_supplemental_wages=args.ytd_supplemental_wages,
             )
         except ValueError as e:
             print(f"Error: {e}")
@@ -492,7 +500,7 @@ def main():
         print(f"Vesting Income:       ${result['vesting_income']:,.2f}")
         print("-" * 35)
         print("Typical Withholding:")
-        print(f"  Federal (22%):      ${result['withholding']['federal']:,.2f}")
+        print(f"  Federal ({result['withholding']['federal_rate']:.1%}):    ${result['withholding']['federal']:,.2f}")
         print(f"  Social Security:    ${result['withholding']['social_security']:,.2f}")
         print(f"  Medicare:           ${result['withholding']['medicare']:,.2f}")
         print(f"  State ({args.state_rate*100:.4g}%):      ${result['withholding']['state']:,.2f}")

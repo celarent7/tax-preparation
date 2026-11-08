@@ -9,6 +9,7 @@ from credit_eligibility_checker import (
     calculate_llc,
     calculate_ftc_simple,
     calculate_savers_credit,
+    check_all_credits,
     check_energy_credits,
     get_credit_params,
 )
@@ -68,10 +69,10 @@ def _savers_params(tax_data):
 def test_savers_credit_hoh_bands_derive_from_mfj_not_single(data_2025):
     """HoH Saver's Credit AGI bands are 75% of the MFJ bands per IRC 25B(b),
     not 75% of the single bands. HoH $30,000 AGI is below the HoH 50%
-    threshold (mfj $49,000 x 0.75 = $36,750), so a $2,000 contribution earns
+    threshold (mfj $47,500 x 0.75 = $35,625), so a $2,000 contribution earns
     the full 50% credit ($1,000). Deriving from single x 0.75 would instead
-    put $30,000 in the 10% bracket (single $24,500 x 0.75 = $18,375 for 50%,
-    $26,500 x 0.75 = $19,875 for 20%), yielding only $200 -- a 5x
+    put $30,000 in the 10% bracket (single $23,750 x 0.75 = $17,812.50 for
+    50%, $25,500 x 0.75 = $19,125 for 20%), yielding only $200 -- a 5x
     understatement.
     """
     r = calculate_savers_credit({
@@ -92,14 +93,68 @@ def test_savers_credit_single_and_mfj_bands_unchanged(data_2025):
         "filing_status": "single", "agi": 20000,
         "retirement_contributions": 2000, "age": 40,
     }, _savers_params(data_2025))
-    assert r_single.amount == 1000.0  # single 50% band: $24,500
+    assert r_single.amount == 1000.0  # single 50% band: $23,750
 
     r_mfj = calculate_savers_credit({
         "filing_status": "married_jointly", "agi": 45000,
         "retirement_contributions": 2000, "age": 40,
     }, _savers_params(data_2025))
-    assert r_mfj.amount == 1000.0  # mfj 50% band: $49,000
+    assert r_mfj.amount == 1000.0  # mfj 50% band: $47,500
 
+
+
+def test_savers_credit_2025_bands_match_notice_2024_80(data_2025):
+    """Notice 2024-80: joint 50% band ends at $47,500 and 20% at $51,000.
+    The old figures (49,000 / 53,000) put a $48,000 joint filer at 50%."""
+    p = _savers_params(data_2025)
+    base = {"filing_status": "married_jointly", "retirement_contributions": 2000, "age": 40}
+    assert calculate_savers_credit({**base, "agi": 48000}, p).amount == 400.0   # 20%
+    assert calculate_savers_credit({**base, "agi": 80000}, p).eligible is False  # over $79,000
+
+
+@pytest.mark.parametrize("year,creditable", [
+    ("2023", True), ("2024", True), ("2025", True), ("2026", True), ("2027", False),
+])
+def test_savers_retirement_contributions_creditable_by_year(year, creditable):
+    """P.L. 119-21 sec. 70116: 25B(d)(1)(B) counts retirement contributions only
+    for taxable years beginning before January 1, 2027."""
+    p = _savers_params(load_tax_constants(year))
+    assert p["retirement_contributions_creditable"] is creditable
+
+
+def test_savers_credit_not_available_for_retirement_contributions_2027():
+    """2027: retirement contributions earn no Saver's Credit (they count toward
+    the Saver's Match), and the unpublished 2027 bands must not raise."""
+    r = calculate_savers_credit({
+        "filing_status": "married_jointly", "agi": 40000,
+        "retirement_contributions": 2000, "age": 40,
+    }, _savers_params(load_tax_constants("2027")))
+    assert r.eligible is False
+    assert r.amount == 0
+    note = " ".join(r.notes)
+    assert "Saver's Match" in note
+    assert "6433" in note
+    assert "ABLE" in note
+
+
+def test_check_all_credits_2027_does_not_raise():
+    """Review finding F1: every 2027 credit check used to fail on the null
+    Saver's Credit bands, whatever the filer's situation."""
+    out = check_all_credits({"filing_status": "mfj", "agi": 300000,
+                             "earned_income": 300000, "children_under_17": 1},
+                            load_tax_constants("2027"))
+    savers = [c for c in out["credits"] if c["name"] == "Saver's Credit"]
+    assert savers and savers[0]["eligible"] is False
+
+
+def test_savers_credit_no_contributions_skips_unverified_bands():
+    """With nothing to credit, null bands must not raise."""
+    params = {"max_contribution": 2000, "retirement_contributions_creditable": True,
+              "bands": {k: {"50_percent": None, "20_percent": None, "10_percent": None}
+                        for k in ("mfj", "single")}}
+    r = calculate_savers_credit({"filing_status": "single", "agi": 20000,
+                                 "retirement_contributions": 0}, params)
+    assert r.eligible is False
 
 def _ftc_params(tax_data):
     return tax_data["credits_static"]["ftc_no_1116_limit"]
@@ -188,3 +243,84 @@ def test_energy_credits_2026_not_available():
     rs = check_energy_credits({"filing_status": "single", "magi": 90000,
                                "solar_costs": 20000}, load_tax_constants("2026"))
     assert rs == [] or all(not r.eligible for r in rs)
+
+# ---------------------------------------------------------------------------
+# Child and Dependent Care Credit — per-year tiers, OBBBA 2026+ (plan CC Task 2)
+# ---------------------------------------------------------------------------
+
+from credit_eligibility_checker import (  # noqa: E402
+    calculate_child_dependent_care,
+    cdcc_applicable_percentage,
+)
+
+
+def _cdcc_params(year):
+    return get_credit_params(load_tax_constants(year))["child_dependent_care"]
+
+
+def _cdcc_data(year_status="married_jointly", agi=100000, persons=2,
+               expenses=6000, fsa=0):
+    return {"filing_status": year_status, "agi": agi,
+            "qualifying_dependents_care": persons, "childcare_expenses": expenses,
+            "earned_income": 100000, "spouse_earned_income": 100000,
+            "dependent_care_fsa": fsa}
+
+
+def test_cdcc_percentage_pre_obbba_rounds_fraction_up():
+    """IRC 21(a)(2) pre-2026: 1 point per $2,000 'or fraction thereof' over $15,000."""
+    p = _cdcc_params("2025")
+    assert cdcc_applicable_percentage(15000, "single", p) == 35
+    assert cdcc_applicable_percentage(15001, "single", p) == 34
+    assert cdcc_applicable_percentage(43000, "single", p) == 21
+    assert cdcc_applicable_percentage(43001, "single", p) == 20
+
+
+def test_cdcc_percentage_2026_two_tiers():
+    p = _cdcc_params("2026")
+    expected = {15000: 50, 15001: 49, 45000: 35, 75000: 35, 100000: 22, 105000: 20}
+    for agi, pct in expected.items():
+        assert cdcc_applicable_percentage(agi, "single", p) == pct, agi
+
+
+def test_cdcc_percentage_2026_joint_second_tier():
+    p = _cdcc_params("2026")
+    for agi, pct in {150000: 35, 200000: 22, 210000: 20}.items():
+        assert cdcc_applicable_percentage(agi, "married_jointly", p) == pct, agi
+
+
+def test_cdcc_qss_and_hoh_use_non_joint_second_tier():
+    """Only a joint return gets the $150,000 / $4,000 second tier."""
+    p = _cdcc_params("2026")
+    assert cdcc_applicable_percentage(100000, "qualifying_surviving_spouse", p) == 22
+    assert cdcc_applicable_percentage(100000, "head_of_household", p) == 22
+
+
+def test_cdcc_mfs_not_eligible():
+    r = calculate_child_dependent_care(
+        _cdcc_data("married_separately", agi=50000), _cdcc_params("2025"))
+    assert r.eligible is False
+    assert r.amount == 0
+    note = " ".join(r.notes)
+    assert "21(e)(2)" in note
+    assert "21(e)(4)" in note
+    assert "last 6 months" in note
+
+
+def test_cdcc_dollar_limit_reduced_by_excluded_benefits():
+    """IRC 21(c) last sentence / Form 2441 lines 27-29: excluded benefits
+    reduce the $3,000/$6,000 limit, not only the expenses."""
+    r = calculate_child_dependent_care(
+        _cdcc_data(expenses=10000, fsa=5000), _cdcc_params("2025"))
+    assert r.amount == 200.0
+
+
+def test_cdcc_2026_fsa_at_7500_eliminates_two_person_credit():
+    r = calculate_child_dependent_care(
+        _cdcc_data(expenses=10000, fsa=7500), _cdcc_params("2026"))
+    assert r.amount == 0
+    assert r.eligible is False
+
+
+def test_cdcc_2026_credit_amount():
+    r = calculate_child_dependent_care(_cdcc_data(expenses=6000), _cdcc_params("2026"))
+    assert r.amount == 2100.0

@@ -420,10 +420,10 @@ def test_flat_state_rate_table_no_longer_advertises_ca():
 
 
 def test_unsupported_state_year_raises():
-    """CA 2023-2025 are populated; 2026 is not yet published by the FTB and
+    """CA 2023-2026 are populated; 2027 is not yet published by the FTB and
     must raise rather than fall back to an adjacent year's indexed figures."""
     with pytest.raises(ValueError):
-        load_state_constants("CA", "2026")
+        load_state_constants("CA", "2027")
 
 
 def test_no_income_tax_states_report_zero():
@@ -489,3 +489,28 @@ def test_ca_mortgage_limit_delta_is_quantified():
 
     assert ca_section["ca_mortgage_debt_limit"] == 1000000
     assert ca_section["mortgage_deduction_delta_vs_federal"] == pytest.approx(8421.05, abs=0.05)
+
+
+def test_ca_2026_brackets_match_ftb_tax_news_oct_2026():
+    """2026 Schedules X/Y/Z transcribed from FTB Tax News, October 2026.
+
+    Every bracket's printed cumulative-tax constant is recomputed from the
+    stored rates, so a mistyped boundary breaks the arithmetic to the cent.
+    """
+    ca = load_state_constants("CA", "2026")
+    printed = {
+        "single": [0, 114.56, 428.58, 1056.74, 2054.96, 3310.88, 32039.70, 39951.95, 74675.27],
+        "married_jointly": [0, 229.12, 857.16, 2113.48, 4109.92, 6621.76, 64079.39, 79903.90, 149350.54],
+        "head_of_household": [0, 229.27, 857.05, 1485.13, 2483.29, 3739.45, 42802.15, 53563.49, 100786.98],
+    }
+    for status, cum in printed.items():
+        total, prev = 0.0, 0
+        for i, b in enumerate(ca["brackets"][status]):
+            assert abs(total - cum[i]) < 0.02, (status, i)
+            if b["top"] is not None:
+                total += (b["top"] - prev) * b["rate"]
+                prev = b["top"]
+    assert ca["standard_deduction"]["single"] == 5900
+    assert ca["standard_deduction"]["married_jointly"] == 11800
+    assert ca["exemption_credit"]["dependent"] == 491
+    assert ca["sdi"]["rate"] == 0.013
